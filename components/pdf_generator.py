@@ -289,7 +289,23 @@ def generate_modular_pdf(
 
                 table_data = ([header_row] if header_row else []) + body_rows
 
-                t = Table(table_data, colWidths=col_widths)
+                cell_scale = el.get("cell_scale", 1.0)
+                row_heights = None
+                if cell_scale != 1.0:
+                    row_heights = [
+                        (
+                            max(
+                                cell.wrap(max(width - 8, 1), 100000)[1]
+                                for cell, width in zip(row, col_widths)
+                            ) + 8
+                        ) * cell_scale
+                        for row in table_data
+                    ]
+                    col_widths = [width * cell_scale for width in col_widths]
+
+                t = Table(table_data, colWidths=col_widths, rowHeights=row_heights)
+                if cell_scale != 1.0:
+                    t.hAlign = "CENTER"
                 
                 if num_cols == 1:
                     t.setStyle(TableStyle([

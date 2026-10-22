@@ -636,7 +636,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 # 1. El título se agrega como elemento independiente porque los callouts no renderizan section_title
         pdf_elements.append({
             "type": "heading",
-            "text": "7. Dictamen de Riesgo Crediticio y Capacidad de Pago"
+            "text": "7. Estimación de Capacidad de Pago"
         })
 
         pdf_elements.append({
@@ -650,7 +650,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         pdf_elements.append({
             "type": "table",
             "title": "Comparativa Vertical de Escenarios de Financiamiento",
-            "df": df_escenarios_pdf
+            "df": df_escenarios_pdf,
+            "cell_scale": 1.15
         })
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA DE REPORTES EN PDF
