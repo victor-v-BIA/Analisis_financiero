@@ -120,10 +120,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     col_g1, col_g2 = st.columns(2)
     _bloque_anual(col_g1, "Clientes · Desfase entre Complementos y Facturación PPD", anual_ing, motivo_ing,
                   "Complementos − Facturación PPD", "clientes",
-                  "Mide la realidad fiscal ante el SAT.")
+                  "Mide la realidad fiscal ante el SAT. Negativo: aparenta cartera vencida (complementos no emitidos, mala relación de UUIDs entre factura y pago, etc.). Positivo: aparenta recuperación de cartera (cobros de facturas PPD de años anteriores, facturas PUE incluidas por error en un complemento, etc.).")
     _bloque_anual(col_g2, "Proveedores · Desfase entre Complementos y Facturación PPD", anual_egr, motivo_egr,
                   "Complementos − Compras PPD", "proveedores",
-                  "Mide la realidad fiscal ante el SAT.")
+                   "Mide la realidad fiscal ante el SAT. Negativo: aparenta deudas vigentes (complementos no recibidos, mala relación de UUIDs entre factura y pago, etc.). Positivo: aparenta liquidación de deudas pasadas (pagos de facturas PPD de años anteriores, facturas PUE incluidas por error en un REP, etc.).")
 
     # ---------------------------------------------------------------
     # Indicador 4: Flujo Neto Fiscal
@@ -303,6 +303,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     "section_title": "3. Ciclos y Estacionalidad Operativa",
                     "title": "Promedio histórico mensual",
                     "fig": fig_ciclos_promedio,
+                    # "custom_height": 620
                 },
                 {
                     "type": "image",
@@ -313,6 +314,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     "type": "image",
                     "title": "Cobros · velas por mes",
                     "fig": fig_velas_c,
+                    
                 },
                 {
                     "type": "image",
@@ -323,7 +325,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             if nota_ciclos.strip():
                 pdf_elements.append({
                     "type": "callout",
-                    "text": f"<b>Comentario compartido:</b><br/>{escape(nota_ciclos)}",
+                    "text": f"<b>Conclusión:</b><br/>{escape(nota_ciclos)}",
                 })
 
     # ---------------------------------------------------------------

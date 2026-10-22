@@ -179,11 +179,15 @@ def _grafica_ciclos_lineas(benchmark: pd.DataFrame, series_anio: dict | None = N
 def _grafica_velas(ohlc: pd.DataFrame, nombre: str, promedio: pd.Series) -> go.Figure:
     """Combo chart por mes (Ene-Dic) de UNA serie: velas japonesas (`_ohlc_mensual`) + línea del Promedio Mensual (`go.Scatter`,
     `mode='lines'`, gris claro) con el promedio histórico de los años seleccionados (`_promedios_mensuales_historicos`).
-    Vela verde si Close > Open y roja si Close < Open; la mecha va del mínimo al máximo histórico. Sin textos estáticos: el
-    hover de cada vela indica en moneda el año base (Open), el año reciente (Close) y los máximo / mínimo históricos; un mes sin
-    datos no dibuja vela ni punto de promedio."""
+    Vela verde si Close > Open y roja si Close < Open, excepto «Pagos Totales», que invierte esos colores; la mecha va del mínimo
+    al máximo histórico. Sin textos estáticos: el hover de cada vela indica en moneda el año base (Open), el año reciente (Close)
+    y los máximo / mínimo históricos; un mes sin datos no dibuja vela ni punto de promedio."""
     def v(x):
         return None if pd.isna(x) else float(x)
+    color_sube, color_baja = (
+        (COLOR_VELA_BAJA, COLOR_VELA_SUBE) if nombre == "Pagos Totales"
+        else (COLOR_VELA_SUBE, COLOR_VELA_BAJA)
+    )
     texto = [("Sin datos" if r.N_Anios == 0 else
               f"<b>{r.Mes}</b> · {nombre}<br>Año base (Open) {r.Anio_Open}: {_mxn_2d(r.Open)}"
               f"<br>Año reciente (Close) {r.Anio_Close}: {_mxn_2d(r.Close)}"
@@ -192,8 +196,8 @@ def _grafica_velas(ohlc: pd.DataFrame, nombre: str, promedio: pd.Series) -> go.F
     fig = go.Figure(go.Candlestick(
         x=list(ohlc["Mes"]), open=[v(x) for x in ohlc["Open"]], high=[v(x) for x in ohlc["High"]],
         low=[v(x) for x in ohlc["Low"]], close=[v(x) for x in ohlc["Close"]], name=nombre,
-        increasing=dict(line=dict(color=COLOR_VELA_SUBE), fillcolor=COLOR_VELA_SUBE),
-        decreasing=dict(line=dict(color=COLOR_VELA_BAJA), fillcolor=COLOR_VELA_BAJA),
+        increasing=dict(line=dict(color=color_sube), fillcolor=color_sube),
+        decreasing=dict(line=dict(color=color_baja), fillcolor=color_baja),
         hovertext=texto, hoverinfo="text"))
     y_prom = [v(x) for x in promedio]
     fig.add_trace(go.Scatter(
