@@ -17,7 +17,7 @@ from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     SEPARADOR_PIE,TEXTO_SOBRE_ING,NOMBRE_NOMINA,COLOR_GASTOS,COLOR_NOMINA,
                     NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD)
 
-from utils import (_mxn_2d, _importe_abreviado_2d,_abrev_monto, _nombre_abreviado, _abrev_signo )
+from utils import (_mxn_2d, _importe_abreviado_2d,_abrev_monto, _nombre_abreviado, _abrev_signo, _formatear_mxn )
 
 from core.finance_logic import (_dictamen_indice, _normalizar_por_rfc, _serie_mensual_por_anio, _ranking_anual)
 
@@ -241,7 +241,8 @@ def _html_detalle_anual(tabla: pd.DataFrame) -> str:
     encabezado = "<thead><tr>" + "".join(
         f'<th class="ppd-anio">{c}</th>' if i == 0 else f"<th>{c}</th>" for i, c in enumerate(tabla.columns)) + "</tr></thead>"
     filas = "".join(
-        f'<tr><td class="ppd-anio">{int(r.iloc[0])}</td>' + "".join(f"<td>{v:,.2f}</td>" for v in r.iloc[1:]) + "</tr>"
+        f'<tr><td class="ppd-anio">{int(r.iloc[0])}</td>' + "".join(
+            f"<td>{_formatear_mxn(v).replace('$', '&#36;')}</td>" for v in r.iloc[1:]) + "</tr>"
         for _, r in tabla.iterrows())
     return (f'{CSS_DETALLE_ANUAL}<div class="ppd-detalle-wrap"><table class="ppd-detalle">{colgroup}{encabezado}'
             f"<tbody>{filas}</tbody></table></div>")

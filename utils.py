@@ -59,6 +59,11 @@ def dinero(x: float) -> str:
     return f"${x:,.0f}"
 
 
+def _formatear_mxn(x: float, decimales: int = 2) -> str:
+    monto = float(x)
+    return f"-${abs(monto):,.{decimales}f}" if monto < 0 else f"${monto:,.{decimales}f}"
+
+
 def _abrev_signo(v: float) -> str:
     """'$4.65M' / '$325.4k' / '$950' con '-' para negativos."""
     a = abs(float(v))

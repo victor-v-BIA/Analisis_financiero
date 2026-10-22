@@ -3,11 +3,13 @@
 '''
 Contiene la vista completa del Dashboard de Riesgo y Viabilidad.
 '''
+from html import escape
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from utils import _mxn
+from utils import _mxn, _formatear_mxn
 from utils import (_nb, _normalizar_ejercicios, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear)
 from views.controls import al_cambiar_ejercicios
 from core.loader import (anios_5_archivos, _anual_ppd_cache,
@@ -90,7 +92,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             df_detalle_pdf = df_detalle.copy()
             for col in df_detalle_pdf.columns:
                 if col != "Año":
-                    df_detalle_pdf[col] = df_detalle_pdf[col].apply(_limpiar_y_formatear)
+                    df_detalle_pdf[col] = df_detalle_pdf[col].apply(
+                        lambda val: _formatear_mxn(val, decimales=1) if pd.notnull(val) else val)
 
             titulo_tabla_pdf = "Detalle Anual — Clientes" if lado == "clientes" else "Detalle Anual — Proveedores"
             
@@ -242,52 +245,86 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     metricas_sel,
                 )
                 render_grafica(fig_ciclos, key="exec_ciclos_lineas")
-                
-                nota_ciclos = st.text_area(
-                    "Conclusión para la gráfica de Ciclos y Estacionalidad",
-                    max_chars=600,
-                    placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
-                    key="note_graf_ciclos"
-                )
-
-                anios_pdf = anios_graf or anios_ritmo
-                fig_ciclos_promedio = _grafica_ciclos_lineas(
-                    ritmo_promedios,
-                    metricas=metricas_sel,
-                )
-                series_pdf = _series_anuales_por_mes(flujo_bruto, anios_pdf)
-                fig_ciclos_anios = _grafica_ciclos_lineas(
-                    ritmo_promedios,
-                    series_pdf,
-                    anios_pdf,
-                    metricas_sel,
-                )
-                pdf_elements.append({
-                    "type": "image",
-                    "section_title": "3. Ciclos y Estacionalidad Operativa",
-                    "title": "Promedio histórico mensual",
-                    "fig": fig_ciclos_promedio
-                })
-                pdf_elements.append({
-                    "type": "image",
-                    "title": f"Ejercicios fiscales: {', '.join(map(str, anios_pdf))}",
-                    "fig": fig_ciclos_anios,
-                    "note": nota_ciclos
-                })
         else:
             fig_velas_c = _grafica_velas(ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"])
             fig_velas_p = _grafica_velas(ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"])
             
             st.markdown("**Cobros · velas por mes**")
             render_grafica(fig_velas_c, key="exec_velas_cobros")
-            nota_velas_c = st.text_area("Conclusión - Velas de Cobros", max_chars=600, key="note_velas_c")
             
             st.markdown("**Pagos Totales · velas por mes**")
             render_grafica(fig_velas_p, key="exec_velas_pagos")
-            nota_velas_p = st.text_area("Conclusión - Velas de Pagos", max_chars=600, key="note_velas_p")
-            
-            pdf_elements.append({"type": "image", "title": "Cobros · Velas por mes", "fig": fig_velas_c, "note": nota_velas_c})
-            pdf_elements.append({"type": "image", "title": "Pagos Totales · Velas por mes", "fig": fig_velas_p, "note": nota_velas_p})
+
+        if anios_ritmo:
+            nota_ciclos = st.text_area(
+                "Comentario para las gráficas de Ciclos y Estacionalidad",
+                max_chars=600,
+                placeholder="Escribe un comentario compartido para las cuatro gráficas (máx. 600 caracteres)...",
+                key="note_graf_ciclos"
+            )
+
+            ejercicios_pdf = _normalizar_ejercicios(
+                st.session_state.get("ritmo_ejercicios"),
+                st.session_state.get("ritmo_ejercicios_prev"),
+            )
+            if not ejercicios_pdf:
+                ejercicios_pdf = [PROMEDIO_HISTORICO]
+            metricas_pdf_sel = [
+                metrica for metrica in METRICAS_VISUALIZAR
+                if metrica in (st.session_state.get("ritmo_metricas") or METRICAS_VISUALIZAR)
+            ] or METRICAS_VISUALIZAR
+            anios_graf_pdf = (
+                [] if ejercicios_pdf == [PROMEDIO_HISTORICO]
+                else [int(anio) for anio in ejercicios_pdf]
+            )
+            anios_pdf = anios_graf_pdf or anios_ritmo
+
+            fig_ciclos_promedio = _grafica_ciclos_lineas(
+                ritmo_promedios,
+                metricas=metricas_pdf_sel,
+            )
+            series_pdf = _series_anuales_por_mes(flujo_bruto, anios_pdf)
+            fig_ciclos_anios = _grafica_ciclos_lineas(
+                ritmo_promedios,
+                series_pdf,
+                anios_pdf,
+                metricas_pdf_sel,
+            )
+            fig_velas_c = _grafica_velas(
+                ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"]
+            )
+            fig_velas_p = _grafica_velas(
+                ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"]
+            )
+
+            pdf_elements.extend([
+                {
+                    "type": "image",
+                    "section_title": "3. Ciclos y Estacionalidad Operativa",
+                    "title": "Promedio histórico mensual",
+                    "fig": fig_ciclos_promedio,
+                },
+                {
+                    "type": "image",
+                    "title": f"Ejercicios fiscales: {', '.join(map(str, anios_pdf))}",
+                    "fig": fig_ciclos_anios,
+                },
+                {
+                    "type": "image",
+                    "title": "Cobros · velas por mes",
+                    "fig": fig_velas_c,
+                },
+                {
+                    "type": "image",
+                    "title": "Pagos Totales · velas por mes",
+                    "fig": fig_velas_p,
+                },
+            ])
+            if nota_ciclos.strip():
+                pdf_elements.append({
+                    "type": "callout",
+                    "text": f"<b>Comentario compartido:</b><br/>{escape(nota_ciclos)}",
+                })
 
     # ---------------------------------------------------------------
     # Indicador 2: Tiempos documentados
@@ -390,11 +427,17 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             if conc["agrupa_por_rfc"]:
                 tabla_conc["Razón Social"] = tabla_conc["RFC"].map(conc["nombre_por_id"]).fillna(tabla_conc["RFC"])
             tabla_conc["%"] = tabla_conc["Facturación Total"] / total_general * 100
+            # Reordenamos las columnas explícitamente en el orden deseado: RFC, Razón Social, Facturación Total, %
+            columnas_ordenadas = ["RFC", "Razón Social", "Facturación Total", "%"]
+            # Por si acaso el dataset original viniera sin RFC y solo con Razón Social, validamos las columnas existentes:
+            columnas_existentes = [c for c in columnas_ordenadas if c in tabla_conc.columns]
+            tabla_conc = tabla_conc[columnas_existentes]
             
             # Copia redondeada para el PDF en Concentración
             tabla_conc_pdf = tabla_conc.head(10).copy()
             if "Facturación Total" in tabla_conc_pdf.columns:
-                tabla_conc_pdf["Facturación Total"] = tabla_conc_pdf["Facturación Total"].apply(lambda x: f"{float(x):,.2f}" if pd.notnull(x) else x)
+                tabla_conc_pdf["Facturación Total"] = tabla_conc_pdf["Facturación Total"].apply(
+                    lambda val: _formatear_mxn(val) if pd.notnull(val) else val)
             if "%" in tabla_conc_pdf.columns:
                 tabla_conc_pdf["%"] = tabla_conc_pdf["%"].apply(lambda x: f"{float(x):,.2f}%" if pd.notnull(x) else x)
 
@@ -406,7 +449,13 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             })
             pdf_elements.append({"type": "table", "title": "Detalle de Concentración por Cliente", "df": tabla_conc_pdf, 
                 "note": nota_conc})
-            col_tabla.dataframe(tabla_conc.head(10), hide_index=True, use_container_width=True, height=ALTURA_CONC)
+            col_tabla.dataframe(
+                tabla_conc.head(10),
+                hide_index=True,
+                use_container_width=True,
+                height=ALTURA_CONC,
+                column_config={"Facturación Total": st.column_config.NumberColumn(format="$%.2f")}
+            )
 
     # ---------------------------------------------------------------
     # Indicador 5 (Sección 6): Clientes sin facturación en el periodo
@@ -443,8 +492,12 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 nota_no_fact = st.text_area("Conclusión - Clientes sin facturación en el periodo", max_chars=600, key="nota_no_fact")
                 
                 df_sf_pdf = df_sf_original.copy()
+                col_facturado = f"Facturado {res_sf['anio_prev']} (MXN)"
                 for col in df_sf_pdf.columns:
-                    if col != "Año":
+                    if col == col_facturado:
+                        df_sf_pdf[col] = df_sf_pdf[col].apply(
+                            lambda val: _formatear_mxn(val, decimales=1) if pd.notnull(val) else val)
+                    elif col != "Año":
                         df_sf_pdf[col] = df_sf_pdf[col].apply(_limpiar_y_formatear)
 
                 # 1. Agregamos la tabla con su respectivo título y título de sección
