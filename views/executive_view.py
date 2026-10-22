@@ -350,12 +350,15 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     fig_plazos_y = None
     fig_plazos_m = None
     titulo_y = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — histórico anual"
-    titulo_m = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — detalle mensual"
+    titulo_m_base = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — detalle mensual"
+    titulo_m = f"{titulo_m_base} - Todos los años"
+    fig_plazos_m_pdf = None
 
     if not (plazos_ing_y.empty and plazos_egr_y.empty):
         fig_plazos_y = _grafica_plazos_comparativa(plazos_ing_y, plazos_egr_y, anual=True)
     if not (plazos_ing_m.empty and plazos_egr_m.empty):
         fig_plazos_m = _grafica_plazos_comparativa(plazos_ing_m, plazos_egr_m, anual=False)
+        fig_plazos_m_pdf = fig_plazos_m
 
     vistas_plazos = []
     if fig_plazos_y is not None:
@@ -374,8 +377,27 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             st.markdown(f"**{titulo_y}**")
             render_grafica(fig_plazos_y, key="exec_plazos_comparativa_y")
         else:
+            anios_mensuales = sorted({
+                str(periodo)[:4]
+                for plazos in (plazos_ing_m, plazos_egr_m)
+                for periodo in plazos.loc[plazos["n_validos"].notna()].index
+            })
+            anio_mensual = st.selectbox(
+                "Año del detalle mensual",
+                ["Todos los años", *anios_mensuales],
+                key="exec_plazos_anio_mensual",
+            )
+            if anio_mensual != "Todos los años":
+                ing_anio = plazos_ing_m.loc[
+                    plazos_ing_m.index.astype(str).str.startswith(f"{anio_mensual}-")
+                ]
+                egr_anio = plazos_egr_m.loc[
+                    plazos_egr_m.index.astype(str).str.startswith(f"{anio_mensual}-")
+                ]
+                fig_plazos_m_pdf = _grafica_plazos_comparativa(ing_anio, egr_anio, anual=False)
+                titulo_m = f"{titulo_m_base} - {anio_mensual}"
             st.markdown(f"**{titulo_m}**")
-            render_grafica(fig_plazos_m, key="exec_plazos_comparativa_m")
+            render_grafica(fig_plazos_m_pdf, key="exec_plazos_comparativa_m")
 
         nota_plazos = st.text_area(
             "Conclusión - Tiempos Documentados",
@@ -390,11 +412,11 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 "title": titulo_y,
                 "fig": fig_plazos_y
             })
-        if fig_plazos_m is not None:
+        if fig_plazos_m_pdf is not None:
             monthly_pdf_element = {
                 "type": "image",
                 "title": titulo_m,
-                "fig": fig_plazos_m,
+                "fig": fig_plazos_m_pdf,
                 "note": nota_plazos
             }
             if fig_plazos_y is None:
@@ -525,7 +547,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # 6 (Sección 7). Dictamen de riesgo crediticio
     # ---------------------------------------------------------------
     st.divider()
-    st.header("7. Dictamen de Riesgo Crediticio y Capacidad de Pago",
+    st.header("7. Estimación de Capacidad de Pago",
               help=('''Estimación documental con los CFDI de la ventana de 5 años; no es una oferta ni una opinión crediticia. El flujo mensual es EL MISMO resumen
                                   mensual de la sección 2 (Cobros − Pagos considerados − Nómina, en Flujo de Efectivo): esta sección no vuelve
                                   a extraer ni cruzar facturas. Un mes sin nómina vale 0 y se conservan los meses negativos.
@@ -815,11 +837,12 @@ def _simulador_financiamiento(balance: dict):
 
     # Explicaciones metodológicas en la interfaz
     st.markdown(
-        "**¿Cómo funciona esta estimación?**\n\n"
-        "1. **Selección de escenarios (24 meses):** A partir del Flujo Neto mensual documentado de los últimos dos años, el sistema identifica tres meses reales de operación.\n"
-        "2. **Dictamen de viabilidad y capacidad de pago (30%):** Cada escenario se evalúa por separado para determinar si su liquidez soporta un crédito empresarial.\n"
-        "3. **Tasa Anual Total:** Suma de la TIIE a 28 días más los puntos adicionales de margen bancario.\n"
-        "4. **Cálculo del financiamiento:** Monto de crédito obtenido mediante la fórmula de Valor Presente de una anualidad ordinaria."
+        '''
+            La capacidad de pago mostrada es una **estimación** basada en la información fiscal histórica de la empresa y 
+            no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
+            criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
+            a un crédito que se ajuste a sus necesitades
+        '''
     )
     st.caption("Evaluación paramétrica basada en el flujo neto documental. Es orientativa y no constituye una opinión crediticia.")
 

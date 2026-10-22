@@ -256,7 +256,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         return
 
     _bloque_egresos(_preparar_concentracion(fac_factura, "Nombre_Emisor", "RFC_Emisor"), cargar_base(file_nomina), df_rep_f, ejercicios,
-                    desglose=_mostrar_desglose, pdf_elements=pdf_elements)
+                    desglose=_mostrar_desglose, tabla_pdf=tabla, pdf_elements=pdf_elements)
 
     st.divider()
     st.subheader("Exportación de Reporte - Vista Financiera")
@@ -277,7 +277,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                 )
 
 
-def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd.DataFrame, ejercicios, desglose=None, pdf_elements=None) -> None:
+def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd.DataFrame, ejercicios, desglose=None, tabla_pdf=None, pdf_elements=None) -> None:
     """Cuerpo de la Vista Financiera de Egresos con la lógica global (sin cruce por UUID), SIEMPRE sobre Total. `df_prov` = `_preparar_concentracion` de
     facturas recibidas vigentes sin NCR, con el Total ya en MXN y filtradas por ejercicios; `nomina_raw` = base de nómina cruda (Total de comprobantes
     activos por Fecha Pago); `comp_df` = complementos vigentes de los ejercicios (`Monto_Num` = Monto MXN, no se reconvierte; `Mes`). Todo sale de
@@ -288,14 +288,12 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     col_monto = "Total"
     if desglose is not None:
         desglose()
-        if pdf_elements is not None:
-            # Asegúrate de usar la versión limpia/formateada de la tabla (tabla_pdf) 
-            # si tienes una, o la tabla base limpia para ReportLab:
+        if tabla_pdf is not None and pdf_elements is not None:
             pdf_elements.append({
                 "type": "table",
                 "section_title": "1. Evolución de Egresos y Desglose Anual",
                 "title": "Desglose Año con Año",
-                # "df": df_prov  # (o tu objeto DataFrame con el desglose formateado)
+                "df": tabla_pdf
             })
 
     nom = _preparar_nomina(nomina_raw)

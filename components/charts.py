@@ -551,19 +551,26 @@ def _html_resumen_metodo_pago(res: dict, paleta: dict | None = None) -> str:
 def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
     """Genera la gráfica de Poder Adquisitivo: Ingresos vs Inflación General (INPC) con sombreado de brecha."""
     fig = go.Figure()
+    brecha = [ingreso - inflacion for ingreso, inflacion in zip(idx_emp, idx_inpc)]
+    datos_hover_inpc = list(zip(idx_emp, brecha))
+    datos_hover_ingresos = list(zip(idx_inpc, brecha))
     
     # Curva de Inflación General (INPC)
     fig.add_trace(go.Scatter(
         x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", mode="lines+markers",
         line=dict(color="#FACC15", width=3), marker=dict(size=9, color="#FACC15"),
-        hovertemplate="<b>%{x}</b><br>INPC: %{y:.1f}<extra></extra>"
+        customdata=datos_hover_inpc,
+        hovertemplate=("<b>%{x}</b><br>INPC: %{y:.1f}<br>Ingresos: %{customdata[0]:.1f}"
+                       "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")
     ))
     
     # Curva de Ingresos DPC (Base 100)
     fig.add_trace(go.Scatter(
         x=anios_str, y=idx_emp, name="Ingresos DPC (Base 100)", mode="lines+markers",
         line=dict(color="#2563EB", width=3), marker=dict(size=9, color="#2563EB"),
-        hovertemplate="<b>%{x}</b><br>Ingresos DPC: %{y:.1f}<extra></extra>"
+        customdata=datos_hover_ingresos,
+        hovertemplate=("<b>%{x}</b><br>Ingresos: %{y:.1f}<br>INPC: %{customdata[0]:.1f}"
+                       "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")
     ))
     
     # Área de relleno sombreada (brecha entre ingresos e inflación)

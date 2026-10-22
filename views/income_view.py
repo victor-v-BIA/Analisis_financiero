@@ -314,24 +314,19 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                 "note": nota_base100
                 
             })
-    # 1. Llamas a la función de la gráfica con sus respectivos parámetros
-    fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas
-    )
-    st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
-    # 2. Renderizas la gráfica en la interfaz visual de Streamlit
-    render_grafica(fig_ing, key="exec_poder_adquisitivo")
+    if not ingresos:
+        fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas)
+        st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
+        render_grafica(fig_ing, key="exec_poder_adquisitivo")
 
-    # 3. (Opcional) Capturas la conclusión o nota del analista si la tienes en un text_area
-    nota_poder_adq = st.text_area("Conclusión - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
-
-    # 4. La integras al PDF modular con su respectivo título y sección
-    pdf_elements.append({
-        "type": "image",
-        "section_title": "Comportamiento de Ingresos en el Entorno", # O el título de sección que corresponda
-        "title": "Poder Adquisitivo: Ingresos vs Inflación General",
-        "fig": fig_ing,
-        "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
-    })
+        nota_poder_adq = st.text_area("Conclusión - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
+        pdf_elements.append({
+            "type": "image",
+            "section_title": "Comportamiento de Ingresos en el Entorno",
+            "title": "Poder Adquisitivo: Ingresos vs Inflación General",
+            "fig": fig_ing,
+            "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
+        })
 
     if ingresos:
         with st.container(border=True):
