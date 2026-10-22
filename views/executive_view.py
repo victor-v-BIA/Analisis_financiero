@@ -653,27 +653,27 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     
     col_pdf_desc, col_pdf_info = st.columns([1, 2])
     with col_pdf_info:
-        exec_notes = st.text_area(
+        '''exec_notes = st.text_area(
             "Notas / Observaciones Generales del Analista para el PDF:",
             placeholder="Agrega tus conclusiones ejecutivas generales aquí...",
             key="exec_notes_general"
-        )
+        )'''
     
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, sus conclusiones individuales, tablas e información financiera de esta vista.")
         
-        texto_notas = exec_notes
+        # texto_notas = exec_notes
         if dictamen_res is not None:
             cons_viabilidad = "VIABLE" if dictamen_res["conservador"] and dictamen_res["conservador"]["es_viable"] else "NO VIABLE"
-            texto_notas =  exec_notes
+            # texto_notas =  exec_notes
 
         if st.button("Generar Reporte PDF", key="btn_generar_pdf"):
             with st.spinner("Construyendo estructura modular y maquetando PDF..."):
                 
                 elementos_finales = []
-                if texto_notas.strip():
-                    elementos_finales.append({"type": "heading", "text": "Notas y Observaciones Ejecutivas"})
-                    elementos_finales.append({"type": "callout", "text": texto_notas})
+                # if texto_notas and texto_notas.strip():
+                elementos_finales.append({"type": "heading", "text": "Notas y Observaciones Ejecutivas"})
+                elementos_finales.append({"type": "callout"})
                 
                 elementos_finales.extend(pdf_elements)
 
