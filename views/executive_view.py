@@ -130,7 +130,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # ---------------------------------------------------------------
     st.divider()
     st.subheader("2. Flujo Neto Fiscal",
-                 help="Mide el flujo de efectivo comprobable ante el SAT.")
+                 help="Mide el flujo de efectivo comprobable ante el SAT. Representa la diferencia entre los cobros (PUE + Complementos) y pagos ( PUE + Complementos + Nomina). ")
     
 
     balance = _balance_cache(a_fac_ing, a_pago_ing, a_fac_egr, a_pago_egr, a_nomina, anios_5, CODIGO_VERSION)
@@ -211,7 +211,11 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # ---------------------------------------------------------------
     st.divider()
     with st.container(key="exec_ciclos_titulo_pdf"):
-        st.subheader("3. Ciclos y Estacionalidad Operativa")
+        st.subheader("3. Ciclos y Estacionalidad Operativa",
+                  help=("Analiza el comportamiento estructural del ciclo operativo. En la vista de Líneas, el espacio entre flujos identifica "
+                       "meses con excedentes brutos (ideales para inversión) frente a meses de déficit (que requieren apalancamiento). En la "
+                       "vista de Velas Japonesas, evalúa el riesgo histórico: cuerpos cortos indican alta certeza operativa, mientras que "
+                       "mechas largas alertan sobre extrema volatilidad e incertidumbre en ese mes."))
   
 
     if not balance["disponible"]:
@@ -332,7 +336,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # Indicador 2: Tiempos documentados
     # ---------------------------------------------------------------
     st.divider()
-    st.subheader("4. Tiempos Documentados de Cobro y Pago")
+    st.subheader("4. Tiempos Documentados de Cobro y Pago", help=('''
+        Mide los días promedio fiscales transcurridos entre la emisión de las facturas diferidas (PPD) y sus complementos de pago
+        (REP) relacionados. Una brecha donde los días de pago (rojo) superan a los cobros (verde) indica que la empresa usa el dinero 
+        de sus proveedores para financiarse. Si ocurre lo contrario, la empresa asume el costo de financiar a sus clientes.'''))
 
     # --- Vistas Histórico Anual (Y) y Detalle Mensual (M) ---
     plazos_ing_y = _tiempos_cache("clientes", a_fac_ing, a_pago_ing, anios_5, "Y", CODIGO_VERSION)
@@ -398,7 +405,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # Indicador 3: Concentración de Ingresos
     # ---------------------------------------------------------------
     st.divider()
-    st.subheader("5. Índice de Concentración de Ingresos (Riesgo de Dependencia)")
+    st.subheader("5. Índice de Concentración de Ingresos (Riesgo de Dependencia)",
+                 help=('''Evalúa el Riesgo de Cliente Clave (Key Client Risk). Cuantifica qué porcentaje de la facturación histórica total 
+                       depende de un solo comprador. Una alta concentración advierte vulnerabilidad estructural, donde la pérdida de la 
+                       cuenta o el retraso en sus pagos compromete directamente la viabilidad operativa.'''))
     
 
     conc = _concentracion_cache(a_fac_ing, anios_5, CODIGO_VERSION)
@@ -516,7 +526,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # ---------------------------------------------------------------
     st.divider()
     st.header("7. Dictamen de Riesgo Crediticio y Capacidad de Pago",
-              help=("Estimación documental con los CFDI de la ventana de 5 años; no es una oferta ni una opinión crediticia."))
+              help=('''Estimación documental con los CFDI de la ventana de 5 años; no es una oferta ni una opinión crediticia. El flujo mensual es EL MISMO resumen
+                                  mensual de la sección 2 (Cobros − Pagos considerados − Nómina, en Flujo de Efectivo): esta sección no vuelve
+                                  a extraer ni cruzar facturas. Un mes sin nómina vale 0 y se conservan los meses negativos.
+                                  Se evalúan de forma independiente el mes más bajo, un mes intermedio y el mejor mes de los últimos 24 meses.'''))
 
     dictamen_res, plazo_sel = _simulador_financiamiento(balance)
 
@@ -723,13 +736,14 @@ def _simulador_financiamiento(balance: dict):
     c1, c2, c3 = st.columns(3)
     with c1:
         plazo = int(st.number_input("Plazo del financiamiento (meses)", min_value=PLAZO_MIN_MESES, max_value=PLAZO_MAX_MESES, value=PLAZO_DEFECTO_MESES, step=1, key="sim_plazo",
-                                    help="Supuesto editable de simulación: meses en que se pagaría el crédito."))
+                                     help="Supuesto editable de simulación (no es un dato bancario ni sale del Excel): meses en que se pagaría el crédito."))
     with c2:
         tiie_actual = float(st.number_input("TIIE Actual / Base (%)", min_value=0.0, max_value=100.0, value=TIIE_DEFECTO, step=0.05, format="%.2f", key="sim_tiie",
-                                            help=f"TIIE a 28 días de Banxico. Se precarga con el último dato conocido ({TIIE_DEFECTO:.2f}%, corte al 25/09/2026)."))
+                                            help=f"TIIE a 28 días de Banxico. Se precarga con el último dato conocido ({TIIE_DEFECTO:.2f}%, corte al 25/09/2026); tú eres responsable de "
+                                                                                             "actualizarla según las condiciones del mercado al momento del análisis (también sirve para simular una TIIE futura)."))
     with c3:
         margen_comercial = float(st.number_input("Puntos adicionales sobre TIIE (%)", min_value=0.0, value=MARGEN_COMERCIAL_DEFECTO, step=0.5, format="%.2f", key="sim_margen",
-                                               help="Puntos porcentuales adicionales que cobra el banco sobre la TIIE."))
+                                               help="Puntos porcentuales adicionales que cobra el banco sobre la TIIE (por ejemplo 5.0 o 10.0). Supuesto editable de simulación."))
     
     tasa_anual = tiie_actual + margen_comercial
     esc = _escenarios_credito(_excedente_homologado(balance)["Excedente_Mensual_Homologado"], plazo, tasa_anual)
