@@ -838,7 +838,7 @@ def _simulador_financiamiento(balance: dict):
     # Explicaciones metodológicas en la interfaz
     st.markdown(
         '''
-            La capacidad de pago mostrada es una **estimación** basada en la información fiscal histórica de la empresa y 
+            ⚠️ **Nota:** La capacidad de pago mostrada es una **estimación** basada en la información fiscal histórica de la empresa y 
             no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
             criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
             a un crédito que se ajuste a sus necesitades
