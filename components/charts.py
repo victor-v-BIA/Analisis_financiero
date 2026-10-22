@@ -533,15 +533,23 @@ def _html_resumen_metodo_pago(res: dict, paleta: dict | None = None) -> str:
     return html + "</div>"
 
 def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
-    """Genera la gráfica de Poder Adquisitivo: Ingresos vs Inflación General (INPC) con sombreado de brecha."""
+    """Genera la gráfica de Poder Adquisitivo: Ingresos vs Inflación General (INPC) con etiquetas fijas."""
     fig = go.Figure()
     brecha = [ingreso - inflacion for ingreso, inflacion in zip(idx_emp, idx_inpc)]
     datos_hover_inpc = list(zip(idx_emp, brecha))
     datos_hover_ingresos = list(zip(idx_inpc, brecha))
     
+    # Textos fijos para mostrar en la gráfica (ej. el valor numérico con 1 decimal)
+    texto_inpc = [f"{val:.1f}" for val in idx_inpc]
+    texto_ingresos = [f"{val:.1f}" for val in idx_emp]
+    
     # Curva de Inflación General (INPC)
     fig.add_trace(go.Scatter(
-        x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", mode="lines+markers",
+        x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", 
+        mode="lines+markers+text",  # <-- Añadido "+text" para mostrar etiquetas fijas
+        text=texto_inpc,            # <-- Lista con el texto de cada punto
+        textposition="top center",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
+        textfont=dict(color="#FACC15", size=11), # Opcional: color a juego con la línea
         line=dict(color="#FACC15", width=3), marker=dict(size=9, color="#FACC15"),
         customdata=datos_hover_inpc,
         hovertemplate=("<b>%{x}</b><br>INPC: %{y:.1f}<br>Ingresos: %{customdata[0]:.1f}"
@@ -550,7 +558,11 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
     
     # Curva de Ingresos DPC (Base 100)
     fig.add_trace(go.Scatter(
-        x=anios_str, y=idx_emp, name="Ingresos DPC (Base 100)", mode="lines+markers",
+        x=anios_str, y=idx_emp, name="Ingresos DPC (Base 100)", 
+        mode="lines+markers+text",  # <-- Añadido "+text"
+        text=texto_ingresos,        # <-- Lista con el texto de cada punto
+        textposition="bottom center", # <-- Posición para evitar que se encimen con los del INPC
+        textfont=dict(color="#2563EB", size=11), # Opcional: color a juego
         line=dict(color="#2563EB", width=3), marker=dict(size=9, color="#2563EB"),
         customdata=datos_hover_ingresos,
         hovertemplate=("<b>%{x}</b><br>Ingresos: %{y:.1f}<br>INPC: %{customdata[0]:.1f}"
@@ -562,7 +574,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         x=anios_str + anios_str[::-1],
         y=idx_emp + idx_inpc[::-1],
         fill='toself',
-        fillcolor='rgba(16, 185, 129, 0.2)', # Sutil tono verdoso/rojizo según cruce
+        fillcolor='rgba(16, 185, 129, 0.2)',
         line=dict(color='rgba(255,255,255,0)'),
         hoverinfo="skip",
         showlegend=False,
@@ -573,13 +585,12 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=90, r=40, t=40, b=40),
+        margin=dict(l=90, r=40, t=60, b=40), # Margen superior un poco más amplio por las etiquetas
         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
         xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
         yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
     )
     return fig
-
 
 # Composición de Gasto Operativo Fijo
 def _fig_eficiencia_operativa(anios_str, idx_emp, idx_inpp):
