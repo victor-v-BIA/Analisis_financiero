@@ -91,10 +91,6 @@ COLOR_DIF_POSITIVA, COLOR_DIF_NEGATIVA, COLOR_DIF_CERO = "#28a745", "#dc3545", "
 COLOR_VELA_SUBE, COLOR_VELA_BAJA = "#16A34A", "#DC2626"          # Close > Open: verde · Close < Open: rojo
 VISTAS_CICLOS = ["Tendencia (Líneas)", "Volatilidad (Velas Japonesas)"]
 
-PROMEDIO_HISTORICO = "Promedio Histórico"
-# Un solo color sólido por métrica en TODA la gráfica (Promedio y cada año), sin degradados ni intensidades cronológicas
-COLOR_COBROS, COLOR_PAGOS = "#2E8B57", "#D32F2F"    
-
 COLOR_LINEA_PROMEDIO = "rgba(160,160,160,0.95)"   # guía neutra (gris claro) que no opaca las velas
 METRICAS_VISUALIZAR = ["Cobros", "Pagos"]
 
@@ -284,4 +280,3 @@ _PARENTESIS = re.compile(r"\([^)]*\)")
 RUTA_ITAEE_DEFAULT = "data/itaee_20.xlsx"
 RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
 RUTA_INPC_DEFAULT = "data/INPC_base.csv"
-

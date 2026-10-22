@@ -260,6 +260,10 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
 
     st.divider()
     st.subheader("Exportación de Reporte - Vista Financiera")
+    col_pdf_desc, col_pdf_info = st.columns([1, 2])
+
+    with col_pdf_desc:
+        st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
     if pdf_elements:
         if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_egresos_financiera"):
             with st.spinner("Generando reporte financiero en PDF..."):
@@ -319,12 +323,12 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         if abs(diferencia) > 0.005:
             st.error(f"{nombre} no cuadra con el Egreso Total; diferencia {diferencia:,.2f}. Revisa los datos.")
 
-
+    st.divider()
     st.markdown("**Egresos en el tiempo**")
     fig_tiempo = _fig_egresos_tiempo(mensual)
     with st.container(key="egr_tiempo_pdf", width="stretch"):
         render_grafica(fig_tiempo, key="egr_tiempo")
-    nota_tiempo = st.text_area("Conclusión - Egresos en el Tiempo", max_chars=600, key="note_egr_tiempo")
+    # nota_tiempo = st.text_area("Conclusión - Egresos en el Tiempo", max_chars=600, key="note_egr_tiempo")
 
     if pdf_elements is not None:
         pdf_elements.append({
@@ -332,21 +336,21 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "section_title": "2. Evolución de los Egresos",
             "title": "Egresos en el Tiempo",
             "fig": fig_tiempo,
-            "note": nota_tiempo
+            # "note": nota_tiempo
         })
-
+    st.divider()
     st.markdown("**Egresos facturados por mes**")
     fig_fact_mes = _fig_lineas_por_anio(tabla_mes, "Egreso total")
     with st.container(key="egr_facturado_por_mes_pdf", width="stretch"):
         render_grafica(fig_fact_mes, key="egr_facturado_por_mes")
-    nota_fact_mes = st.text_area("Conclusión - Egresos Facturados por Mes", max_chars=600, key="note_egr_fact_mes")
+    # nota_fact_mes = st.text_area("Conclusión - Egresos Facturados por Mes", max_chars=600, key="note_egr_fact_mes")
 
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
             "title": "Egresos Facturados por Mes",
             "fig": fig_fact_mes,
-            "note": nota_fact_mes
+            # "note": nota_fact_mes
         })
 
     st.divider()
@@ -363,7 +367,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                     render_grafica(fig_nom_gastos, key="egr_nomina_vs_gastos", incluir_notas=False)
             with t1:
                 st.markdown(_html_resumen_nomina_gastos(res_nom), unsafe_allow_html=True)
-        nota_nom_gastos = st.text_area("Conclusión - Nómina vs. Gastos", max_chars=600, key="note_egr_nom_gastos")
+        # nota_nom_gastos = st.text_area("Conclusión - Nómina vs. Gastos", max_chars=600, key="note_egr_nom_gastos")
 
     # Secciones cuadradas: Método de Pago de Gastos
     fig_metodo_pago = _fig_pie_metodo_pago(res)
@@ -376,7 +380,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                     render_grafica(fig_metodo_pago, key="egr_metodo_pago", incluir_notas=False)
             with t2:
                 st.markdown(_html_resumen_metodo_pago(res), unsafe_allow_html=True)
-        nota_metodo_pago = st.text_area("Conclusión - Método de Pago", max_chars=600, key="note_egr_metodo_pago")
+        # nota_metodo_pago = st.text_area("Conclusión - Método de Pago", max_chars=600, key="note_egr_metodo_pago")
 
     # Registro en PDF para Nómina vs. Gastos y Método de Pago
     if pdf_elements is not None:
@@ -386,7 +390,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "section_title": "3. Composición y Métodos de Pago",
             "title": "Nómina vs. Gastos",
             "fig": fig_nom_gastos,
-            "note": nota_nom_gastos
+            # "note": nota_nom_gastos
         })
         try:
             total_egr_nom = float(res_nom.get("gastos", 0) + res_nom.get("nomina", 0))
@@ -414,7 +418,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "type": "image",
             "title": "Método de Pago de Gastos",
             "fig": fig_metodo_pago,
-            "note": nota_metodo_pago
+            # "note": nota_metodo_pago
         })
         try:
             pue_g = float(res.get("pue", 0))
@@ -446,7 +450,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         fig_bump = _fig_bump_anual(df_prov, col_monto)
         with st.container(key="egr_bump_anual_pdf", width="stretch"):
             render_grafica(fig_bump, key="egr_bump_anual")
-        nota_bump = st.text_area("Conclusión - Top 10 Proveedores", max_chars=600, key="note_egr_bump")
+        # nota_bump = st.text_area("Conclusión - Top 10 Proveedores", max_chars=600, key="note_egr_bump")
 
         if pdf_elements is not None:
             pdf_elements.append({
@@ -454,6 +458,6 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 "section_title": "4. Egresos y Riesgo de Dependencia",
                 "title": "Top 10 Proveedores de Cada Año",
                 "fig": fig_bump,
-                "note": nota_bump,
+                # "note": nota_bump,
                 "custom_height": 320  # Alto extendido para evitar corte de ejes X
             })

@@ -10,13 +10,12 @@ import pandas as pd
 import plotly.express as px
 
 from utils import _mxn, _formatear_mxn
-from utils import (_nb, _normalizar_ejercicios, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear)
-from views.controls import al_cambiar_ejercicios
+from utils import (_nb, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear)
 from core.loader import (anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
                          _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache)
 
-from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,PROMEDIO_HISTORICO,
+from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
                     METRICAS_VISUALIZAR, PESOS_INDICE,BANDA_CONCENTRACION_ALTA,
                     BANDA_CONCENTRACION_BAJA,MOSTRAR_INDICE_DESEMPENO,
                     REGLAS_INDICE,PLAZO_DEFECTO_MESES,PERIODOS_EVALUACION, TASA_REFERENCIA_ANUAL,MARGEN_SEGURIDAD_PCT)
@@ -222,33 +221,48 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         st.info("Información insuficiente: no se pudo calcular el flujo mensual de la Sección 2.")
     else:
         flujo_bruto = _flujo_bruto_mensual(balance)
-        anios_ritmo = sorted({int(a) for a in flujo_bruto["Año"]})
+        anios_disponibles = sorted({int(a) for a in flujo_bruto["Año"].dropna()})
+        anios_ritmo = anios_disponibles
         vista_ritmo = st.segmented_control("Vista", VISTAS_CICLOS, default=VISTAS_CICLOS[0], key="ritmo_vista") or VISTAS_CICLOS[0]
-        ritmo_promedios = _promedios_mensuales_historicos(flujo_bruto, anios_ritmo)
-        ritmo_ohlc = {"Cobros": _ohlc_mensual(flujo_bruto, anios_ritmo, "Cobros"),
-                      "Pagos": _ohlc_mensual(flujo_bruto, anios_ritmo, "Pagos")}
-        if not anios_ritmo:
+        ritmo_promedios = _promedios_mensuales_historicos(flujo_bruto, anios_disponibles)
+        ritmo_ohlc = {"Cobros": _ohlc_mensual(flujo_bruto, anios_disponibles, "Cobros"),
+                      "Pagos": _ohlc_mensual(flujo_bruto, anios_disponibles, "Pagos")}
+        if not anios_disponibles:
             st.info("Sin años con datos para analizar.")
         elif vista_ritmo == VISTAS_CICLOS[0]:
             if "ritmo_ejercicios" not in st.session_state:
-                st.session_state["ritmo_ejercicios"] = st.session_state.get("ritmo_ejercicios_prev") or [PROMEDIO_HISTORICO]
-            sel_ej = st.pills("Ejercicios fiscales", [PROMEDIO_HISTORICO] + anios_ritmo, selection_mode="multi",
-                              key="ritmo_ejercicios", on_change=al_cambiar_ejercicios)
-            sel_ej = _normalizar_ejercicios(sel_ej, st.session_state.get("ritmo_ejercicios_prev"))
-            st.session_state["ritmo_ejercicios_prev"] = sel_ej
+                seleccion_previa = st.session_state.get("ritmo_ejercicios_prev", anios_ritmo)
+            else:
+                seleccion_previa = st.session_state["ritmo_ejercicios"]
+            seleccion_previa = list(seleccion_previa or [])
+            seleccion_valida = [
+                int(anio) for anio in seleccion_previa
+                if str(anio).isdigit() and int(anio) in anios_ritmo
+            ]
+            if "ritmo_ejercicios" not in st.session_state:
+                st.session_state["ritmo_ejercicios"] = seleccion_valida or anios_ritmo
+            else:
+                if len(seleccion_valida) != len(seleccion_previa) and not seleccion_valida:
+                    seleccion_valida = anios_ritmo
+                st.session_state["ritmo_ejercicios"] = seleccion_valida
+            sel_ej = st.pills("Ejercicios fiscales", anios_ritmo, selection_mode="multi",
+                              key="ritmo_ejercicios")
+            sel_ej = sorted(int(anio) for anio in (sel_ej or []))
             sel_met = st.pills("Métricas a visualizar", METRICAS_VISUALIZAR, selection_mode="multi",
                                default=st.session_state.get("ritmo_metricas_prev", METRICAS_VISUALIZAR), key="ritmo_metricas")
             metricas_sel = [m for m in METRICAS_VISUALIZAR if m in (sel_met or [])]
             st.session_state["ritmo_metricas_prev"] = metricas_sel
             if sel_ej and metricas_sel:
-                anios_graf = [] if sel_ej == [PROMEDIO_HISTORICO] else sel_ej
                 fig_ciclos = _grafica_ciclos_lineas(
-                    ritmo_promedios,
-                    _series_anuales_por_mes(flujo_bruto, anios_graf) if anios_graf else None,
-                    anios_graf,
+                    _series_anuales_por_mes(flujo_bruto, sel_ej),
+                    sel_ej,
                     metricas_sel,
                 )
                 render_grafica(fig_ciclos, key="exec_ciclos_lineas")
+            elif not sel_ej:
+                st.info("Selecciona al menos un ejercicio fiscal para mostrar la gráfica.")
+            elif not metricas_sel:
+                st.info("Selecciona al menos una métrica para mostrar la gráfica.")
         else:
             fig_velas_c = _grafica_velas(ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"])
             fig_velas_p = _grafica_velas(ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"])
@@ -259,41 +273,25 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             st.markdown("**Pagos Totales · velas por mes**")
             render_grafica(fig_velas_p, key="exec_velas_pagos")
 
-        if anios_ritmo:
+        if anios_disponibles:
             nota_ciclos = st.text_area(
                 "Comentario para las gráficas de Ciclos y Estacionalidad",
                 max_chars=600,
-                placeholder="Escribe un comentario compartido para las cuatro gráficas (máx. 600 caracteres)...",
+                placeholder="Escribe un comentario compartido para las gráficas de la sección (máx. 600 caracteres)...",
                 key="note_graf_ciclos"
             )
 
-            ejercicios_pdf = _normalizar_ejercicios(
-                st.session_state.get("ritmo_ejercicios"),
-                st.session_state.get("ritmo_ejercicios_prev"),
+            ejercicios_pdf = sorted(
+                int(anio) for anio in (st.session_state.get("ritmo_ejercicios", anios_ritmo) or [])
+                if str(anio).isdigit() and int(anio) in anios_ritmo
             )
-            if not ejercicios_pdf:
-                ejercicios_pdf = [PROMEDIO_HISTORICO]
+            metricas_guardadas = st.session_state.get("ritmo_metricas")
+            if metricas_guardadas is None:
+                metricas_guardadas = st.session_state.get("ritmo_metricas_prev", METRICAS_VISUALIZAR)
             metricas_pdf_sel = [
                 metrica for metrica in METRICAS_VISUALIZAR
-                if metrica in (st.session_state.get("ritmo_metricas") or METRICAS_VISUALIZAR)
-            ] or METRICAS_VISUALIZAR
-            anios_graf_pdf = (
-                [] if ejercicios_pdf == [PROMEDIO_HISTORICO]
-                else [int(anio) for anio in ejercicios_pdf]
-            )
-            anios_pdf = anios_graf_pdf or anios_ritmo
-
-            fig_ciclos_promedio = _grafica_ciclos_lineas(
-                ritmo_promedios,
-                metricas=metricas_pdf_sel,
-            )
-            series_pdf = _series_anuales_por_mes(flujo_bruto, anios_pdf)
-            fig_ciclos_anios = _grafica_ciclos_lineas(
-                ritmo_promedios,
-                series_pdf,
-                anios_pdf,
-                metricas_pdf_sel,
-            )
+                if metrica in metricas_guardadas
+            ]
             fig_velas_c = _grafica_velas(
                 ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"]
             )
@@ -301,25 +299,32 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"]
             )
 
-            pdf_elements.extend([
-                {
+            if ejercicios_pdf and metricas_pdf_sel:
+                series_pdf = _series_anuales_por_mes(flujo_bruto, ejercicios_pdf)
+                fig_ciclos_anios = _grafica_ciclos_lineas(
+                    series_pdf,
+                    ejercicios_pdf,
+                    metricas_pdf_sel,
+                )
+                pdf_elements.append({
                     "type": "image",
                     "section_title": "3. Ciclos y Estacionalidad Operativa",
-                    "title": "Promedio histórico mensual",
-                    "fig": fig_ciclos_promedio,
-                    # "custom_height": 620
-                },
-                {
-                    "type": "image",
-                    "title": f"Ejercicios fiscales: {', '.join(map(str, anios_pdf))}",
+                    "title": (
+                        f"Ejercicios fiscales: {', '.join(map(str, ejercicios_pdf))} · "
+                        f"Métricas: {', '.join(metricas_pdf_sel)}"
+                    ),
                     "fig": fig_ciclos_anios,
-                },
-                {
-                    "type": "image",
-                    "title": "Cobros · velas por mes",
-                    "fig": fig_velas_c,
-                    
-                },
+                })
+
+            elemento_velas_c = {
+                "type": "image",
+                "title": "Cobros · velas por mes",
+                "fig": fig_velas_c,
+            }
+            if not (ejercicios_pdf and metricas_pdf_sel):
+                elemento_velas_c["section_title"] = "3. Ciclos y Estacionalidad Operativa"
+            pdf_elements.extend([
+                elemento_velas_c,
                 {
                     "type": "image",
                     "title": "Pagos Totales · velas por mes",

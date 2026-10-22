@@ -430,11 +430,11 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         d, dif = _desglose_cobros(df, pagos_agrupados, col_monto)
         if abs(dif) > 0.005:
             st.error(f"El desglose PUE / PPD cobrado / PPD pendiente no cuadra con el total de {col_monto}; revisa los datos.")
-        
+        st.divider()
         st.markdown("**Facturación emitida en el tiempo**")
         fig_tiempo = _fig_facturacion_tiempo(d, col_monto)
         render_grafica(fig_tiempo, key="ing_facturacion_tiempo")
-        nota_tiempo = st.text_area("Conclusión - Facturación Emitida en el Tiempo", max_chars=600, key="note_ing_tiempo")
+        # nota_tiempo = st.text_area("Conclusión - Facturación Emitida en el Tiempo", max_chars=600, key="note_ing_tiempo")
         
         if pdf_elements is not None:
             pdf_elements.append({
@@ -442,20 +442,20 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 "section_title": "2. Comportamiento de la Facturación e Ingresos",
                 "title": "Facturación Emitida en el Tiempo",
                 "fig": fig_tiempo,
-                "note": nota_tiempo
+                # "note": nota_tiempo
             })
-
+        st.divider()
         st.markdown("**Ingresos facturados**")
         fig_ing_fact = _fig_ingresos_facturados(d, col_monto)
         render_grafica(fig_ing_fact, key="ingresos_facturados")
-        nota_ing_fact = st.text_area("Conclusión - Ingresos Facturados", max_chars=600, key="note_ing_fact")
+        # nota_ing_fact = st.text_area("Conclusión - Ingresos Facturados", max_chars=600, key="note_ing_fact")
         
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
                 "title": "Ingresos Facturados por Mes",
                 "fig": fig_ing_fact,
-                "note": nota_ing_fact
+                # "note": nota_ing_fact
             })
 
         st.divider()
@@ -469,7 +469,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         with c_tabla:
             st.markdown(_html_resumen_metodo_cobro(resumen, col_monto, rotular_base=False), unsafe_allow_html=True)
         
-        nota_metodo = st.text_area("Conclusión - Método de Cobro", max_chars=600, key="note_ing_metodo")
+        # nota_metodo = st.text_area("Conclusión - Método de Cobro", max_chars=600, key="note_ing_metodo")
         
         if pdf_elements is not None:
             # 1. Agregamos la gráfica de dona al PDF
@@ -529,7 +529,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                     "type": "table",
                     "title": "Resumen del Método de Cobro",
                     "df": df_metodo_pdf,
-                    "note": nota_metodo
+                    # "note": nota_metodo
                 })
             except Exception as e:
                 pass
@@ -543,7 +543,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
     else:
         fig_bump = _fig_bump_anual(df, col_monto)
         render_grafica(fig_bump, key="ing_bump_anual", width="stretch")
-        nota_bump = st.text_area("Conclusión - Concentración y Top 10 Clientes", max_chars=600, key="note_ing_bump")
+        # nota_bump = st.text_area("Conclusión - Concentración y Top 10 Clientes", max_chars=600, key="note_ing_bump")
         
         if pdf_elements is not None:
             pdf_elements.append({
@@ -551,7 +551,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 "section_title": "4. Concentración y Riesgo de Dependencia",
                 "title": "Evolución Top 10 Clientes (Bump Chart)",
                 "fig": fig_bump,
-                "note": nota_bump
+                # "note": nota_bump
             })
 
     # ---------------------------------------------------------------
@@ -561,20 +561,14 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
     st.subheader("Exportación de Reporte - Vista Financiera")
     
     col_pdf_desc, col_pdf_info = st.columns([1, 2])
-    with col_pdf_info:
-        fin_notes = st.text_area(
-            "Notas / Observaciones Generales de la Vista Financiera:",
-            placeholder="Escribe tus observaciones del módulo de ingresos aquí...",
-            key="fin_notes_general"
-        )
+
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
         if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin"):
             with st.spinner("Generando reporte financiero en PDF..."):
                 final_elements = []
-                if fin_notes.strip():
-                    final_elements.append({"type": "heading", "text": "Observaciones del Analista"})
-                    final_elements.append({"type": "callout", "text": fin_notes})
+                final_elements.append({"type": "heading", "text": "Observaciones del Analista"})
+                final_elements.append({"type": "callout"})
                 final_elements.extend(pdf_elements)
 
                 pdf_bytes = generate_modular_pdf(

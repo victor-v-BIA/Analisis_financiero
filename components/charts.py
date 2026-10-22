@@ -10,8 +10,8 @@ import pandas as pd
 import html
 import plotly.express as px
 from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
-                    METRICAS_VISUALIZAR,COLOR_COBROS,COLOR_PAGOS,MESES_ES,
-                    COLOR_PAGOS,COLOR_VELA_SUBE,COLOR_VELA_BAJA,
+                    METRICAS_VISUALIZAR,MESES_ES,
+                    COLOR_VELA_SUBE,COLOR_VELA_BAJA,
                     COLOR_LINEA_PROMEDIO,ANCHOS_SIN_FACTURACION,CSS_SIN_FACTURACION,
                     ANCHOS_DETALLE_ANUAL,CSS_DETALLE_ANUAL, PALETA_BUMP, PALETA_ING,
                     SEPARADOR_PIE,TEXTO_SOBRE_ING,NOMBRE_NOMINA,COLOR_GASTOS,COLOR_NOMINA,
@@ -129,44 +129,28 @@ def _grafica_diferencia_cobros_pagos(periodos, cobros, pagos, diferencia, nombre
     return fig
 
 
-def _grafica_ciclos_lineas(benchmark: pd.DataFrame, series_anio: dict | None = None, anios: list[int] | None = None,
+def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
                            metricas: list[str] | None = None) -> go.Figure:
-    """Flujo mensual (Ene-Dic) de Cobros y Pagos Totales, siempre del mes aislado (sin acumulados, tendencias ni barras).
-    `metricas` (control «Métricas a visualizar» de Streamlit; por defecto ambas) decide QUÉ se dibuja: un `go.Scatter` de una métrica
-    ausente de la lista no se crea para ningún año ni para el promedio (el filtro vive en Python, no en la leyenda de Plotly, que se
-    reinicia en cada rerun). Escenario A (`anios` vacío o None): 'Cobros Promedio' (verde) y/o 'Pagos Promedio' (rojo), `width=4`, con el
-    promedio mensual de TODO el dataset (`benchmark` = `_promedios_mensuales_historicos`). Escenario B (`anios` con años): por cada año,
-    una línea de cada métrica elegida (`width=2`, `lines+markers`; `series_anio` = `_series_anuales_por_mes`) con el MISMO color sólido
-    de la métrica para todos los años (verde #2E8B57 Cobros, rojo #D32F2F Pagos) y leyenda agrupada (`legendgroup`): solo la 1.ª línea
-    dibujada de cada métrica entra a la leyenda. El año se lee en el hover (`customdata` = año), sin textos dentro de la gráfica."""
+    """Flujo mensual de los años seleccionados. El color identifica el ejercicio fiscal; si se muestran ambas métricas,
+    Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
     metricas = METRICAS_VISUALIZAR if metricas is None else list(metricas)
-
-    def v(x):
-        return None if pd.isna(x) else float(x)
     fig = go.Figure()
-    if not anios:
-        for metrica, col, color in (("Cobros", "Cobros_Promedio", COLOR_COBROS), ("Pagos", "Pagos_Promedio", COLOR_PAGOS)):
-            if metrica not in metricas:
-                continue
-            nombre = f"{metrica} Promedio"
-            y = [v(x) for x in benchmark[col]]
+    anios = sorted(int(a) for a in anios)
+    metricas_sel = [metrica for metrica in METRICAS_VISUALIZAR if metrica in metricas]
+    estilos = {"Cobros": ("solid", "circle"), "Pagos": ("dash", "square")}
+    for anio in anios:
+        color = px.colors.qualitative.Plotly[(anio - 2021) % len(px.colors.qualitative.Plotly)]
+        for j, metrica in enumerate(metricas_sel):
+            dash, simbolo = estilos[metrica]
             fig.add_trace(go.Scatter(
-                x=MESES_ES, y=y, name=nombre, mode="lines", connectgaps=False, line=dict(color=color, width=4, dash="solid"),
-                customdata=[_mxn_2d(x) if x is not None else "Sin datos" for x in y],
-                hovertemplate="<b>" + nombre + "</b> · %{x}: %{customdata}<extra></extra>"))
-    else:
-        anios = sorted(int(a) for a in anios)
-        for metrica, color in (("Cobros", COLOR_COBROS), ("Pagos", COLOR_PAGOS)):                  # un solo color por métrica, igual para todos los años
-            if metrica not in metricas:                                                              # métrica no elegida: ningún trazo, de ningún año
-                continue
-            for i, anio in enumerate(anios):
-                y = [v(x) for x in series_anio[metrica][anio]]
-                fig.add_trace(go.Scatter(
-                    x=MESES_ES, y=y, name=metrica, legendgroup=metrica.lower(), showlegend=(i == 0),    # leyenda: solo «Cobros» y/o «Pagos»
-                    mode="lines+markers", connectgaps=False,
-                    line=dict(color=color, width=2, dash="solid"), marker=dict(size=6, color=color),
-                    customdata=[anio] * len(MESES_ES),                                                  # el año va en el tooltip
-                    hovertemplate=("<b>Año: %{customdata}</b><br>Mes: %{x}<br>" + f"Flujo de {metrica}: " + "MXN %{y:,.2f}<extra></extra>")))
+                x=MESES_ES, y=[None if pd.isna(x) else float(x) for x in series_anio[metrica][anio]],
+                name=str(anio), legendgroup=str(anio), showlegend=(j == 0),
+                mode="lines+markers", connectgaps=False,
+                line=dict(color=color, width=2, dash=dash),
+                marker=dict(size=6, color=color, symbol=simbolo),
+                customdata=[anio] * len(MESES_ES),
+                hovertemplate=("<b>Año: %{customdata}</b><br>Mes: %{x}<br>" + f"{metrica}: " +
+                               "MXN %{y:,.2f}<extra></extra>")))
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=MESES_ES, showgrid=False)
     fig.update_yaxes(tickformat=",.0f", showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=True, zerolinecolor="rgba(128,128,128,0.5)")
     fig = _layout_plotly(fig, y_titulo="Flujo mensual (MXN)", altura=420)

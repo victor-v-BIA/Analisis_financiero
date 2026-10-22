@@ -4,8 +4,7 @@ Funciones de propósito general para formateo, normalización de textos, convers
 import unicodedata
 import pandas as pd
 import re
-from config import (_PARENTESIS,_GRUPO_FINANCIERO_FINAL, _SUFIJOS_CORPORATIVOS, _CONECTORES_MINUSCULA, COL_FECHA_REP,MESES_ES
-,PROMEDIO_HISTORICO)
+from config import (_PARENTESIS,_GRUPO_FINANCIERO_FINAL, _SUFIJOS_CORPORATIVOS, _CONECTORES_MINUSCULA, COL_FECHA_REP,MESES_ES)
 
 #  Clase auxiliar
 class _ArchivoMem:
@@ -198,17 +197,6 @@ def _anios_txt(anios: list[int]) -> str:
     """'2022–2025' si los años son consecutivos (2 o más); si no, la lista separada por comas."""
     anios = sorted(anios)
     return f"{anios[0]}–{anios[-1]}" if len(anios) >= 2 and anios == list(range(anios[0], anios[-1] + 1)) else ", ".join(map(str, anios))
-
-def _normalizar_ejercicios(nuevo, previo) -> list:
-    """Exclusión mutua de los «Ejercicios fiscales»: 'Promedio Histórico' y los años individuales no conviven. Si ambos quedaron
-    marcados, gana lo que el usuario acaba de pulsar (lo ausente en `previo`): recién pulsado el Promedio -> solo el Promedio;
-    recién pulsado un año -> solo los años (el Promedio se descarta). Devuelve ['Promedio Histórico'], los años en orden o []."""
-    nuevo, previo = list(nuevo or []), list(previo or [])
-    anios = sorted(int(x) for x in nuevo if x != PROMEDIO_HISTORICO)
-    if PROMEDIO_HISTORICO in nuevo and anios:
-        return [PROMEDIO_HISTORICO] if PROMEDIO_HISTORICO not in previo else anios
-    return [PROMEDIO_HISTORICO] if PROMEDIO_HISTORICO in nuevo else anios
-
 
 def _nb(archivo) -> tuple[str, bytes]:
     """(nombre, contenido) de un archivo subido: la llave de los cálculos en caché del Dashboard Ejecutivo."""
