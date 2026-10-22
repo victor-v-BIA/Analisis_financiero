@@ -3,6 +3,8 @@
 '''
 Contiene la vista completa del Dashboard de Riesgo y Viabilidad.
 '''
+from html import escape
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -262,17 +264,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 st.info("Selecciona al menos un ejercicio fiscal para mostrar la gráfica.")
             elif not metricas_sel:
                 st.info("Selecciona al menos una métrica para mostrar la gráfica.")
-            if "note_graf_ciclos_lineas_input" not in st.session_state:
-                st.session_state["note_graf_ciclos_lineas_input"] = st.session_state.get(
-                    "note_graf_ciclos_lineas", ""
-                )
-            nota_tendencia_widget = st.text_area(
-                "Comentario para la vista de Tendencia (Líneas)",
-                max_chars=600,
-                placeholder="Escribe un comentario para la tendencia (máx. 600 caracteres)...",
-                key="note_graf_ciclos_lineas_input",
-            )
-            st.session_state["note_graf_ciclos_lineas"] = nota_tendencia_widget
         else:
             fig_velas_c = _grafica_velas(ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"])
             fig_velas_p = _grafica_velas(ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"])
@@ -282,17 +273,19 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             st.markdown("**Pagos Totales · velas por mes**")
             render_grafica(fig_velas_p, key="exec_velas_pagos")
-            if "note_graf_ciclos_velas_input" not in st.session_state:
-                st.session_state["note_graf_ciclos_velas_input"] = st.session_state.get(
-                    "note_graf_ciclos_velas", ""
-                )
-            nota_velas_widget = st.text_area(
-                "Comentario para la vista de Volatilidad (Velas Japonesas)",
-                max_chars=600,
-                placeholder="Escribe un comentario compartido para las gráficas de velas (máx. 600 caracteres)...",
-                key="note_graf_ciclos_velas_input",
-            )
-            st.session_state["note_graf_ciclos_velas"] = nota_velas_widget
+
+        st.text_area(
+            "Comentario para la vista de Tendencia (Líneas)",
+            max_chars=600,
+            placeholder="Escribe un comentario para la tendencia (máx. 600 caracteres)...",
+            key="note_graf_ciclos_lineas_input",
+        )
+        st.text_area(
+            "Comentario para la vista de Volatilidad (Velas Japonesas)",
+            max_chars=600,
+            placeholder="Escribe un comentario compartido para las gráficas de velas (máx. 600 caracteres)...",
+            key="note_graf_ciclos_velas_input",
+        )
 
         if anios_disponibles:
             ejercicios_pdf = sorted(
@@ -326,7 +319,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                         elemento_tendencia["section_title"] = "3. Ciclos y Estacionalidad Operativa"
                     if i == len(METRICAS_VISUALIZAR) - 1:
                         elemento_tendencia["note"] = st.session_state.get(
-                            "note_graf_ciclos_lineas", ""
+                            "note_graf_ciclos_lineas_input",
+                            "",
                         ).strip()
                     pdf_elements.append(elemento_tendencia)
 
@@ -343,7 +337,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     "type": "image",
                     "title": "Pagos Totales · velas por mes",
                     "fig": fig_velas_p,
-                    "note": st.session_state.get("note_graf_ciclos_velas", "").strip(),
+                    "note": st.session_state.get(
+                        "note_graf_ciclos_velas_input",
+                        "",
+                    ).strip(),
                 },
             ])
 
