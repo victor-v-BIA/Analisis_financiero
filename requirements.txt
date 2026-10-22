@@ -1,5 +1,5 @@
 # Dependencias de la aplicación
-streamlit==1.64.0
+streamlit>=1.45.1
 pandas
 numpy
 plotly
