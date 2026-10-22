@@ -549,8 +549,8 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         mode="lines+markers+text",  # <-- Añadido "+text" para mostrar etiquetas fijas
         text=texto_inpc,            # <-- Lista con el texto de cada punto
         textposition="top center",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
-        textfont=dict(color="#FACC15", size=11), # Opcional: color a juego con la línea
-        line=dict(color="#FACC15", width=3), marker=dict(size=9, color="#FACC15"),
+        textfont=dict(color="#FA4A15", size=11), # Opcional: color a juego con la línea
+        line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,
         hovertemplate=("<b>%{x}</b><br>INPC: %{y:.1f}<br>Ingresos: %{customdata[0]:.1f}"
                        "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")
