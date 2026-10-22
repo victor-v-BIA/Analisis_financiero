@@ -295,7 +295,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 "type": "table",
                 "section_title": "1. Evolución de Egresos y Desglose Anual",
                 "title": "Desglose Año con Año",
-                "df": df_prov  # (o tu objeto DataFrame con el desglose formateado)
+                # "df": df_prov  # (o tu objeto DataFrame con el desglose formateado)
             })
 
     nom = _preparar_nomina(nomina_raw)
