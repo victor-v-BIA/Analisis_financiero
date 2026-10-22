@@ -31,18 +31,7 @@ st.markdown("""
 with st.sidebar:
   st.header("Acciones del Reporte")
 
-  if st.button("Generar Reporte PDF", type="primary", use_container_width=True):
-    # Agregamos un comentario HTML con el tiempo actual para que el contenido
-    # sea siempre único y Streamlit se vea obligado a re-ejecutar el script.
-    st.components.v1.html(
-        f"""
-        <script>
-            window.parent.print();
-        </script>
-        <!-- timestamp: {time.time()} -->
-        """,
-        height=0,
-    )
+  
 
     
 
@@ -53,7 +42,7 @@ def main() -> None:
     st.markdown(CSS_TARJETAS_KPI, unsafe_allow_html=True)
 
     with st.sidebar:
-        st.header("📁 Carga de Datos")
+        st.header("Carga de Datos")
         archivos_subidos = st.file_uploader("Sube todos tus reportes aquí (Excel/CSV)",
                                             type=['csv', 'xlsx', 'xls'], accept_multiple_files=True)
 
