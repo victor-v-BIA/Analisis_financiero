@@ -547,7 +547,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # 6 (Sección 7). Dictamen de riesgo crediticio
     # ---------------------------------------------------------------
     st.divider()
-    st.header("7. Estimación de Capacidad de Pago",
+    st.header("7.Estimación de Capacidad de Pago",
               help=('''Estimación documental con los CFDI de la ventana de 5 años; no es una oferta ni una opinión crediticia. El flujo mensual es EL MISMO resumen
                                   mensual de la sección 2 (Cobros − Pagos considerados − Nómina, en Flujo de Efectivo): esta sección no vuelve
                                   a extraer ni cruzar facturas. Un mes sin nómina vale 0 y se conservan los meses negativos.
