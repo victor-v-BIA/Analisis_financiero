@@ -247,7 +247,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         pdf_elements.append({
             "type": "table",
             "section_title": "Evolución Económica de Egresos",
-            "title": "Desglose Año con Año",
+            "title": "Desglose Año con Año Egresos",
             "df": tabla
         })
         
@@ -296,7 +296,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             pdf_elements.append({
                 "type": "table",
                 "section_title": "1. Evolución de Egresos y Desglose Anual",
-                "title": "Desglose Año con Año",
+                "title": "Desglose Año con Año Egresos",
                 "df": tabla_pdf
             })
 

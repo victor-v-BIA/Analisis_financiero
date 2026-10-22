@@ -219,7 +219,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None, fi
     st.divider()
     if econ:
         _mostrar_desglose()
-        pdf_elements.append({"type": "table", "title": "Desglose Año con Año (Vista Económica)", "df": tabla_pdf})
+        pdf_elements.append({"type": "table", "title": "Desglose Año con Año Ingresos", "df": tabla_pdf})
         st.divider()
         _vista_economica("ingresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5, pdf_elements)
         return
@@ -306,10 +306,10 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
             # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
             
-            nota_base100 = st.text_area(f"Conclusión - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+            nota_base100 = st.text_area(f"Conclusión - Egresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
             pdf_elements.append({
                 "type": "image",
-                "title": f"Ingresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
+                "title": f"Egresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
                 "fig": fig_base100,
                 "note": nota_base100
                 
@@ -417,7 +417,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "table",
                 "section_title": "1. Evolución de Ingresos y Desglose Anual",
-                "title": "Desglose Año con Año",
+                "title": "Desglose Año con Año Ingresos",
                 "df": tabla_pdf
             })
 

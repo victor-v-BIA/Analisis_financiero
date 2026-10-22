@@ -3,8 +3,6 @@
 '''
 Contiene la vista completa del Dashboard de Riesgo y Viabilidad.
 '''
-from html import escape
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -32,6 +30,7 @@ from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa
                                  _trazabilidad_indicadores,_indice_desempeno,_periodo_evaluacion,_excedente_homologado,_dictamen_credito)
 
 from components.pdf_generator import generate_modular_pdf
+
 
 def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago, f_nomina) -> None:
     """Dashboard Ejecutivo (Flujo de Efectivo): cruza Ingresos y Egresos para un vistazo de riesgo y viabilidad, antes de entrar
@@ -263,6 +262,17 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 st.info("Selecciona al menos un ejercicio fiscal para mostrar la gráfica.")
             elif not metricas_sel:
                 st.info("Selecciona al menos una métrica para mostrar la gráfica.")
+            if "note_graf_ciclos_lineas_input" not in st.session_state:
+                st.session_state["note_graf_ciclos_lineas_input"] = st.session_state.get(
+                    "note_graf_ciclos_lineas", ""
+                )
+            nota_tendencia_widget = st.text_area(
+                "Comentario para la vista de Tendencia (Líneas)",
+                max_chars=600,
+                placeholder="Escribe un comentario para la tendencia (máx. 600 caracteres)...",
+                key="note_graf_ciclos_lineas_input",
+            )
+            st.session_state["note_graf_ciclos_lineas"] = nota_tendencia_widget
         else:
             fig_velas_c = _grafica_velas(ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"])
             fig_velas_p = _grafica_velas(ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"])
@@ -272,26 +282,23 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             st.markdown("**Pagos Totales · velas por mes**")
             render_grafica(fig_velas_p, key="exec_velas_pagos")
+            if "note_graf_ciclos_velas_input" not in st.session_state:
+                st.session_state["note_graf_ciclos_velas_input"] = st.session_state.get(
+                    "note_graf_ciclos_velas", ""
+                )
+            nota_velas_widget = st.text_area(
+                "Comentario para la vista de Volatilidad (Velas Japonesas)",
+                max_chars=600,
+                placeholder="Escribe un comentario compartido para las gráficas de velas (máx. 600 caracteres)...",
+                key="note_graf_ciclos_velas_input",
+            )
+            st.session_state["note_graf_ciclos_velas"] = nota_velas_widget
 
         if anios_disponibles:
-            nota_ciclos = st.text_area(
-                "Comentario para las gráficas de Ciclos y Estacionalidad",
-                max_chars=600,
-                placeholder="Escribe un comentario compartido para las gráficas de la sección (máx. 600 caracteres)...",
-                key="note_graf_ciclos"
-            )
-
             ejercicios_pdf = sorted(
                 int(anio) for anio in (st.session_state.get("ritmo_ejercicios", anios_ritmo) or [])
                 if str(anio).isdigit() and int(anio) in anios_ritmo
             )
-            metricas_guardadas = st.session_state.get("ritmo_metricas")
-            if metricas_guardadas is None:
-                metricas_guardadas = st.session_state.get("ritmo_metricas_prev", METRICAS_VISUALIZAR)
-            metricas_pdf_sel = [
-                metrica for metrica in METRICAS_VISUALIZAR
-                if metrica in metricas_guardadas
-            ]
             fig_velas_c = _grafica_velas(
                 ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"]
             )
@@ -299,29 +306,36 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"]
             )
 
-            if ejercicios_pdf and metricas_pdf_sel:
+            if ejercicios_pdf:
                 series_pdf = _series_anuales_por_mes(flujo_bruto, ejercicios_pdf)
-                fig_ciclos_anios = _grafica_ciclos_lineas(
-                    series_pdf,
-                    ejercicios_pdf,
-                    metricas_pdf_sel,
-                )
-                pdf_elements.append({
-                    "type": "image",
-                    "section_title": "3. Ciclos y Estacionalidad Operativa",
-                    "title": (
-                        f"Ejercicios fiscales: {', '.join(map(str, ejercicios_pdf))} · "
-                        f"Métricas: {', '.join(metricas_pdf_sel)}"
-                    ),
-                    "fig": fig_ciclos_anios,
-                })
+                for i, metrica in enumerate(METRICAS_VISUALIZAR):
+                    fig_tendencia = _grafica_ciclos_lineas(
+                        series_pdf,
+                        ejercicios_pdf,
+                        [metrica],
+                    )
+                    elemento_tendencia = {
+                        "type": "image",
+                        "title": (
+                            f"{metrica} · Tendencia mensual · Ejercicios fiscales: "
+                            f"{', '.join(map(str, ejercicios_pdf))}"
+                        ),
+                        "fig": fig_tendencia,
+                    }
+                    if i == 0:
+                        elemento_tendencia["section_title"] = "3. Ciclos y Estacionalidad Operativa"
+                    if i == len(METRICAS_VISUALIZAR) - 1:
+                        elemento_tendencia["note"] = st.session_state.get(
+                            "note_graf_ciclos_lineas", ""
+                        ).strip()
+                    pdf_elements.append(elemento_tendencia)
 
             elemento_velas_c = {
                 "type": "image",
                 "title": "Cobros · velas por mes",
                 "fig": fig_velas_c,
             }
-            if not (ejercicios_pdf and metricas_pdf_sel):
+            if not ejercicios_pdf:
                 elemento_velas_c["section_title"] = "3. Ciclos y Estacionalidad Operativa"
             pdf_elements.extend([
                 elemento_velas_c,
@@ -329,13 +343,9 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     "type": "image",
                     "title": "Pagos Totales · velas por mes",
                     "fig": fig_velas_p,
+                    "note": st.session_state.get("note_graf_ciclos_velas", "").strip(),
                 },
             ])
-            if nota_ciclos.strip():
-                pdf_elements.append({
-                    "type": "callout",
-                    "text": f"<b>Conclusión:</b><br/>{escape(nota_ciclos)}",
-                })
 
     # ---------------------------------------------------------------
     # Indicador 2: Tiempos documentados
