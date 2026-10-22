@@ -652,7 +652,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             "title": "Comparativa Vertical de Escenarios de Financiamiento",
             "df": df_escenarios_pdf,
             "cell_scale": 1.15,
-            "note": ''' La capacidad de pago mostrada es una **estimación** basada en la información fiscal histórica de la empresa y 
+            "note": ''' La capacidad de pago mostrada es una estimación basada en la información fiscal histórica de la empresa y 
                         no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
                         criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
                         a un crédito que se ajuste a sus necesitades'''
