@@ -1,4 +1,5 @@
 import io
+from copy import deepcopy
 import pandas as pd
 from xml.sax.saxutils import escape
 from PIL import Image as PILImage
@@ -118,7 +119,14 @@ def create_callout_box(text, styles):
     return box_table
 
 
-def plotly_fig_to_reportlab_image(fig, width_pt=500, height_pt=None):
+def plotly_fig_to_reportlab_image(fig, width_pt=500, height_pt=None, preserve_textfont_size=False):
+    if preserve_textfont_size:
+        fig = deepcopy(fig)
+        font_scale = 0.75 * 1000 / width_pt
+        for trace in fig.data:
+            if trace.type == "pie" and isinstance(trace.textfont.size, (int, float)):
+                trace.textfont.size *= font_scale
+
     img_bytes = fig.to_image(format="png", width=1000, height=600, scale=2)
     img_buffer = io.BytesIO(img_bytes)
     pil_img = PILImage.open(img_buffer)
@@ -357,10 +365,20 @@ def generate_modular_pdf(
                 
                 # Soportar un alto personalizado (custom_height) para gráficas que requieran más espacio vertical
                 custom_height = el.get("custom_height", None)
+                preserve_textfont_size = el.get("preserve_textfont_size", False)
                 if custom_height:
-                    img = plotly_fig_to_reportlab_image(fig, width_pt=550, height_pt=custom_height)
+                    img = plotly_fig_to_reportlab_image(
+                        fig,
+                        width_pt=550,
+                        height_pt=custom_height,
+                        preserve_textfont_size=preserve_textfont_size,
+                    )
                 else:
-                    img = plotly_fig_to_reportlab_image(fig, width_pt=350)
+                    img = plotly_fig_to_reportlab_image(
+                        fig,
+                        width_pt=350,
+                        preserve_textfont_size=preserve_textfont_size,
+                    )
                     
                 section_content.append(img)
                 

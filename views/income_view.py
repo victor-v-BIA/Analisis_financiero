@@ -477,8 +477,9 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "image",
                 "section_title": "3. Estructura y Método de Cobro",
-                "title": "Distribución por Método de Cobro**",
-                "fig": fig_pie
+                "title": "Distribución por Método de Cobro",
+                "fig": fig_pie,
+                "preserve_textfont_size": True,
               
             })
             

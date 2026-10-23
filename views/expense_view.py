@@ -390,6 +390,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "section_title": "3. Composición y Métodos de Pago",
             "title": "Nómina vs. Gastos",
             "fig": fig_nom_gastos,
+            "preserve_textfont_size": True,
             # "note": nota_nom_gastos
         })
         try:
@@ -418,6 +419,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "type": "image",
             "title": "Método de Pago de Gastos",
             "fig": fig_metodo_pago,
+            "preserve_textfont_size": True,
             # "note": nota_metodo_pago
         })
         try:
