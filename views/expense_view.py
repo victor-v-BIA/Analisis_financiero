@@ -14,7 +14,7 @@ from core.loader import (anios_5_archivos,_columnas_archivo,validar_columnas,
                          _facturas_egresos_cache,excluir_años_incompletos,
                          cargar_base, buscar_columna,preparar_complementos_egresos,_preparar_nomina)
 
-from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODULO,AYUDA_TOTAL,NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,NOMBRE_NOMINA,AYUDA_TOP10_ANUAL)
+from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODULO,AYUDA_TOTAL,NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,NOMBRE_NOMINA,COLOR_NOMINA,AYUDA_TOP10_ANUAL)
 from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos)
 from utils import (dinero)
 from components.charts import  render_notas_reporte
@@ -403,13 +403,14 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             df_nom_pdf = pd.DataFrame([
                 {"Concepto": f"<font size=8 color='#6B7280'>Monto Total</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
                 {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Gastos Operativos</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
-                {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Nómina Total</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
+                {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Nómina Total</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
             ])[["Concepto"]]
 
             pdf_elements.append({
                 "type": "table",
                 "title": "Resumen — Nómina vs. Gastos",
-                "df": df_nom_pdf
+                "df": df_nom_pdf,
+                "white_background": True
             })
         except Exception:
             pass
@@ -438,7 +439,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             pdf_elements.append({
                 "type": "table",
                 "title": "Resumen — Método de Pago de Gastos",
-                "df": df_pago_pdf
+                "df": df_pago_pdf,
+                "white_background": True
             })
         except Exception:
             pass

@@ -316,8 +316,9 @@ def generate_modular_pdf(
                     t.hAlign = "CENTER"
                 
                 if num_cols == 1:
+                    cell_background = colors.white if el.get("white_background", False) else colors.HexColor("#F9FAFB")
                     t.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F9FAFB")),
+                        ('BACKGROUND', (0, 0), (-1, -1), cell_background),
                         ('TOPPADDING', (0, 0), (-1, -1), 5),
                         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
                         ('LEFTPADDING', (0, 0), (-1, -1), 10),

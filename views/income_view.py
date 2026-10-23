@@ -531,6 +531,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                     "type": "table",
                     "title": "Resumen del Método de Cobro",
                     "df": df_metodo_pdf,
+                    "white_background": True,
                     # "note": nota_metodo
                 })
             except Exception as e:
