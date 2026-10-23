@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from views.controls import barra_control
 
-from utils import (dinero, _nb, _rango_base100)
+from utils import (dinero, _nb, _rango_base100, buscar_columna)
 from components.charts import (_grafica_ingresos_gastos, _insight_html,
                                _layout_eco, _fig_facturacion_tiempo,
                                _fig_ingresos_facturados, _fig_pie_metodo_cobro,
@@ -18,7 +18,8 @@ from components.charts import (_grafica_ingresos_gastos, _insight_html,
                                render_notas_reporte,_fig_poder_adquisitivo,_fig_eficiencia_operativa)
 
 from core.loader import (anios_5_archivos, _facturas_cache, excluir_años_incompletos,
-                         _complementos_cache, cargar_base, _facturacion_anual_cache, _cargar_bases_economicas)
+                         _complementos_cache, _facturas_egresos_cache, cargar_base,
+                         preparar_complementos_egresos, _facturacion_anual_cache, _cargar_bases_economicas)
 
 from config import (CODIGO_VERSION, REP_VACIO, VISTAS_MODULO, NOMBRE_FECHA,
                     AYUDA_TOTAL, CSS_VISTA_ECONOMICA, ETIQUETA_SELECTOR_SERIE,
@@ -29,9 +30,140 @@ from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vige
                                 matriz_anual, _preparar_concentracion, _pagos_por_factura,
                                 _insight_ingresos_gastos, _anio_base, _rebase, _insight_itaee,
                                 _insight_inpp, _insight_tiie, _desglose_cobros, _serie_mensual_por_anio,
-                                _resumen_metodo_cobro_global, _resumen_metodo_cobro)
+                                _resumen_metodo_cobro_global, _resumen_metodo_cobro, facturas_a_mxn)
 
 from components.pdf_generator import generate_modular_pdf
+
+
+def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
+                             egresos: pd.Series) -> go.Figure:
+    """Crea una serie mensual con ingresos y egresos alrededor de cero y su diferencia."""
+    x = [str(periodo) for periodo in periodos]
+    egresos_negativos = -egresos
+    diferencia = ingresos - egresos
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=x, y=ingresos, name="Ingresos", marker_color="#2563EB",
+        hovertemplate="<b>%{x}</b><br>Ingresos: $%{y:,.2f}<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=x, y=egresos_negativos, name="Egresos", marker_color="#60A5FA",
+        customdata=egresos,
+        hovertemplate="<b>%{x}</b><br>Egresos: $%{customdata:,.2f}<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=diferencia, name="Diferencia mensual", mode="lines+markers",
+        line=dict(color="#F97316", width=3), marker=dict(size=6),
+        hovertemplate="<b>%{x}</b><br>Diferencia: $%{y:,.2f}<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_width=1, line_color="#9CA3AF")
+    fig.update_layout(
+        barmode="relative", height=380,
+        margin=dict(l=90, r=20, t=55, b=55),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        xaxis_title=None, yaxis_title="MXN",
+    )
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=x, tickangle=-45)
+    fig.update_yaxes(tickformat=",.0f", zeroline=False, gridcolor="rgba(128,128,128,0.18)")
+    return fig
+
+
+def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
+                                   f_fac_egr, f_pago_egr, anios_5, ejercicios,
+                                   pdf_elements: list) -> None:
+    """Muestra facturación devengada y flujo fiscal mensual de ingresos frente a egresos."""
+    st.divider()
+    st.subheader(
+        "Facturación Neta y Flujo Fiscal",
+        help=("Facturación Neta: facturas emitidas menos facturas recibidas, por fecha de emisión y sin notas de "
+              "crédito. Flujo Fiscal: facturas PUE por fecha de emisión más complementos por fecha de pago; "
+              "ingresos y egresos se muestran a ambos lados del cero y la línea representa su diferencia mensual."),
+    )
+    faltan = [nombre for nombre, archivo in (
+        ("Facturación Recibida", f_fac_egr),
+        ("Complementos de Pago Recibidos (Base PAGO de Egresos)", f_pago_egr),
+    ) if archivo is None]
+    if faltan:
+        st.info("Para comparar Ingresos contra Egresos carga también: " + " y ".join(faltan) + ".")
+        return
+
+    try:
+        fac_egr, _ = _facturas_egresos_cache(
+            f_fac_egr.name, f_fac_egr.getvalue(), CODIGO_VERSION)
+        fac_egr, _ = excluir_años_incompletos(fac_egr, "Fecha", "Facturación recibida", anios_5)
+    except KeyError as e:
+        st.info(f"Información insuficiente en la Facturación Recibida: {e.args[0]}")
+        return
+
+    fac_egr = fac_egr[fac_egr["Fecha"].dt.year.isin(ejercicios)]
+    fac_egr, n_sin_tc = facturas_a_mxn(fac_egr)
+    if n_sin_tc:
+        st.warning(f"{n_sin_tc} factura(s) recibida(s) sin Tipo de Cambio válido se excluyeron de las gráficas.")
+
+    base_pago_egr = cargar_base(f_pago_egr)
+    col_estatus = buscar_columna(base_pago_egr.columns, "Estatus")
+    if col_estatus is not None:
+        base_pago_egr = base_pago_egr[
+            base_pago_egr[col_estatus].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])
+        ]
+    col_monto = buscar_columna(base_pago_egr.columns, "Monto MXN")
+    col_fecha = buscar_columna(base_pago_egr.columns, "Fecha Pago")
+    faltan_columnas = [nombre for nombre, columna in (
+        ("Monto MXN", col_monto), ("Fecha Pago", col_fecha),
+    ) if columna is None]
+    if faltan_columnas:
+        st.info(f"Información insuficiente en la Base PAGO de Egresos: faltan las columnas {faltan_columnas}.")
+        return
+    pagos_egr = preparar_complementos_egresos(base_pago_egr, col_monto, col_fecha)
+    pagos_egr = pagos_egr[pagos_egr["Año"].isin(ejercicios)]
+
+    anios = sorted(int(anio) for anio in ejercicios)
+    periodos = pd.PeriodIndex(
+        [pd.Period(f"{anio}-{mes:02d}", freq="M") for anio in anios for mes in range(1, 13)],
+        freq="M",
+    )
+
+    def sumar_por_mes(df: pd.DataFrame, fecha: str, monto: str) -> pd.Series:
+        fechas = df[fecha]
+        periodos_df = fechas if isinstance(fechas.dtype, pd.PeriodDtype) else fechas.dt.to_period("M")
+        serie = df.assign(_Periodo=periodos_df).groupby("_Periodo")[monto].sum()
+        return serie.reindex(periodos, fill_value=0.0).astype(float)
+
+    facturas_ing = fac_ing[~fac_ing["Es_NCR"]]
+    facturas_egr = fac_egr[~fac_egr["Es_NCR"]]
+    ingresos_devengados = sumar_por_mes(facturas_ing, "Fecha", "Total")
+    egresos_devengados = sumar_por_mes(facturas_egr, "Fecha", "Total")
+
+    ingresos_pue = sumar_por_mes(
+        facturas_ing[facturas_ing["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
+    ingresos_complementos = sumar_por_mes(rep_ing, "Fecha_Cobro", "Cobro_Efectivo")
+    egresos_pue = sumar_por_mes(
+        facturas_egr[facturas_egr["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
+    egresos_complementos = sumar_por_mes(pagos_egr, "Mes", "Monto_Num")
+
+    fig_neta = _figura_ingresos_egresos(periodos, ingresos_devengados, egresos_devengados)
+    fig_flujo = _figura_ingresos_egresos(
+        periodos, ingresos_pue + ingresos_complementos, egresos_pue + egresos_complementos)
+    st.markdown("**Facturación Neta Mensual**")
+    render_grafica(fig_neta, key="ing_fig_neta", incluir_notas=False, width="stretch")
+    st.markdown("**Flujo Fiscal Mensual**")
+    render_grafica(fig_flujo, key="ing_fig_flujo", incluir_notas=False, width="stretch")
+    pdf_elements.extend([
+        {
+            "type": "image",
+            "section_title": "5. Facturación Neta y Flujo Fiscal",
+            "title": "Facturación Neta Mensual",
+            "fig": fig_neta,
+            "custom_height": 270,
+        },
+        {
+            "type": "image",
+            "title": "Flujo Fiscal Mensual",
+            "fig": fig_flujo,
+            "custom_height": 270,
+        },
+    ])
 
 
 def _limpiar_y_formatear(val, prefijo="", sufijo=""):
@@ -45,7 +177,8 @@ def _limpiar_y_formatear(val, prefijo="", sufijo=""):
         return val
 
 
-def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None, file_egresos_facturas=None) -> None:
+def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
+                    file_egresos_facturas=None, file_egresos_pago=None) -> None:
     st.title("Facturación Emitida e Ingresos Corporativos")
 
     if file_ingresos_facturas is None:
@@ -230,6 +363,34 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None, fi
         etiqueta="Clientes", pagos_agrupados=_pagos_por_factura(cargar_base(file_ingresos_pago)),
         complementos_periodo=cobr_ppd, desglose=_mostrar_desglose, tabla_pdf=tabla_pdf, pdf_elements=pdf_elements
     )
+    _bloque_neta_y_flujo_ingresos(
+        fac, rep, file_egresos_facturas, file_egresos_pago, anios_5, ejercicios, pdf_elements)
+
+    st.divider()
+    st.subheader("Exportación de Reporte - Vista Financiera")
+    col_pdf_desc, _ = st.columns([1, 2])
+
+    with col_pdf_desc:
+        st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
+        if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin"):
+            with st.spinner("Generando reporte financiero en PDF..."):
+                final_elements = [
+                    {"type": "heading", "text": "Observaciones del Analista"},
+                    {"type": "callout"},
+                    *pdf_elements,
+                ]
+                pdf_bytes = generate_modular_pdf(
+                    title="Reporte de Auditoría de Ingresos — Vista Financiera",
+                    subtitle="Análisis de Facturación Emitida, Cobranza y Concentración",
+                    elements=final_elements
+                )
+                st.download_button(
+                    label="Descargar PDF Financiero",
+                    data=pdf_bytes,
+                    file_name="Reporte_Ingresos_Vista_Financiera.pdf",
+                    mime="application/pdf",
+                    key="btn_download_pdf_fin"
+                )
 
 
 def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios_5, pdf_elements: list) -> None:
@@ -556,33 +717,3 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 "fig": fig_bump,
                "custom_height": 290
             })
-
-    # ---------------------------------------------------------------
-    # SECCIÓN DE DESCARGA PDF - VISTA FINANCIERA
-    # ---------------------------------------------------------------
-    st.divider()
-    st.subheader("Exportación de Reporte - Vista Financiera")
-    
-    col_pdf_desc, col_pdf_info = st.columns([1, 2])
-
-    with col_pdf_desc:
-        st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
-        if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin"):
-            with st.spinner("Generando reporte financiero en PDF..."):
-                final_elements = []
-                final_elements.append({"type": "heading", "text": "Observaciones del Analista"})
-                final_elements.append({"type": "callout"})
-                final_elements.extend(pdf_elements)
-
-                pdf_bytes = generate_modular_pdf(
-                    title="Reporte de Auditoría de Ingresos — Vista Financiera",
-                    subtitle="Análisis de Facturación Emitida, Cobranza y Concentración",
-                    elements=final_elements
-                )
-                st.download_button(
-                    label="Descargar PDF Financiero",
-                    data=pdf_bytes,
-                    file_name="Reporte_Ingresos_Vista_Financiera.pdf",
-                    mime="application/pdf",
-                    key="btn_download_pdf_fin"
-                )
