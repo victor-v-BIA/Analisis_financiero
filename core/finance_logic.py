@@ -953,7 +953,8 @@ def anual_ppd_clientes(f_fac, f_rep, anios=None) -> pd.DataFrame:
     rep = rep_total[rep_total["Fecha_Cobro"].dt.year.isin(ejercicios)]
     res = resumen_mensual(facturas, rep, ejercicios)
     m = matriz_anual(res, ncr_por_año(facturas))
-    return _armar_anual_ppd(m[" └─ Facturación PPD"], m["Complementos de Pago Emitidos"])
+    return _armar_anual_ppd(
+        m["\xa0\xa0\xa0\xa0Facturación PPD"], m["Complementos de Pago Emitidos"])
 
 
 def anual_ppd_proveedores(f_fac, f_rep, anios=None) -> pd.DataFrame:
@@ -977,7 +978,8 @@ def anual_ppd_proveedores(f_fac, f_rep, anios=None) -> pd.DataFrame:
     rep_por_año = df_rep[df_rep["Año"].isin(ejercicios)].groupby("Año")["Monto_Num"].sum()
     m = matriz_anual_egresos(facturas, rep_por_año, ncr_por_año_egresos(facturas), pd.Series(dtype=float),
                              ejercicios)
-    return _armar_anual_ppd(m[" └─ Facturación Recibida PPD"], m["Complementos de Pago Recibidos"])
+    return _armar_anual_ppd(
+        m["\xa0\xa0\xa0\xa0Facturación PPD"], m["Complementos de Pago Recibidos"])
 
 
 def rep_mensual_clientes(f_fac, f_rep, anios=None) -> tuple[pd.Series | None, str | None]:
