@@ -364,19 +364,38 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
     completa la facturación con PUE + PPD y la diferencia se muestra fuera del gráfico (tabla lateral), con su importe sin alterar."""
     paleta = PALETA_ING if paleta is None else paleta
     cobrado, pendiente = r["cobrado"], r["pendiente"]
-    if pendiente < 0:                                        # complementos > facturación PPD: el sector cobrado llega solo hasta el PPD facturado
+    if pendiente < 0:                                       # complementos > facturación PPD: el sector cobrado llega solo hasta el PPD facturado
         cobrado, pendiente = r["ppd"], 0.0
     sectores = [(n, v, c) for n, v, c in ((  "PUE", r["pue"], paleta["pue"]), (f"PPD {realizado}", cobrado, paleta["ppd"]),
-                                          ("PPD pendiente", pendiente, paleta["pendiente"])) if v > 0.005]
+                                         ("PPD pendiente", pendiente, paleta["pendiente"])) if v > 0.005]
     nombres, valores, colores = ([s[i] for s in sectores] for i in range(3))
-    fig = go.Figure(go.Pie(labels=nombres, values=valores, hole=0.5, sort=False, direction="clockwise", textinfo=" percent", textposition="inside",
-                           marker=dict(colors=colores, line=dict(width=0, color='rgba(0,0,0,0)')),
-                           textfont=dict(color=[TEXTO_SOBRE_ING[c] for c in colores]),
-                           customdata=[_mxn_2d(v) for v in valores],
-                           hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"))
-    fig.update_layout(height=360, showlegend=False, margin=dict(l=90, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    
+    fig = go.Figure(go.Pie(
+        labels=nombres, 
+        values=valores, 
+        hole=0.5, 
+        sort=False, 
+        direction="clockwise", 
+        textinfo="percent", 
+        textposition="inside",
+        marker=dict(colors=colores, line=dict(width=0, color='rgba(0,0,0,0)')),
+        # Añadimos el parámetro size junto con el color existente en textfont
+        textfont=dict(
+            color=[TEXTO_SOBRE_ING[c] for c in colores],
+            size=18  # <-- Cambia este valor al tamaño en píxeles que prefieras (ej. 11, 12, 14)
+        ),
+        customdata=[_mxn_2d(v) for v in valores],
+        hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        height=360, 
+        showlegend=False, 
+        margin=dict(l=90, r=10, t=30, b=10), 
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)"
+    )
     return fig
-
 
 def _html_resumen_metodo_cobro(r: dict, col_monto: str, lado: str = "ingresos", paleta: dict | None = None, rotular_base: bool = True) -> str:
     """Tabla lateral (HTML): Monto total en la cabecera y debajo PUE, PPD Total (con sus dos viñetas, pendiente y cobrado), cada uno con monto y %
