@@ -268,10 +268,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             fig_velas_c = _grafica_velas(ritmo_ohlc["Cobros"], "Cobros", ritmo_promedios["Cobros_Promedio"])
             fig_velas_p = _grafica_velas(ritmo_ohlc["Pagos"], "Pagos Totales", ritmo_promedios["Pagos_Promedio"])
             
-            st.markdown("**Cobros · velas por mes**")
+            st.markdown("**Cobros · Velas por Mes**")
             render_grafica(fig_velas_c, key="exec_velas_cobros")
             
-            st.markdown("**Pagos Totales · velas por mes**")
+            st.markdown("**Pagos Totales · Velas por Mes**")
             render_grafica(fig_velas_p, key="exec_velas_pagos")
 
         st.text_area(
@@ -310,7 +310,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     elemento_tendencia = {
                         "type": "image",
                         "title": (
-                            f"{metrica} · Tendencia mensual · Ejercicios fiscales: "
+                            f"{metrica} · Tendencia mensual · Ejercicios Fiscales: "
                             f"{', '.join(map(str, ejercicios_pdf))}"
                         ),
                         "fig": fig_tendencia,
@@ -326,7 +326,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 
             elemento_velas_c = {
                 "type": "image",
-                "title": "Cobros · velas por mes",
+                "title": "Cobros · Velas por Mes",
                 "fig": fig_velas_c,
             }
             if not ejercicios_pdf:
@@ -335,7 +335,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 elemento_velas_c,
                 {
                     "type": "image",
-                    "title": "Pagos Totales · velas por mes",
+                    "title": "Pagos Totales · Velas por Mes",
                     "fig": fig_velas_p,
                     "note": st.session_state.get(
                         "note_graf_ciclos_velas_input",
@@ -361,8 +361,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 
     fig_plazos_y = None
     fig_plazos_m = None
-    titulo_y = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — histórico anual"
-    titulo_m_base = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — detalle mensual"
+    titulo_y = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — Histórico Anual"
+    titulo_m_base = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — Detalle Mensual"
     titulo_m = f"{titulo_m_base} - Todos los años"
     fig_plazos_m_pdf = None
 
@@ -459,10 +459,44 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 datos_dona = pd.concat([datos_dona, pd.Series({"Otros": otros})])
             nombres_completos = [conc["nombre_por_id"].get(idx, idx) if idx != "Otros" else "Otros" for idx in datos_dona.index]
             etiquetas_dona = [_nombre_abreviado(n) if n != "Otros" else "Otros" for n in nombres_completos]
-            fig_dona = px.pie(names=etiquetas_dona, values=datos_dona.values, hole=0.5, custom_data=[nombres_completos],template="plotly_white")
-            fig_dona.update_traces(textinfo="percent", textposition="inside", sort=False)
+            
+            # 1. Definimos la paleta de azules según la cantidad de sectores de la dona
+            num_sectores = len(datos_dona)
+            # Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
+            paleta_azules_fija = [
+                "#0F2E85",  # Azul marino muy oscuro
+                "#4160B4",  # Azul marino muy oscuro
+                "#1D4ED8",  # Azul rey profundo
+                "#2563EB",  # Azul vivo principal
+                "#3B82F6",  # Azul claro brillante pero sólido
+                "#60A5FA"   # Azul cielo (último tono, pero aún legible)
+            ]
+            
+            # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
+            colores_azules = [paleta_azules_fija[i % len(paleta_azules_fija)] for i in range(num_sectores)]
+
+            fig_dona = px.pie(
+                names=etiquetas_dona, 
+                values=datos_dona.values, 
+                hole=0.5, 
+                custom_data=[nombres_completos],
+                template="plotly_white",
+                color_discrete_sequence=colores_azules  # <-- Aplicamos la paleta de azules aquí
+            )
+            
+            # 2. Configuramos el textinfo, posición y el tamaño de fuente (size=18)
+            fig_dona.update_traces(
+                textinfo="percent", 
+                textposition="inside", 
+                sort=False,
+                textfont=dict(size=15,color="white")  # <-- Tamaño de fuente configurado en 18
+            )
+            
             fig_dona = _layout_plotly(fig_dona, altura=ALTURA_CONC)
-            fig_dona.update_layout(margin=dict(l=20, r=20, t=30, b=80),legend=dict(font=dict(textcase="upper")))
+            fig_dona.update_layout(
+                margin=dict(l=20, r=20, t=30, b=80),
+                legend=dict(font=dict(textcase="upper"))
+            )
             
             with col_dona:
                 render_grafica(fig_dona, key="exec_concentracion_clientes")
@@ -491,7 +525,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 "type": "image", 
                 "section_title": "5. Índice de Concentración de Ingresos (Riesgo de Dependencia)",
                 "title": "Distribución Top Clientes (Concentración)", 
-                "fig": fig_dona
+                "fig": fig_dona,
+                "preserve_textfont_size": True
             })
             pdf_elements.append({"type": "table", "title": "Detalle de Concentración por Cliente", "df": tabla_conc_pdf, 
                 "note": nota_conc})
@@ -652,7 +687,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             "title": "Comparativa Vertical de Escenarios de Financiamiento",
             "df": df_escenarios_pdf,
             "cell_scale": 1.15,
-            "note": ''' La capacidad de pago mostrada es una estimación basada en la información fiscal histórica de la empresa y 
+            "text": ''' La capacidad de pago mostrada es una estimación basada en la información fiscal histórica de la empresa y 
                         no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
                         criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
                         a un crédito que se ajuste a sus necesitades'''
@@ -684,14 +719,14 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 
                 elementos_finales = []
                 # if texto_notas and texto_notas.strip():
-                elementos_finales.append({"type": "heading", "text": "Notas y Observaciones Ejecutivas"})
-                elementos_finales.append({"type": "callout"})
+                # elementos_finales.append({"type": "heading", "text": "Notas y Observaciones Ejecutivas"})
+                # elementos_finales.append({"type": "callout"})
                 
                 elementos_finales.extend(pdf_elements)
 
                 pdf_data = generate_modular_pdf(
                     title="Reporte Ejecutivo de Riesgo y Viabilidad",
-                    subtitle="Análisis Financiero y Capacidad de Pago basado en CFDI",
+                    subtitle="",
                     elements=elementos_finales
                 )
                 

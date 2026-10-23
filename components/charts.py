@@ -82,7 +82,7 @@ def _grafica_plazos_comparativa(ing: pd.DataFrame, egr: pd.DataFrame, anual: boo
     for nombre, ys, color in (("Días de cobro", y_c, COLOR["Cobrado"]), ("Días de pago", y_p, "#E45756")):
         # Histórico anual: valor exacto (1 decimal) arriba de cada punto; Detalle mensual: sin texto (valores solo en el hover)
         fig.add_trace(go.Scatter(x=periodos, y=ys, name=nombre, mode="lines+markers+text" if anual else "lines+markers",
-                                 connectgaps=False, line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
+                                 connectgaps=True, line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
                                  text=[f"{x:.1f}" if x is not None else "" for x in ys] if anual else None,
                                  textposition="top center", textfont_size=11, cliponaxis=False,
                                  customdata=custom, hovertemplate=plantilla))
@@ -145,7 +145,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
             fig.add_trace(go.Scatter(
                 x=MESES_ES, y=[None if pd.isna(x) else float(x) for x in series_anio[metrica][anio]],
                 name=str(anio), legendgroup=str(anio), showlegend=(j == 0),
-                mode="lines+markers", connectgaps=False,
+                mode="lines+markers", connectgaps=True,
                 line=dict(color=color, width=2, dash=dash),
                 marker=dict(size=6, color=color, symbol=simbolo),
                 customdata=[anio] * len(MESES_ES),
@@ -342,7 +342,7 @@ def _fig_lineas_por_anio(tabla: pd.DataFrame, rotulo: str) -> go.Figure:
         color = PALETA_BUMP[i % len(PALETA_BUMP)]
         y = [None if pd.isna(v) else float(v) for v in tabla[anio]]
         fig.add_trace(go.Scatter(
-            x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers", connectgaps=False, line=dict(color=color, width=2),
+            x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers", connectgaps=True, line=dict(color=color, width=2),
             marker=dict(symbol="circle", size=7, color=color), customdata=[[str(int(anio)), _mxn_2d(v) if v is not None else "Sin movimientos"] for v in y],
             hovertemplate="<b>Año %{customdata[0]}</b><br>Mes: %{x}<br>" + rotulo + ": %{customdata[1]}<extra></extra>"))
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=MESES_ES, showgrid=False, zeroline=False, title_text=None, automargin=True)
@@ -381,8 +381,9 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
         marker=dict(colors=colores, line=dict(width=0, color='rgba(0,0,0,0)')),
         # Añadimos el parámetro size junto con el color existente en textfont
         textfont=dict(
-            color=[TEXTO_SOBRE_ING[c] for c in colores],
-            size=18  # <-- Cambia este valor al tamaño en píxeles que prefieras (ej. 11, 12, 14)
+            color="white",
+            size=18
+              # <-- Cambia este valor al tamaño en píxeles que prefieras (ej. 11, 12, 14)
         ),
         customdata=[_mxn_2d(v) for v in valores],
         hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"
@@ -633,7 +634,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", 
         mode="lines+markers+text",  # <-- Añadido "+text" para mostrar etiquetas fijas
         text=texto_inpc,            # <-- Lista con el texto de cada punto
-        textposition="top center",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
+        textposition="bottom left",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
         textfont=dict(color="#FA4A15", size=11), # Opcional: color a juego con la línea
         line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,

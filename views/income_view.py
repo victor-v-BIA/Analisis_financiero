@@ -428,7 +428,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         nota_ing_gas = st.text_area("Conclusión - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
         pdf_elements.append({
             "type": "image",
-            "section_title": "Análisis Económico: Ingresos vs Gastos",
+            "section_title": "Evolución de Ingresos",
             "title": "Ingresos vs Gastos Anuales (Millones MXN)",
             "fig": fig_ing_gas,
             "note": nota_ing_gas
@@ -467,10 +467,11 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
             # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
             
-            nota_base100 = st.text_area(f"Conclusión - Egresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+            nota_base100 = st.text_area(f"Conclusión - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
             pdf_elements.append({
                 "type": "image",
-                "title": f"Egresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
+                "section_title": f"Ingresos vs ITAEE",
+                "title": f"Ingresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
                 "fig": fig_base100,
                 "note": nota_base100
                 
