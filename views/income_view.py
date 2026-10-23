@@ -439,7 +439,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
-                "section_title": "2. Comportamiento de la Facturación e Ingresos",
+                # "section_title": "2. Comportamiento de la Facturación e Ingresos",
                 "title": "Ingresos en el Tiempo",
                 "fig": fig_tiempo,
                 "custom_height": 230
