@@ -82,7 +82,7 @@ def _grafica_plazos_comparativa(ing: pd.DataFrame, egr: pd.DataFrame, anual: boo
     for nombre, ys, color in (("Días de cobro", y_c, COLOR["Cobrado"]), ("Días de pago", y_p, "#E45756")):
         # Histórico anual: valor exacto (1 decimal) arriba de cada punto; Detalle mensual: sin texto (valores solo en el hover)
         fig.add_trace(go.Scatter(x=periodos, y=ys, name=nombre, mode="lines+markers+text" if anual else "lines+markers",
-                                 connectgaps=True, line=dict(color=color, width=2.5, shape="spline", smoothing=0.5), marker=dict(size=8, color=color),
+                                 connectgaps=True, line=dict(color=color, width=2.5, shape="spline", smoothing=0.3), marker=dict(size=8, color=color),
                                  text=[f"{x:.1f}" if x is not None else "" for x in ys] if anual else None,
                                  textposition="top center", textfont_size=11, cliponaxis=False,
                                  customdata=custom, hovertemplate=plantilla))
