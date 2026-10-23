@@ -104,7 +104,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             # 3. El cuadro de texto de conclusiones ahora se ubica debajo de la tabla en la vista de Streamlit
             nota_key = f"note_graf_{lado}"
             nota_grafica = st.text_area(
-                f"Conclusión para el detalle anual ({'Clientes' if lado == 'clientes' else 'Proveedores'})",
+                f"Insight para el detalle anual ({'Clientes' if lado == 'clientes' else 'Proveedores'})",
                 max_chars=600,
                 placeholder="Escribe tus conclusiones de la tabla (máx. 600 caracteres)...",
                 key=nota_key
@@ -190,7 +190,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         render_grafica(fig_cp, key="exec_flujo_neto")
         
         nota_flujo = st.text_area(
-            "Conclusión para la gráfica de Flujo Neto Fiscal",
+            "Insight para la gráfica de Flujo Neto Fiscal",
             max_chars=600,
             placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
             key="note_graf_flujo"
@@ -412,7 +412,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             render_grafica(fig_plazos_m_pdf, key="exec_plazos_comparativa_m")
 
         nota_plazos = st.text_area(
-            "Conclusión - Tiempos Documentados",
+            "Insight - Tiempos Documentados",
             max_chars=600,
             key="note_graf_plazos_m"
         )
@@ -500,7 +500,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             with col_dona:
                 render_grafica(fig_dona, key="exec_concentracion_clientes")
-                nota_conc = st.text_area("Conclusión - Concentración de Ingresos", max_chars=600, key="note_graf_conc")
+                nota_conc = st.text_area("Insight - Concentración de Ingresos", max_chars=600, key="note_graf_conc")
 
             tabla_conc = por_cliente.rename("Facturación Total").reset_index().rename(
                 columns={"Cliente": "RFC" if conc["agrupa_por_rfc"] else "Razón Social"})
@@ -570,7 +570,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
            # Agregar tabla y nota de clientes sin facturación al PDF
             if df_sf_original is not None and not df_sf_original.empty:
-                nota_no_fact = st.text_area("Conclusión - Clientes sin facturación en el periodo", max_chars=600, key="nota_no_fact")
+                nota_no_fact = st.text_area("Insight - Clientes sin facturación en el periodo", max_chars=600, key="nota_no_fact")
                 
                 df_sf_pdf = df_sf_original.copy()
                 col_facturado = f"Facturado {res_sf['anio_prev']} (MXN)"
@@ -686,11 +686,14 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             "type": "table",
             "title": "Comparativa Vertical de Escenarios de Financiamiento",
             "df": df_escenarios_pdf,
-            "cell_scale": 1.15,
-            "text": ''' La capacidad de pago mostrada es una estimación basada en la información fiscal histórica de la empresa y 
-                        no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
-                        criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
-                        a un crédito que se ajuste a sus necesitades'''
+            "cell_scale": 1.15
+        })
+        pdf_elements.append({
+            "type": "callout", # O "paragraph" según lo que soporte tu generador
+            "text": """<b>Nota:</b> La capacidad de pago mostrada es una estimación basada en la información fiscal histórica de la empresa y 
+                      no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
+                      criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
+                      a un crédito que se ajuste a sus necesidades."""
         })
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA DE REPORTES EN PDF

@@ -345,7 +345,7 @@ def generate_modular_pdf(
                 if note_text:
                     table_block.append(Spacer(1, 10))
                     table_block.append(Paragraph(
-                        f"<b>Conclusión:</b> {escape(note_text)}",
+                        f"<b>Insight:</b> {escape(note_text)}",
                         note_style
                     ))
                 table_block.append(Spacer(1, 12))
@@ -387,7 +387,7 @@ def generate_modular_pdf(
                 if note_text:
                     section_content.append(Spacer(1, 4))
                     section_content.append(Paragraph(
-                        f"<b>Conclusión:</b> {escape(note_text)}",
+                        f"<b>Insight:</b> {escape(note_text)}",
                         note_style
                     ))
                 

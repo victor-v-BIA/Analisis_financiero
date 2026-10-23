@@ -425,7 +425,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         render_grafica(fig_ing_gas, key=f"eco_{lado}_ingresos_gastos")
         # _insight_html(_insight_ingresos_gastos(anios, ing, gas))
         
-        nota_ing_gas = st.text_area("Conclusión - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
+        nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
         pdf_elements.append({
             "type": "image",
             "section_title": "Evolución de Ingresos",
@@ -467,7 +467,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
             # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
             
-            nota_base100 = st.text_area(f"Conclusión - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+            nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
             pdf_elements.append({
                 "type": "image",
                 "section_title": f"Ingresos vs ITAEE",
@@ -481,7 +481,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
         render_grafica(fig_ing, key="exec_poder_adquisitivo")
 
-        nota_poder_adq = st.text_area("Conclusión - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
+        nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
         pdf_elements.append({
             "type": "image",
             "section_title": "Comportamiento de Ingresos en el Entorno",
@@ -490,41 +490,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
         })
 
-    if ingresos:
-        with st.container(border=True):
-            st.markdown("**Flujo de Ingresos vs Tasa TIIE (Banxico)**")
-            nombre_t, serie_t = tarjeta_serie("tiie", " (TIIE)")
-            if serie_t is None:
-                capturada = st.data_editor(pd.DataFrame({"Año": anios, "TIIE promedio anual (%)": [None] * len(anios)}), hide_index=True,
-                                           disabled=["Año"], key="eco_tiie_manual", use_container_width=True,
-                                           column_config={"TIIE promedio anual (%)": st.column_config.NumberColumn(min_value=0.0, format="%.2f")})
-                serie_t = {int(a): float(v) for a, v in zip(capturada["Año"], capturada["TIIE promedio anual (%)"]) if pd.notna(v)}
-            tiie = [serie_t.get(a, float("nan")) for a in anios]
-            if not any(pd.notna(v) for v in tiie):
-                st.info(MENSAJE_CARGA_ECONOMICA)
-            else:
-                fig_tiie = make_subplots(specs=[[{"secondary_y": True}]])
-                fig_tiie.add_trace(go.Bar(x=anios_str, y=ing, name="Ingresos (MDP)", marker_color="#2563EB", texttemplate="%{y:,.1f}",
-                                             textposition="outside", cliponaxis=False,
-                                             hovertemplate="<b>%{x}</b><br>Ingresos (MDP): %{y:,.1f}<extra></extra>"), secondary_y=False)
-                fig_tiie.add_trace(go.Scatter(x=anios_str, y=tiie, name="Tasa TIIE Promedio (%)", mode="lines+markers",
-                                                 line=dict(color="#A855F7", width=3), marker=dict(size=9, color="#A855F7"), connectgaps=False,
-                                                 hovertemplate="<b>%{x}</b><br>TIIE promedio: %{y:.2f}%<extra></extra>"), secondary_y=True)
-                fig_tiie = _layout_eco(fig_tiie, anios_str, "Ingresos (MDP)")
-                fig_tiie.update_yaxes(range=[0, (max(ing + [0.0]) * 1.2) or 1], secondary_y=False)
-                fig_tiie.update_yaxes(title_text="TIIE (%)", range=[0, max([v for v in tiie if pd.notna(v)] + [1.0]) * 1.3], secondary_y=True,
-                                         showgrid=False)
-                render_grafica(fig_tiie, key=f"eco_{lado}_tiie")
-                _insight_html(_insight_tiie(anios, ing, tiie), "eco-tiie")
-                
-                nota_tiie = st.text_area("Conclusión - Flujo de Ingresos vs Tasa TIIE", max_chars=600, key="note_eco_tiie")
-                pdf_elements.append({
-                    "type": "image",
-                    "title": "Flujo de Ingresos vs Tasa TIIE (Banxico)",
-                    "fig": fig_tiie,
-                    "note": nota_tiie
-                })
-
+   
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA PDF - VISTA ECONÓMICA
     # ---------------------------------------------------------------
