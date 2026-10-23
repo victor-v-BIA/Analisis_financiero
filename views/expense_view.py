@@ -402,7 +402,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
 
             df_nom_pdf = pd.DataFrame([
                 {"Concepto": f"<font size=8 color='#6B7280'>Monto Total</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
-                {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Gastos Operativos</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
+                {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>Gastos Operativos</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
                 {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Nómina Total</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
             ])[["Concepto"]]
 
