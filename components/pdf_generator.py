@@ -358,7 +358,7 @@ def generate_modular_pdf(
                 # Soportar un alto personalizado (custom_height) para gráficas que requieran más espacio vertical
                 custom_height = el.get("custom_height", None)
                 if custom_height:
-                    img = plotly_fig_to_reportlab_image(fig, width_pt=350, height_pt=custom_height)
+                    img = plotly_fig_to_reportlab_image(fig, width_pt=550, height_pt=custom_height)
                 else:
                     img = plotly_fig_to_reportlab_image(fig, width_pt=350)
                     

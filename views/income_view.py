@@ -440,8 +440,9 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "image",
                 "section_title": "2. Comportamiento de la Facturación e Ingresos",
-                "title": "Facturación Emitida en el Tiempo",
+                "title": "Ingresos en el Tiempo",
                 "fig": fig_tiempo,
+                "custom_height": 230
                 # "note": nota_tiempo
             })
         st.divider()
@@ -455,7 +456,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 "type": "image",
                 "title": "Ingresos Facturados por Mes",
                 "fig": fig_ing_fact,
-                # "note": nota_ing_fact
+                "custom_height": 270
             })
 
         st.divider()
@@ -476,7 +477,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "image",
                 "section_title": "3. Estructura y Método de Cobro",
-                "title": "Distribución por Método de Cobro",
+                "title": "Distribución por Método de Cobro**",
                 "fig": fig_pie
               
             })
@@ -549,9 +550,9 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "image",
                 "section_title": "4. Concentración y Riesgo de Dependencia",
-                "title": "Evolución Top 10 Clientes (Bump Chart)",
+                "title": "Top 10 Clientes de Cada Año",
                 "fig": fig_bump,
-                # "note": nota_bump
+               "custom_height": 290
             })
 
     # ---------------------------------------------------------------

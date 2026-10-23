@@ -333,10 +333,10 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
-            "section_title": "2. Evolución de los Egresos",
+            # "section_title": "2. Evolución de los Egresos",
             "title": "Egresos en el Tiempo",
             "fig": fig_tiempo,
-            # "note": nota_tiempo
+            "custom_height": 240
         })
     st.divider()
     st.markdown("**Egresos facturados por mes**")
@@ -350,7 +350,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "type": "image",
             "title": "Egresos Facturados por Mes",
             "fig": fig_fact_mes,
-            # "note": nota_fact_mes
+            "custom_height": 270
         })
 
     st.divider()

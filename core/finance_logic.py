@@ -126,8 +126,8 @@ def matriz_anual(res: pd.DataFrame, ncr_anual: pd.DataFrame) -> pd.DataFrame:
     pct = (a["Cobrado_PPD"] / a["Facturado_PPD"] * 100).where(a["Facturado_PPD"] != 0)
     m = pd.DataFrame({
         "Facturación Emitida Total": a["Facturado_Total"],
-        " ├─ Facturación PUE": a["Facturado_PUE"],
-        " └─ Facturación PPD": a["Facturado_PPD"],
+        "\xa0\xa0\xa0\xa0Facturación PUE": a["Facturado_PUE"],
+        "\xa0\xa0\xa0\xa0Facturación PPD": a["Facturado_PPD"],
         "Complementos de Pago Emitidos": a["Cobrado_PPD"],
         "Cobrado Total (PUE + Complementos)": a["Cobrado_Total"],
         "Notas de Crédito": ncr_a["NCR_Total"],
@@ -187,8 +187,8 @@ def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_
 
     m = pd.DataFrame({
         "Facturación Recibida Total": fact_total,
-        " ├─ Facturación Recibida PUE": fact_pue,
-        " └─ Facturación Recibida PPD": fact_ppd,
+        "\xa0\xa0\xa0\xa0Facturación PUE": fact_pue,
+        "\xa0\xa0\xa0\xa0Facturación PPD": fact_ppd,
         "Pagado Total (PUE + Complementos)": pagado_total,
         "Complementos de Pago Recibidos": pagado_ppd,
         "Notas de Crédito": ncr_a["NCR_Total"],

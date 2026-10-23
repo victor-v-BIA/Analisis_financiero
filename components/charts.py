@@ -331,20 +331,6 @@ def _fig_bump_top10(df: pd.DataFrame, monto_calc: str) -> go.Figure:
     return fig
 
 
-def _fig_facturacion_tiempo(d: pd.DataFrame, col_monto: str) -> go.Figure:
-    """Facturación emitida en el tiempo: barras apiladas por mes (`px.bar`, barmode='stack'), PUE (`Monto_PUE`) y PPD (`Monto_PPD_Cobrado +
-    Monto_PPD_Pendiente`); sin bordes, sin grid vertical, morado/azul para PUE y verde lima para PPD."""
-    g = d.assign(PPD=d["Monto_PPD_Cobrado"] + d["Monto_PPD_Pendiente"]).groupby("Periodo", as_index=False)[["Monto_PUE", "PPD"]].sum().sort_values("Periodo")
-    g = g.rename(columns={"Monto_PUE": "PUE"}).melt(id_vars="Periodo", value_vars=["PUE", "PPD"], var_name="Método", value_name="Monto")
-    fig = px.bar(g, x="Periodo", y="Monto", color="Método", barmode="stack", color_discrete_map={"PUE": PALETA_ING["pue"], "PPD": PALETA_ING["ppd"]},
-                 category_orders={"Periodo": sorted(g["Periodo"].unique()), "Método": ["PUE", "PPD"]})
-    fig.update_traces(marker_line_width=0, hovertemplate="<b>%{x}</b><br>%{fullData.name}: MXN %{y:,.2f}<extra></extra>")
-    fig.update_xaxes(type="category", showgrid=False, zeroline=False, tickangle=-90, title_text=None, automargin=True)
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=",.0f", title_text=f"{col_monto} (MXN)")
-    fig.update_layout(height=460, margin=dict(l=115, r=25, t=30, b=110), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      hovermode="x unified", legend_title_text=None, bargap=0.15)
-    return fig
-
 
 
 def _fig_lineas_por_anio(tabla: pd.DataFrame, rotulo: str) -> go.Figure:
@@ -445,9 +431,9 @@ def _fig_bump_anual(df: pd.DataFrame, col_monto: str) -> go.Figure:
                            "<br>Total: %{customdata[4]}<br>Participación del año: %{customdata[5]}<extra></extra>")))
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=anios, showgrid=False, zeroline=False)
     fig.update_yaxes(autorange="reversed", tickmode="array", tickvals=list(range(1, 11)), showgrid=False, zeroline=False, title_text="Rango")
-    fig.update_layout(height=480, margin=dict(l=90, r=10, t=30, b=40),
+    fig.update_layout(height=480, margin=dict(l=60, r=40, t=30, b=90),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      hovermode="closest", legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.01), legend_title_text=None)
+                      hovermode="closest", legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5), legend_title_text=None)
     return fig
 
 
@@ -455,11 +441,30 @@ def _fig_bump_anual(df: pd.DataFrame, col_monto: str) -> go.Figure:
 def _fig_pie_nomina_gastos(r: dict) -> go.Figure:
     """Pie (`go.Pie`, hole=0, leyenda nativa oculta) del egreso total acumulado: Gastos (proveedores) vs Pagos a Nómina (naranja)."""
     valores = [r["gastos"], r["nomina"]]
-    fig = go.Figure(go.Pie(labels=["Gastos", NOMBRE_NOMINA], values=valores, hole=0.5, sort=False, direction="clockwise", textinfo="percent", textposition="inside",
-                           marker=dict(colors=[COLOR_GASTOS, COLOR_NOMINA], line=dict(width=0, color='rgba(0,0,0,0)')),
-                           textfont=dict(color=[TEXTO_SOBRE_ING[COLOR_GASTOS], TEXTO_SOBRE_ING[COLOR_NOMINA]]), customdata=[_mxn_2d(v) for v in valores],
-                           hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"))
-    fig.update_layout(height=320, showlegend=False, margin=dict(l=90, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig = go.Figure(go.Pie(
+        labels=["Gastos", NOMBRE_NOMINA], 
+        values=valores, 
+        hole=0.5, 
+        sort=False, 
+        direction="clockwise", 
+        textinfo="percent", 
+        textposition="inside",
+        marker=dict(colors=[COLOR_GASTOS, COLOR_NOMINA], line=dict(width=0, color='rgba(0,0,0,0)')),
+        # Añadimos el parámetro size dentro de textfont para definir el tamaño de la fuente
+        textfont=dict(
+            color=[TEXTO_SOBRE_ING[COLOR_GASTOS], TEXTO_SOBRE_ING[COLOR_NOMINA]],
+            size=18  # <-- Cambia este valor al tamaño en píxeles que prefieras (ej. 11, 12, 14)
+        ), 
+        customdata=[_mxn_2d(v) for v in valores],
+        hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"
+    ))
+    fig.update_layout(
+        height=320, 
+        showlegend=False, 
+        margin=dict(l=90, r=10, t=30, b=10),
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)"
+    )
     return fig
 
 
@@ -483,11 +488,43 @@ def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:
                  color_discrete_map={NOMBRE_EGR_PUE: COLOR_EGR_PUE, NOMBRE_EGR_PPD: COLOR_EGR_PPD, NOMBRE_NOMINA: COLOR_NOMINA},
                  category_orders={"Periodo": sorted(g["Periodo"].unique()), "Rubro": rubros})
     fig.update_traces(marker_line_width=0, hovertemplate="<b>%{x}</b><br>%{fullData.name}: MXN %{y:,.2f}<extra></extra>")
-    fig.update_xaxes(type="category", showgrid=False, zeroline=False, tickangle=-90, title_text=None)
+    fig.update_xaxes(type="category", showgrid=False, zeroline=False, tickangle=-90, title_text=None, automargin=True)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=",.0f", title_text="Total (MXN)")
-    fig.update_layout(height=400, margin=dict(l=110, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      hovermode="x unified", legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="left", x=0), legend_title_text=None, bargap=0.15)
+    
+    fig.update_layout(
+        height=500,  # Aumentamos un poco la altura total de la gráfica
+        margin=dict(l=115, r=25, t=30, b=140),  # Aumentamos el margen inferior ('b') para dejar espacio a las fechas y la leyenda
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified", 
+        legend_title_text=None, 
+        bargap=0.15,
+        legend=dict(
+            orientation="h",       # Leyenda horizontal
+            yanchor="top",         # Anclada desde su parte superior
+            y=-0.35,               # Posición vertical por debajo del eje X (puedes ajustarlo si lo quieres más arriba o abajo)
+            xanchor="center",      # Centrada horizontalmente
+            x=0.5
+        )
+    )
     return fig
+
+
+# correcta
+def _fig_facturacion_tiempo(d: pd.DataFrame, col_monto: str) -> go.Figure:
+    """Facturación emitida en el tiempo: barras apiladas por mes (`px.bar`, barmode='stack'), PUE (`Monto_PUE`) y PPD (`Monto_PPD_Cobrado +
+    Monto_PPD_Pendiente`); sin bordes, sin grid vertical, morado/azul para PUE y verde lima para PPD."""
+    g = d.assign(PPD=d["Monto_PPD_Cobrado"] + d["Monto_PPD_Pendiente"]).groupby("Periodo", as_index=False)[["Monto_PUE", "PPD"]].sum().sort_values("Periodo")
+    g = g.rename(columns={"Monto_PUE": "PUE"}).melt(id_vars="Periodo", value_vars=["PUE", "PPD"], var_name="Método", value_name="Monto")
+    fig = px.bar(g, x="Periodo", y="Monto", color="Método", barmode="stack", color_discrete_map={"PUE": PALETA_ING["pue"], "PPD": PALETA_ING["ppd"]},
+                 category_orders={"Periodo": sorted(g["Periodo"].unique()), "Método": ["PUE", "PPD"]})
+    fig.update_traces(marker_line_width=0, hovertemplate="<b>%{x}</b><br>%{fullData.name}: MXN %{y:,.2f}<extra></extra>")
+    fig.update_xaxes(type="category", showgrid=False, zeroline=False, tickangle=-90, title_text=None, automargin=True)
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=",.0f", title_text=f"{col_monto} (MXN)")
+    fig.update_layout(height=460, margin=dict(l=115, r=25, t=30, b=110), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      hovermode="x unified", legend_title_text=None, bargap=0.15)
+    return fig
+
 
 
 def _fig_pie_metodo_pago(res: dict, paleta: dict | None = None) -> go.Figure:
@@ -501,10 +538,25 @@ def _fig_pie_metodo_pago(res: dict, paleta: dict | None = None) -> go.Figure:
         filas = [(NOMBRE_EGR_PUE, res["pue"], paleta["pue"]), (NOMBRE_EGR_PPD, res["ppd"], paleta["ppd"])]
     sectores = [f for f in filas if f[1] > 0.005]
     nombres, valores, colores = ([s[i] for s in sectores] for i in range(3))
-    fig = go.Figure(go.Pie(labels=nombres, values=valores,hole=0.5, sort=False, direction="clockwise", textinfo="percent", textposition="inside",
-                           marker=dict(colors=colores,line=dict(width=0, color='rgba(0,0,0,0)')), textfont=dict(color=[TEXTO_SOBRE_ING[c] for c in colores]),
-                           customdata=[_mxn_2d(v) for v in valores],
-                           hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"))
+    
+    fig = go.Figure(go.Pie(
+        labels=nombres, 
+        values=valores,
+        hole=0.5, 
+        sort=False, 
+        direction="clockwise", 
+        textinfo="percent", 
+        textposition="inside",
+        marker=dict(colors=colores, line=dict(width=0, color='rgba(0,0,0,0)')), 
+        # Modificamos textfont para incluir tanto el color como el tamaño (size)
+        textfont=dict(
+            color=[TEXTO_SOBRE_ING[c] for c in colores],
+            size=18
+        ),
+        customdata=[_mxn_2d(v) for v in valores],
+        hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"
+    ))
+    
     fig.update_layout(height=320, showlegend=False, margin=dict(l=90, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     return fig
 
