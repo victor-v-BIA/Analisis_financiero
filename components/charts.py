@@ -540,7 +540,7 @@ def _fig_facturacion_tiempo(d: pd.DataFrame, col_monto: str) -> go.Figure:
     fig.update_traces(marker_line_width=0, hovertemplate="<b>%{x}</b><br>%{fullData.name}: MXN %{y:,.2f}<extra></extra>")
     fig.update_xaxes(type="category", showgrid=False, zeroline=False, tickangle=-90, title_text=None, automargin=True)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=",.0f", title_text=f"{col_monto} (MXN)")
-    fig.update_layout(height=460, margin=dict(l=115, r=25, t=30, b=110), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    fig.update_layout(height=480, margin=dict(l=115, r=25, t=30, b=110), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       hovermode="x unified", legend_title_text=None, bargap=0.15)
     return fig
 
