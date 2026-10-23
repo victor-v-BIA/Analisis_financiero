@@ -172,6 +172,18 @@ _MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul":
 
 # Paleta sobria para fondo oscuro (el fondo de las figuras es transparente y hereda el tema; sin cuadrículas)
 PALETA_BUMP = ["#60A5FA", "#34D399", "#FBBF24", "#F87171", "#A78BFA", "#22D3EE", "#FB923C", "#A3E635", "#F472B6", "#94A3B8"]
+PALETA_BUMP_INGRESOS = [
+    "#1E3A8A",  # Azul marino muy oscuro (Base fuerte)
+    "#1D4ED8",  # Azul rey profundo
+    "#2563EB",  # Azul vivo principal
+    "#3B82F6",  # Azul claro brillante
+    "#60A5FA",  # Azul cielo intermedio
+    "#93C5FD",  # Azul cielo suave
+    "#38BDF8",  # Azul cian / celeste vibrante
+    "#0284C7",  # Azul océano profundo
+    "#0EA5E9",  # Azul turquesa claro
+    "#BFDBFE"   # Azul pastel muy claro (para el último nivel)
+]
 AYUDA_TOP10_ANUAL = ("Cada año muestra sus diez principales empresas. La leyenda puede incluir más de diez porque los integrantes cambian entre ejercicios.")
 
 

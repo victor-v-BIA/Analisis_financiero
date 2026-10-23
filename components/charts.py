@@ -13,7 +13,7 @@ from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     METRICAS_VISUALIZAR,MESES_ES,
                     COLOR_VELA_SUBE,COLOR_VELA_BAJA,
                     COLOR_LINEA_PROMEDIO,ANCHOS_SIN_FACTURACION,CSS_SIN_FACTURACION,
-                    ANCHOS_DETALLE_ANUAL,CSS_DETALLE_ANUAL, PALETA_BUMP, PALETA_ING,
+                    ANCHOS_DETALLE_ANUAL,CSS_DETALLE_ANUAL, PALETA_BUMP,PALETA_BUMP_INGRESOS, PALETA_ING,
                     SEPARADOR_PIE,TEXTO_SOBRE_ING,NOMBRE_NOMINA,COLOR_GASTOS,COLOR_NOMINA,
                     NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD)
 
@@ -82,7 +82,7 @@ def _grafica_plazos_comparativa(ing: pd.DataFrame, egr: pd.DataFrame, anual: boo
     for nombre, ys, color in (("Días de cobro", y_c, COLOR["Cobrado"]), ("Días de pago", y_p, "#E45756")):
         # Histórico anual: valor exacto (1 decimal) arriba de cada punto; Detalle mensual: sin texto (valores solo en el hover)
         fig.add_trace(go.Scatter(x=periodos, y=ys, name=nombre, mode="lines+markers+text" if anual else "lines+markers",
-                                 connectgaps=True, line=dict(color=color, width=2.5), marker=dict(size=8, color=color),
+                                 connectgaps=True, line=dict(color=color, width=2.5, shape="spline", smoothing=0.5), marker=dict(size=8, color=color),
                                  text=[f"{x:.1f}" if x is not None else "" for x in ys] if anual else None,
                                  textposition="top center", textfont_size=11, cliponaxis=False,
                                  customdata=custom, hovertemplate=plantilla))
@@ -130,27 +130,48 @@ def _grafica_diferencia_cobros_pagos(periodos, cobros, pagos, diferencia, nombre
 
 
 def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
-                           metricas: list[str] | None = None) -> go.Figure:
+                            metricas: list[str] | None = None) -> go.Figure:
     """Flujo mensual de los años seleccionados. El color identifica el ejercicio fiscal; si se muestran ambas métricas,
     Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
+    
+    # Tu paleta fija de azules personalizada
+    paleta_azules_fija = [
+        "#0F2E85",  # Azul marino muy oscuro
+        "#4775F7",  # Azul marino intermedio
+        "#1D4ED8",  # Azul rey profundo
+        "#83A3E7",  # Azul vivo principal
+        "#14489C",  # Azul claro brillante pero sólido
+        "#8EA9CA"   # Azul cielo
+    ]
+    
     metricas = METRICAS_VISUALIZAR if metricas is None else list(metricas)
     fig = go.Figure()
     anios = sorted(int(a) for a in anios)
     metricas_sel = [metrica for metrica in METRICAS_VISUALIZAR if metrica in metricas]
     estilos = {"Cobros": ("solid", "circle"), "Pagos": ("dash", "square")}
-    for anio in anios:
-        color = px.colors.qualitative.Plotly[(anio - 2021) % len(px.colors.qualitative.Plotly)]
+    
+    for i, anio in enumerate(anios):
+        # Asignamos el color de tu paleta de forma cíclica (usando el operador módulo % por si hay más años que colores)
+        color = paleta_azules_fija[i % len(paleta_azules_fija)]
+        
         for j, metrica in enumerate(metricas_sel):
             dash, simbolo = estilos[metrica]
             fig.add_trace(go.Scatter(
                 x=MESES_ES, y=[None if pd.isna(x) else float(x) for x in series_anio[metrica][anio]],
                 name=str(anio), legendgroup=str(anio), showlegend=(j == 0),
                 mode="lines+markers", connectgaps=True,
-                line=dict(color=color, width=2, dash=dash),
+                line=dict(
+                    color=color, 
+                    width=2, 
+                    dash=dash,
+                    shape="spline",     # Transforma las líneas rectas en curvas suaves
+                    smoothing=0.5      # Nivel de suavizado (valores entre 0.0 y 1.3, por defecto es 0.5)
+                ),
                 marker=dict(size=6, color=color, symbol=simbolo),
                 customdata=[anio] * len(MESES_ES),
                 hovertemplate=("<b>Año: %{customdata}</b><br>Mes: %{x}<br>" + f"{metrica}: " +
                                "MXN %{y:,.2f}<extra></extra>")))
+                               
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=MESES_ES, showgrid=False)
     fig.update_yaxes(tickformat=",.0f", showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=True, zerolinecolor="rgba(128,128,128,0.5)")
     fig = _layout_plotly(fig, y_titulo="Flujo mensual (MXN)", altura=420)
@@ -339,10 +360,12 @@ def _fig_lineas_por_anio(tabla: pd.DataFrame, rotulo: str) -> go.Figure:
     leyenda horizontal inferior. `rotulo` = texto del monto en el hover y en el título del eje Y."""
     fig = go.Figure()
     for i, anio in enumerate(tabla.columns):
-        color = PALETA_BUMP[i % len(PALETA_BUMP)]
+        color = PALETA_BUMP_INGRESOS[i % len(PALETA_BUMP_INGRESOS)]
         y = [None if pd.isna(v) else float(v) for v in tabla[anio]]
         fig.add_trace(go.Scatter(
-            x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers", connectgaps=True, line=dict(color=color, width=2),
+            x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers", connectgaps=True, line=dict(color=color, width=2,shape="spline",    
+                    smoothing=0.5    
+                ),
             marker=dict(symbol="circle", size=7, color=color), customdata=[[str(int(anio)), _mxn_2d(v) if v is not None else "Sin movimientos"] for v in y],
             hovertemplate="<b>Año %{customdata[0]}</b><br>Mes: %{x}<br>" + rotulo + ": %{customdata[1]}<extra></extra>"))
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=MESES_ES, showgrid=False, zeroline=False, title_text=None, automargin=True)
