@@ -36,7 +36,7 @@ with st.sidebar:
     
 
 def main() -> None:
-    st.set_page_config(page_title="Facturación Emitida e Ingresos Corporativos", page_icon="📊", layout="wide")
+    st.set_page_config(page_title="Facturación Emitida e Ingresos Corporativos", page_icon=":material/bar_chart:", layout="wide")
     # st.set_page_config(layout="centered")
 
     st.markdown(CSS_TARJETAS_KPI, unsafe_allow_html=True)
