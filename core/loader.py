@@ -80,7 +80,7 @@ def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) 
         st.stop()
 
 def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
-    """Facturas emitidas: Activo + (Factura o NCR); Fecha sin hora; PUE/PPD; Total numérico (una fila por UUID).
+    """Facturas emitidas: Activo/Vigente + (Factura o NCR); Fecha sin hora; PUE/PPD; Total numérico (una fila por UUID).
 
     Se conservan las Notas de Crédito (Tipo Documento = 'NCR') con la bandera `Es_NCR`, para poder calcular el
     Ingreso Neto sin mezclarlas con la Facturación Total.
@@ -95,7 +95,8 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
     es_ncr_crudo = tipo_crudo.str.contains("NCR", case=False, na=False)
     n_ncr_crudo = int(es_ncr_crudo.sum())
     es_factura = tipo_crudo.str.strip().str.upper() == "FACTURA"
-    df = df[(df["Estatus"].str.casefold() == "activo") & (es_factura | es_ncr_crudo)]
+    estatus = df["Estatus"].astype(str).str.strip().str.upper()
+    df = df[estatus.isin(["ACTIVO", "VIGENTE"]) & (es_factura | es_ncr_crudo)]
     df = df.assign(Es_NCR=df["Tipo Documento"].astype(str).str.contains("NCR", case=False, na=False))
     avisos.append(f"Facturas: {n0} filas leídas, {len(df)} con Estatus 'Activo' y Tipo 'Factura' o 'NCR' "
                   f"({n_ncr_crudo} NCR detectadas en el archivo, {int(df['Es_NCR'].sum())} tras el filtro).")
@@ -220,8 +221,24 @@ def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, 
     es_mxn = moneda.isin(["MXN", "PESOS", "PESO MEXICANO", "NAN", ""])
     tipo_cambio = a_numero(df[col_tc]) if col_tc is not None else pd.Series(1.0, index=df.index)
     df = df.assign(Factor_MXN=tipo_cambio.where(~es_mxn, 1.0).where(es_mxn | (tipo_cambio > 0)))
-    df = (df[["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total", "Es_NCR", "Factor_MXN"]
-             + ([col_forma] if col_forma is not None else [])]
+    col_serie = buscar_columna(df.columns, "Serie")
+    df["Serie"] = df[col_serie].fillna("").astype(str).str.strip() if col_serie else ""
+    col_iva_total = buscar_columna(df.columns, "IVA Trasladado")
+    columnas_iva = ([col_iva_total] if col_iva_total is not None else [
+        col for col in df.columns
+        if "iva" in _norm(col) and "reten" not in _norm(col) and "retencion" not in _norm(col)
+    ])
+    if columnas_iva:
+        df["IVA_Trasladado"] = df[columnas_iva].apply(
+            lambda columna: a_numero(columna).fillna(0.0)
+        ).sum(axis=1)
+    columnas_salida = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total",
+                       "Es_NCR", "Factor_MXN", "Serie"]
+    if columnas_iva:
+        columnas_salida.append("IVA_Trasladado")
+    if col_forma is not None:
+        columnas_salida.append(col_forma)
+    df = (df[columnas_salida]
           .rename(columns={"RFC Emisor": "RFC_Emisor", "Nombre Emisor": "Nombre_Emisor", **({col_forma: "Forma_Pago"} if col_forma else {})})
           .sort_values("Fecha", kind="stable").reset_index(drop=True))
     return df, avisos
@@ -238,8 +255,10 @@ def leer_complementos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list
                            COLS_COMPLEMENTOS_OPCIONALES)
     n0 = len(df)
     if "Estatus" in df.columns:
-        df = df[df["Estatus"].str.casefold() == "activo"]
-        avisos.append(f"{etiqueta}: {n0 - len(df)} filas descartadas por Estatus distinto de 'Activo'.")
+        estatus = df["Estatus"].astype(str).str.strip().str.upper()
+        df = df[estatus.isin(["ACTIVO", "VIGENTE"])]
+        avisos.append(f"{etiqueta}: {n0 - len(df)} filas descartadas por Estatus distinto de "
+                      "'Activo'/'Vigente'.")
     if "RFC Emisor" not in df.columns:
         df = df.assign(**{"RFC Emisor": ""})
         avisos.append(f"{etiqueta}: la base no trae 'RFC Emisor'; los cobros no se pueden filtrar por RFC.")

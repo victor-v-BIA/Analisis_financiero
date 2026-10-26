@@ -110,7 +110,7 @@ def main() -> None:
                      file_egresos_pago, file_nomina)
     elif modulo == "Ingresos (Auditoría Operativa)":
         modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5,
-                        file_egresos_facturas, file_egresos_pago)
+                        file_egresos_facturas, file_egresos_pago, file_nomina)
     else:
         modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5, file_ingresos_facturas)
 

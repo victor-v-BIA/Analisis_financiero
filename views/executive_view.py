@@ -181,7 +181,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             fig_cp = _grafica_diferencia_cobros_pagos(
                 etiquetas, d["Cobros"].tolist(), (d["Pagos"] + d["Nomina"]).tolist(), d["Balance"].tolist(),
                 nombre_cobros, nombre_pagos)
-            titulo_graf = "Flujo Neto Fiscal Mensual"
+            titulo_graf = f"Flujo Neto Fiscal Mensual Año {anio_sel}"
             
             df_pdf_tabla = d[["Cobros", "Pagos", "Nomina", "Balance"]].reset_index()
             df_pdf_tabla.columns = ["Periodo", "Cobros", "Pagos", "Nómina", "Diferencia"] # O Flujo Neto

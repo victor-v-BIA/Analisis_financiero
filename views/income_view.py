@@ -30,7 +30,8 @@ from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vige
                                 matriz_anual, _preparar_concentracion, _pagos_por_factura,
                                 _insight_ingresos_gastos, _anio_base, _rebase, _insight_itaee,
                                 _insight_inpp, _insight_tiie, _desglose_cobros, _serie_mensual_por_anio,
-                                _resumen_metodo_cobro_global, _resumen_metodo_cobro, facturas_a_mxn)
+                                _resumen_metodo_cobro_global, _resumen_metodo_cobro, facturas_a_mxn,
+                                _nomina_mensual_mxn)
 
 from components.pdf_generator import generate_modular_pdf
 
@@ -70,19 +71,21 @@ def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
 
 
 def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
-                                   f_fac_egr, f_pago_egr, anios_5, ejercicios,
-                                   pdf_elements: list) -> None:
+                                   f_fac_egr, f_pago_egr, f_pago_ing, f_nomina,
+                                   anios_5, ejercicios, pdf_elements: list) -> None:
     """Muestra facturación devengada y flujo fiscal mensual de ingresos frente a egresos."""
     st.divider()
     st.subheader(
         "Facturación Neta y Flujo Fiscal",
-        help=("Facturación Neta: facturas emitidas menos facturas recibidas, por fecha de emisión y sin notas de "
-              "crédito. Flujo Fiscal: facturas PUE por fecha de emisión más complementos por fecha de pago; "
-              "ingresos y egresos se muestran a ambos lados del cero y la línea representa su diferencia mensual."),
+        help=("Facturación Neta: facturas emitidas menos NCR y facturas recibidas menos NCR, por fecha de emisión. "
+              "Flujo Fiscal: facturas PUE por fecha de emisión más complementos y nómina por fecha de pago; "
+              "excluye NCR y operaciones de divisas de los egresos. En ambas, la línea es ingresos menos egresos."),
     )
     faltan = [nombre for nombre, archivo in (
         ("Facturación Recibida", f_fac_egr),
         ("Complementos de Pago Recibidos (Base PAGO de Egresos)", f_pago_egr),
+        ("Base PAGO de Ingresos", f_pago_ing),
+        ("Nómina", f_nomina),
     ) if archivo is None]
     if faltan:
         st.info("Para comparar Ingresos contra Egresos carga también: " + " y ".join(faltan) + ".")
@@ -96,17 +99,51 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         st.info(f"Información insuficiente en la Facturación Recibida: {e.args[0]}")
         return
 
+    base_pago_ing = cargar_base(f_pago_ing)
+    col_estatus_ing = buscar_columna(base_pago_ing.columns, "Estatus")
+    if col_estatus_ing is None:
+        st.info("Información insuficiente en la Base PAGO de Ingresos: falta la columna Estatus para "
+                "conservar únicamente complementos Activos o Vigentes.")
+        return
+    estatus_ing = base_pago_ing[col_estatus_ing].astype(str).str.strip().str.upper()
+    if not estatus_ing.isin(["ACTIVO", "VIGENTE"]).any():
+        st.info("La Base PAGO de Ingresos no contiene complementos Activos o Vigentes.")
+        return
+
     fac_egr = fac_egr[fac_egr["Fecha"].dt.year.isin(ejercicios)]
+    rfc_divisas = fac_egr["RFC_Emisor"].fillna("").astype(str).str.strip().str.upper().eq("BMI9704113PA")
+    col_serie = buscar_columna(fac_egr.columns, "Serie")
+    if col_serie is None:
+        st.warning("La Facturación Recibida no incluye la columna Serie; no se pudo evaluar el criterio "
+                   "de exclusión de divisas por Serie.")
+        serie_divisas = pd.Series(False, index=fac_egr.index)
+    else:
+        serie_divisas = fac_egr[col_serie].fillna("").astype(str).str.strip().str.upper().eq("MNND")
+    excluir_divisas = rfc_divisas | serie_divisas
+    col_iva = buscar_columna(fac_egr.columns, "IVA_Trasladado")
+    if col_iva is None:
+        st.warning("La Facturación Recibida no incluye columnas de IVA; no se pudo evaluar el criterio "
+                   "de exclusión por falta de IVA trasladado.")
+    else:
+        iva_trasladado = pd.to_numeric(fac_egr[col_iva], errors="coerce").fillna(0.0)
+        excluir_divisas |= iva_trasladado.le(0)
+    n_divisas = int(excluir_divisas.sum())
+    if n_divisas:
+        st.info(f"{n_divisas} factura(s) recibida(s) de operaciones de divisas se excluyeron de ambas gráficas.")
+        fac_egr = fac_egr[~excluir_divisas]
     fac_egr, n_sin_tc = facturas_a_mxn(fac_egr)
     if n_sin_tc:
         st.warning(f"{n_sin_tc} factura(s) recibida(s) sin Tipo de Cambio válido se excluyeron de las gráficas.")
 
     base_pago_egr = cargar_base(f_pago_egr)
     col_estatus = buscar_columna(base_pago_egr.columns, "Estatus")
-    if col_estatus is not None:
-        base_pago_egr = base_pago_egr[
-            base_pago_egr[col_estatus].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])
-        ]
+    if col_estatus is None:
+        st.info("Información insuficiente en la Base PAGO de Egresos: falta la columna Estatus para "
+                "conservar únicamente complementos Activos o Vigentes.")
+        return
+    base_pago_egr = base_pago_egr[
+        base_pago_egr[col_estatus].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])
+    ]
     col_monto = buscar_columna(base_pago_egr.columns, "Monto MXN")
     col_fecha = buscar_columna(base_pago_egr.columns, "Fecha Pago")
     faltan_columnas = [nombre for nombre, columna in (
@@ -117,6 +154,11 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         return
     pagos_egr = preparar_complementos_egresos(base_pago_egr, col_monto, col_fecha)
     pagos_egr = pagos_egr[pagos_egr["Año"].isin(ejercicios)]
+
+    nomina_mensual, motivo_nomina = _nomina_mensual_mxn(cargar_base(f_nomina))
+    if motivo_nomina:
+        st.info(f"Información insuficiente en la Base de Nómina: {motivo_nomina}.")
+        return
 
     anios = sorted(int(anio) for anio in ejercicios)
     periodos = pd.PeriodIndex(
@@ -132,8 +174,10 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
 
     facturas_ing = fac_ing[~fac_ing["Es_NCR"]]
     facturas_egr = fac_egr[~fac_egr["Es_NCR"]]
-    ingresos_devengados = sumar_por_mes(facturas_ing, "Fecha", "Total")
-    egresos_devengados = sumar_por_mes(facturas_egr, "Fecha", "Total")
+    ncr_ing = sumar_por_mes(fac_ing[fac_ing["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
+    ncr_egr = sumar_por_mes(fac_egr[fac_egr["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
+    ingresos_devengados = sumar_por_mes(facturas_ing, "Fecha", "Total") - ncr_ing
+    egresos_devengados = sumar_por_mes(facturas_egr, "Fecha", "Total") - ncr_egr
 
     ingresos_pue = sumar_por_mes(
         facturas_ing[facturas_ing["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
@@ -141,10 +185,13 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     egresos_pue = sumar_por_mes(
         facturas_egr[facturas_egr["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
     egresos_complementos = sumar_por_mes(pagos_egr, "Mes", "Monto_Num")
+    egresos_nomina = (nomina_mensual.reindex(periodos, fill_value=0.0).astype(float)
+                      if nomina_mensual is not None else pd.Series(0.0, index=periodos))
 
     fig_neta = _figura_ingresos_egresos(periodos, ingresos_devengados, egresos_devengados)
     fig_flujo = _figura_ingresos_egresos(
-        periodos, ingresos_pue + ingresos_complementos, egresos_pue + egresos_complementos)
+        periodos, ingresos_pue + ingresos_complementos,
+        egresos_pue + egresos_complementos + egresos_nomina)
     st.markdown("**Facturación Neta Mensual**")
     render_grafica(fig_neta, key="ing_fig_neta", incluir_notas=False, width="stretch")
     st.markdown("**Flujo Fiscal Mensual**")
@@ -178,7 +225,7 @@ def _limpiar_y_formatear(val, prefijo="", sufijo=""):
 
 
 def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
-                    file_egresos_facturas=None, file_egresos_pago=None) -> None:
+                    file_egresos_facturas=None, file_egresos_pago=None, file_nomina=None) -> None:
     st.title("Facturación Emitida e Ingresos Corporativos")
 
     if file_ingresos_facturas is None:
@@ -364,7 +411,8 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         complementos_periodo=cobr_ppd, desglose=_mostrar_desglose, tabla_pdf=tabla_pdf, pdf_elements=pdf_elements
     )
     _bloque_neta_y_flujo_ingresos(
-        fac, rep, file_egresos_facturas, file_egresos_pago, anios_5, ejercicios, pdf_elements)
+        fac, rep, file_egresos_facturas, file_egresos_pago, file_ingresos_pago,
+        file_nomina, anios_5, ejercicios, pdf_elements)
 
     st.divider()
     st.subheader("Exportación de Reporte - Vista Financiera")
