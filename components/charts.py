@@ -438,7 +438,7 @@ def _html_resumen_metodo_cobro(r: dict, col_monto: str, lado: str = "ingresos", 
     sobre el total. Montos como 'MXN 1,234.00' (sin '$', que Streamlit podría interpretar como fórmula)."""
     tot = r["total"]
     paleta = PALETA_ING if paleta is None else paleta
-    inmediato, plazo, realizado = (("Cobros inmediatos (PUE)", "Cobros a plazos (PPD Total)", "PPD cobrado") if lado == "ingresos"
+    inmediato, plazo, realizado = (("Cobros inmediatos (PUE)", "Cobros a plazos (PPD)", "PPD cobrado") if lado == "ingresos"
                                    else ("Pagos inmediatos (PUE)", "Pagos a plazos (PPD)", "PPD pagado"))
     pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
     fila = lambda color, nombre, v, sangria=0, fuerte=True: (
@@ -494,10 +494,19 @@ def _fig_bump_anual(df: pd.DataFrame, col_monto: str) -> go.Figure:
 
 
 def _fig_pie_nomina_gastos(r: dict) -> go.Figure:
-    """Pie (`go.Pie`, hole=0, leyenda nativa oculta) del egreso total acumulado: Gastos (proveedores) vs Pagos a Nómina (naranja)."""
+    """Pie (`go.Pie`, hole=0.5, leyenda nativa oculta) del egreso total acumulado: Gastos (proveedores) vs Pagos a Nómina."""
     valores = [r["gastos"], r["nomina"]]
+    labels = ["Gastos", NOMBRE_NOMINA]
+    
+    # Determinamos de forma dinámica cuál valor es el mayor para ponerle texto blanco y al menor negro
+    # Si el gasto es mayor o igual a la nómina, el primer color es blanco y el segundo negro, y viceversa.
+    if valores[0] >= valores[1]:
+        colores_texto = ['white', 'black']
+    else:
+        colores_texto = ['black', 'white']
+
     fig = go.Figure(go.Pie(
-        labels=["Gastos", NOMBRE_NOMINA], 
+        labels=labels, 
         values=valores, 
         hole=0.5, 
         sort=False, 
@@ -505,10 +514,11 @@ def _fig_pie_nomina_gastos(r: dict) -> go.Figure:
         textinfo="percent", 
         textposition="inside",
         marker=dict(colors=[COLOR_GASTOS, COLOR_NOMINA], line=dict(width=0, color='rgba(0,0,0,0)')),
-        # Añadimos el parámetro size dentro de textfont para definir el tamaño de la fuente
+        
+        # Asignamos la lista de colores al texto según el orden de los valores
         textfont=dict(
-            color=[TEXTO_SOBRE_ING[COLOR_GASTOS], TEXTO_SOBRE_ING[COLOR_NOMINA]],
-            size=18  # <-- Cambia este valor al tamaño en píxeles que prefieras (ej. 11, 12, 14)
+            color=colores_texto,
+            size=18
         ), 
         customdata=[_mxn_2d(v) for v in valores],
         hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"
