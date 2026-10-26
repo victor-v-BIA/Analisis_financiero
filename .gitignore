@@ -9,3 +9,5 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.md
+.xml

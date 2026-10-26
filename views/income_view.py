@@ -384,6 +384,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     st.divider()
     if econ:
         _mostrar_desglose()
+        pdf_elements.append({"type": "heading", "text": "1. Evolución de Ingresos y Egresos"})
         pdf_elements.append({"type": "table", "title": "Desglose Año con Año Ingresos", "df": tabla_pdf})
         st.divider()
         _vista_economica("ingresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5, pdf_elements)
@@ -461,7 +462,6 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
         pdf_elements.append({
             "type": "image",
-            "section_title": "Evolución de Ingresos",
             "title": "Ingresos vs Gastos Anuales (Millones MXN)",
             "fig": fig_ing_gas,
             "note": nota_ing_gas
@@ -534,12 +534,15 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             fig_base100.update_yaxes(range=_rango_base100(idx_emp, idx_ext))
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
             # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
-            
-            nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+            if not ingresos:
+                nota_base100 = st.text_area(f"Insight - Egresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+            else:
+                nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+
             pdf_elements.append({
                 "type": "image",
-                "section_title": f"Ingresos vs ITAEE",
-                "title": f"Ingresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
+                "section_title": f"3.Egresos vs INPP",
+                "title": f"Egresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
                 "fig": fig_base100,
                 "note": nota_base100
                 
@@ -552,7 +555,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
         pdf_elements.append({
             "type": "image",
-            "section_title": "Comportamiento de Ingresos en el Entorno",
+            "section_title": "4. Comportamiento de Ingresos en el Entorno",
             "title": "Poder Adquisitivo: Ingresos vs Inflación General",
             "fig": fig_ing,
             "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
@@ -608,11 +611,12 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                           complementos_periodo: float | None = None, desglose=None, tabla_pdf=None, pdf_elements=None) -> None:
     col_monto = "Total"
     if desglose is not None:
+        
         desglose()
         if tabla_pdf is not None and pdf_elements is not None:
             pdf_elements.append({
                 "type": "table",
-                "section_title": "1. Evolución de Ingresos y Desglose Anual",
+                "section_title": "1. Facturación PPD y Complementos: Diferencias Anuales",
                 "title": "Desglose Año con Año Ingresos",
                 "df": tabla_pdf
             })

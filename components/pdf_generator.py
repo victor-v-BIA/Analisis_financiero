@@ -223,7 +223,12 @@ def generate_modular_pdf(
                 table_block.append(Spacer(1, 4))
             
             df = el["df"]
-            if df is not None and not df.empty:
+            if df is None or df.empty:
+                if table_block:
+                    story.append(KeepTogether(table_block))
+                continue
+
+            if not df.empty:
                 cols = list(df.columns)
                 num_cols = len(cols)
                 total_width = 504  # Ancho total imprimible

@@ -712,7 +712,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
     
     # Curva de Ingresos DPC (Base 100)
     fig.add_trace(go.Scatter(
-        x=anios_str, y=idx_emp, name="Ingresos DPC (Base 100)", 
+        x=anios_str, y=idx_emp, name="Ingresos (Base 100)", 
         mode="lines+markers+text",  # <-- Añadido "+text"
         text=texto_ingresos,        # <-- Lista con el texto de cada punto
         textposition="bottom center", # <-- Posición para evitar que se encimen con los del INPC
