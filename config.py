@@ -292,3 +292,15 @@ _PARENTESIS = re.compile(r"\([^)]*\)")
 RUTA_ITAEE_DEFAULT = "data/itaee_20.xlsx"
 RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
 RUTA_INPC_DEFAULT = "data/INPC_base.csv"
+
+# ____________________________________________________
+# VARIABLE PARA EL MODUL 7 DEL DASHBOARD EJECUTIVO
+
+# Evaluación INDEPENDIENTE de cada escenario: proporción del flujo del mes frente al mejor mes de la ventana -> viabilidad y porcentaje del flujo libre.
+PROPORCION_MINIMA = 0.05        # flujo del mes < 5 % del mejor mes: flujo marginal, no viable
+CREDITO_MINIMO = 50_000.0       # línea comercial mínima (MXN): si al 30 % el crédito queda por debajo, el escenario no es viable
+PCT_CAPACIDAD = 0.30            # porcentaje ESTANDARIZADO del flujo libre que se compromete en todo escenario viable (mes bajo, intermedio o mejor mes)
+PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES = 36, 12, 60
+MARGEN_COMERCIAL_DEFECTO = 5.0  # puntos porcentuales que el banco suma a la TIIE (editable)
+VENTANA_DICTAMEN_MESES = 24     # el dictamen evalúa estrictamente los últimos 24 meses históricos disponibles
+TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de Banxico (corte al 25/09/2026); el analista la actualiza a mano según el mercado del momento

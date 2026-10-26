@@ -214,3 +214,10 @@ def _limpiar_y_formatear(val, sufijo=""):
                 return f"{num:,.1f}{sufijo}"
             except (ValueError, TypeError):
                 return val
+
+def _monto_por_cuota(cuota: float, tasa_m: float, plazo: int) -> float:
+    """Monto de crédito estimado (ingeniería inversa, valor actual de la anualidad): cuota = 0 -> 0; tasa 0 -> cuota * plazo; tasa > 0 ->
+    cuota * ((1 - (1 + tasa_m) ** -plazo) / tasa_m)."""
+    if cuota <= 0 or plazo <= 0:
+        return 0.0
+    return cuota * plazo if tasa_m <= 0 else cuota * ((1 - (1 + tasa_m) ** -plazo) / tasa_m)

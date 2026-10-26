@@ -86,14 +86,26 @@ def _grafica_plazos_comparativa(ing: pd.DataFrame, egr: pd.DataFrame, anual: boo
                                  text=[f"{x:.1f}" if x is not None else "" for x in ys] if anual else None,
                                  textposition="top center", textfont_size=11, cliponaxis=False,
                                  customdata=custom, hovertemplate=plantilla))
+    
     if anual:
         fig.update_xaxes(type="category", categoryorder="array", categoryarray=periodos, showgrid=False)
     else:
-        fig.update_xaxes(type="date", tickformat="%Y-%m", showgrid=False)
+        # CAMBIO AQUÍ: Tratamos el eje X como categoría para enlistar ordenadamente los meses de inicio a fin
+        # y definimos un dtick o seleccionamos mostrar etiquetas específicas (ej. cada enero o todas)
+        fig.update_xaxes(
+            type="category", 
+            categoryorder="array", 
+            categoryarray=periodos, 
+            showgrid=False,
+            tickangle=-90,
+            tickvals=[p for p in periodos if p.endswith(("-01","-06","-12"))], 
+            ticktext=[p for p in periodos if p.endswith(("-01","-06","-12"))]
+        )
+        
     fig.update_yaxes(rangemode="tozero", showgrid=True, gridcolor="rgba(128,128,128,0.18)")
     fig = _layout_plotly(fig, y_titulo="Días promedio/mediana", altura=340)
-    fig.update_layout(margin=dict(t=30, b=50, l=90, r=30), font=dict(size=12), hovermode="closest",
-                      legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="left", x=0))
+    fig.update_layout(margin=dict(t=30, b=55, l=90, r=30), font=dict(size=12), hovermode="closest",
+                      legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="left", x=0))
     return fig
 
 

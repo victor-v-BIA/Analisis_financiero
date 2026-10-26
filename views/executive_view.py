@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 
 from utils import _mxn, _formatear_mxn
-from utils import (_nb, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear)
+from utils import (_nb, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear, _monto_por_cuota)
 from core.loader import (anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
                          _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache)
@@ -18,7 +18,9 @@ from core.loader import (anios_5_archivos, _anual_ppd_cache,
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
                     METRICAS_VISUALIZAR, PESOS_INDICE,BANDA_CONCENTRACION_ALTA,
                     BANDA_CONCENTRACION_BAJA,MOSTRAR_INDICE_DESEMPENO,
-                    REGLAS_INDICE,PLAZO_DEFECTO_MESES,PERIODOS_EVALUACION, TASA_REFERENCIA_ANUAL,MARGEN_SEGURIDAD_PCT)
+                    REGLAS_INDICE,PLAZO_DEFECTO_MESES,PERIODOS_EVALUACION, TASA_REFERENCIA_ANUAL,MARGEN_SEGURIDAD_PCT,
+                    PROPORCION_MINIMA, CREDITO_MINIMO, PCT_CAPACIDAD, PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
+                    MARGEN_COMERCIAL_DEFECTO, VENTANA_DICTAMEN_MESES, TIIE_DEFECTO)
 
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
@@ -620,18 +622,27 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         def _get_val_esc(e, tipo):
             if e is None:
                 return "N/D", "Sin datos"
+            
+            # Lista de meses abreviados en español (el índice 0 se deja vacío para que coincida con el número de mes)
+            meses_es = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+            
             if tipo == "flujo":
-                return _mxn(e["flujo"]), f"Mes: {e['mes'].strftime('%b %Y')}"
+                # Extraemos el mes y año usando el número de mes para asegurar el español
+                mes_formateado = f"{meses_es[e['mes'].month]} {e['mes'].year}"
+                return _mxn(e["flujo"]), f"Mes: {mes_formateado}"
+                
             elif tipo == "cuota":
                 if e["es_viable"]:
                     return _mxn(e["cuota"]), "30% del flujo libre"
                 else:
                     return "No disponible", "Flujo insuficiente"
+                    
             elif tipo == "credito":
                 if e["es_viable"]:
                     return _mxn(e["credito"]), f"{plazo_val} meses · tasa {tasa_total:.2f}%"
                 else:
                     return "No viable", "No recomendado"
+                    
             return "", ""
 
         val_cons_f, sub_cons_f = _get_val_esc(cons, "flujo")
@@ -740,27 +751,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     mime="application/pdf",
                     key="btn_download_pdf"
                 )
-'''
-MOVER TODAS ESTAS VARIABLE AL ARCHIVO DE CONFIG.PY. POR EL MOMENTO, SE QUEDAN AQUI HASTA VALIDAR
-
-'''
-
-# Evaluación INDEPENDIENTE de cada escenario: proporción del flujo del mes frente al mejor mes de la ventana -> viabilidad y porcentaje del flujo libre.
-PROPORCION_MINIMA = 0.05        # flujo del mes < 5 % del mejor mes: flujo marginal, no viable
-CREDITO_MINIMO = 50_000.0       # línea comercial mínima (MXN): si al 30 % el crédito queda por debajo, el escenario no es viable
-PCT_CAPACIDAD = 0.30            # porcentaje ESTANDARIZADO del flujo libre que se compromete en todo escenario viable (mes bajo, intermedio o mejor mes)
-PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES = 36, 12, 60
-MARGEN_COMERCIAL_DEFECTO = 5.0  # puntos porcentuales que el banco suma a la TIIE (editable)
-VENTANA_DICTAMEN_MESES = 24     # el dictamen evalúa estrictamente los últimos 24 meses históricos disponibles
-TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de Banxico (corte al 25/09/2026); el analista la actualiza a mano según el mercado del momento
 
 
-def _monto_por_cuota(cuota: float, tasa_m: float, plazo: int) -> float:
-    """Monto de crédito estimado (ingeniería inversa, valor actual de la anualidad): cuota = 0 -> 0; tasa 0 -> cuota * plazo; tasa > 0 ->
-    cuota * ((1 - (1 + tasa_m) ** -plazo) / tasa_m)."""
-    if cuota <= 0 or plazo <= 0:
-        return 0.0
-    return cuota * plazo if tasa_m <= 0 else cuota * ((1 - (1 + tasa_m) ** -plazo) / tasa_m)
 
 
 def evaluar_escenario(flujo_mes: float, flujo_max: float, tasa_mensual: float, plazo: int) -> dict:
@@ -798,8 +790,6 @@ def _escenarios_credito(flujo: pd.Series, plazo: int, tasa_anual: float) -> dict
             "conservador": escenario(flujo_min, idx_min),
             "medio": escenario(float(ventana.loc[idx_intermedio]), idx_intermedio) if idx_intermedio is not None else None,
             "optimista": escenario(flujo_max, idx_max)}
-
-
 
 
 
