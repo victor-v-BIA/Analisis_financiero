@@ -80,18 +80,25 @@ def _grafica_plazos_comparativa(ing: pd.DataFrame, egr: pd.DataFrame, anual: boo
                  "<br>Aplicaciones válidas — cobro: %{customdata[5]} · pago: %{customdata[6]}<extra></extra>")
     fig = go.Figure()
     for nombre, ys, color in (("Días de cobro", y_c, COLOR["Cobrado"]), ("Días de pago", y_p, "#E45756")):
-        # Histórico anual: valor exacto (1 decimal) arriba de cada punto; Detalle mensual: sin texto (valores solo en el hover)
+        
+        # Asignamos la posición del texto de forma dinámica si es anual para evitar que se encimen
+        if anual:
+            posicion_texto = "bottom right" if nombre == "Días de cobro" else "top right"
+        else:
+            posicion_texto = "bottom left"
+
+        # Histórico anual: valor exacto (1 decimal) arriba/abajo de cada punto; Detalle mensual: sin texto (valores solo en el hover)
         fig.add_trace(go.Scatter(x=periodos, y=ys, name=nombre, mode="lines+markers+text" if anual else "lines+markers",
                                  connectgaps=True, line=dict(color=color, width=2.5, shape="spline", smoothing=0.3), marker=dict(size=8, color=color),
                                  text=[f"{x:.1f}" if x is not None else "" for x in ys] if anual else None,
-                                 textposition="top center", textfont_size=11, cliponaxis=False,
+                                 textposition=posicion_texto, textfont_size=11, cliponaxis=False,
                                  customdata=custom, hovertemplate=plantilla))
     
     if anual:
         fig.update_xaxes(type="category", categoryorder="array", categoryarray=periodos, showgrid=False)
+        
     else:
-        # CAMBIO AQUÍ: Tratamos el eje X como categoría para enlistar ordenadamente los meses de inicio a fin
-        # y definimos un dtick o seleccionamos mostrar etiquetas específicas (ej. cada enero o todas)
+        # Tratamos el eje X como categoría para enlistar ordenadamente los meses de inicio a fin
         fig.update_xaxes(
             type="category", 
             categoryorder="array", 
