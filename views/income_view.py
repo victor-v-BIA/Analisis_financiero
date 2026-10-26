@@ -536,31 +536,39 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
             if not ingresos:
                 nota_base100 = st.text_area(f"Insight - Egresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+                pdf_elements.append({
+                                "type": "image",
+                                "section_title": f"3. Egresos vs INPP",
+                                "title": f"Egresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
+                                "fig": fig_base100,
+                                "note": nota_base100
+                                
+                            })
+                fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas)
+                st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
+                render_grafica(fig_ing, key="exec_poder_adquisitivo")
+                
+                nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
+                pdf_elements.append({
+                            "type": "image",
+                            "section_title": "4. Comportamiento de Ingresos en el Entorno",
+                            "title": "Poder Adquisitivo: Ingresos vs Inflación General",
+                            "fig": fig_ing,
+                            "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
+                        })
+                
             else:
                 nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
 
-            pdf_elements.append({
-                "type": "image",
-                "section_title": f"3.Egresos vs INPP",
-                "title": f"Egresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
-                "fig": fig_base100,
-                "note": nota_base100
-                
-            })
-    if not ingresos:
-        fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas)
-        st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
-        render_grafica(fig_ing, key="exec_poder_adquisitivo")
-
-        nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
-        pdf_elements.append({
-            "type": "image",
-            "section_title": "4. Comportamiento de Ingresos en el Entorno",
-            "title": "Poder Adquisitivo: Ingresos vs Inflación General",
-            "fig": fig_ing,
-            "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
-        })
-
+                pdf_elements.append({
+                    "type": "image",
+                    "section_title": f"3.Ingresos vs ITAEE",
+                    "title": f"Ingresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
+                    "fig": fig_base100,
+                    "note": nota_base100
+                    
+                })
+     
    
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA PDF - VISTA ECONÓMICA
