@@ -112,25 +112,10 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
 
     fac_egr = fac_egr[fac_egr["Fecha"].dt.year.isin(ejercicios)]
     rfc_divisas = fac_egr["RFC_Emisor"].fillna("").astype(str).str.strip().str.upper().eq("BMI9704113PA")
-    col_serie = buscar_columna(fac_egr.columns, "Serie")
-    if col_serie is None:
-        st.warning("La Facturación Recibida no incluye la columna Serie; no se pudo evaluar el criterio "
-                   "de exclusión de divisas por Serie.")
-        serie_divisas = pd.Series(False, index=fac_egr.index)
-    else:
-        serie_divisas = fac_egr[col_serie].fillna("").astype(str).str.strip().str.upper().eq("MNND")
-    excluir_divisas = rfc_divisas | serie_divisas
-    col_iva = buscar_columna(fac_egr.columns, "IVA_Trasladado")
-    if col_iva is None:
-        st.warning("La Facturación Recibida no incluye columnas de IVA; no se pudo evaluar el criterio "
-                   "de exclusión por falta de IVA trasladado.")
-    else:
-        iva_trasladado = pd.to_numeric(fac_egr[col_iva], errors="coerce").fillna(0.0)
-        excluir_divisas |= iva_trasladado.le(0)
-    n_divisas = int(excluir_divisas.sum())
+    n_divisas = int(rfc_divisas.sum())
     if n_divisas:
-        st.info(f"{n_divisas} factura(s) recibida(s) de operaciones de divisas se excluyeron de ambas gráficas.")
-        fac_egr = fac_egr[~excluir_divisas]
+        st.info(f"{n_divisas} factura(s) recibida(s) del RFC BMI9704113PA se excluyeron de ambas gráficas.")
+        fac_egr = fac_egr[~rfc_divisas]
     fac_egr, n_sin_tc = facturas_a_mxn(fac_egr)
     if n_sin_tc:
         st.warning(f"{n_sin_tc} factura(s) recibida(s) sin Tipo de Cambio válido se excluyeron de las gráficas.")
