@@ -503,13 +503,48 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                                          textposition="outside", cliponaxis=False,
                                          hovertemplate=f"<b>%{{x}}</b><br>{nombre_barra}: %{{y:.1f}}<extra></extra>"))
             if ingresos:
-                fig_base100.add_trace(go.Scatter(x=anios_str, y=idx_ext, name="ITAEE (Índice Referencia)", mode="lines+markers",
-                                                 line=dict(color="#10B981", dash="dot", width=3), marker=dict(size=9, color="#10B981"),
-                                                 connectgaps=False, hovertemplate="<b>%{x}</b><br>ITAEE (Base 100): %{y:.1f}<extra></extra>"))
+                fig_base100.add_trace(go.Scatter(
+                        x=anios_str, 
+                        y=idx_ext, 
+                        name="ITAEE (Índice Referencia)", 
+                        
+                        # 1. Añadimos "+text" al mode
+                        mode="lines+markers+text", 
+                        
+                        line=dict(color="#10B981", dash="dot", width=3), 
+                        marker=dict(size=9, color="#10B981"),
+                        connectgaps=True, 
+                        
+                        # 2. Definimos el texto a mostrar en cada punto (con 1 decimal, omitiendo nulos)
+                        text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
+                        
+                        # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
+                        textposition="bottom center",
+                        textfont=dict(size=11),
+                        cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
+                        
+                        hovertemplate="<b>%{x}</b><br>ITAEE (Base 100): %{y:.1f}<extra></extra>"
+                    ))
             else:
-                fig_base100.add_trace(go.Scatter(x=anios_str, y=idx_ext, name="INPP (Inflación Productor)", mode="lines+markers",
-                                                 line=dict(color="#FACC15", width=3), marker=dict(size=9, color="#FACC15"), connectgaps=False,
-                                                 hovertemplate="<b>%{x}</b><br>INPP (Base 100): %{y:.1f}<extra></extra>"))
+                fig_base100.add_trace(go.Scatter(
+                        x=anios_str,
+                        y=idx_ext,
+                        name="INPP (Inflación Productor)", 
+                                                    
+                        mode="lines+markers+text",                             
+                        line=dict(color="#FACC15", width=3),
+                        marker=dict(size=9, color="#FACC15"),
+                        connectgaps=False,
+                        # 2. Definimos el texto a mostrar en cada punto (con 1 decimal, omitiendo nulos)
+                        text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
+                                                
+                        # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
+                        textposition="bottom center",
+                        textfont=dict(size=11),
+                        cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
+                                                          
+                        hovertemplate="<b>%{x}</b><br>INPP (Base 100): %{y:.1f}<extra></extra>"))
+            
             fig_base100 = _layout_eco(fig_base100, anios_str, "Índice (Base 100)")
             fig_base100.update_yaxes(range=_rango_base100(idx_emp, idx_ext))
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
