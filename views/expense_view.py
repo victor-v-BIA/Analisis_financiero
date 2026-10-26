@@ -402,8 +402,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
 
             df_nom_pdf = pd.DataFrame([
                 {"Concepto": f"<font size=8 color='#6B7280'>Monto Total</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
-                {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>Gastos Operativos</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
-                {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Nómina Total</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
+                {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>Gastos (Proveedores)</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
+                {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Pagos a Nómina</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
             ])[["Concepto"]]
 
             pdf_elements.append({
@@ -425,16 +425,29 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         })
         try:
             pue_g = float(res.get("pue", 0))
-            ppd_g = float(res.get("ppd_pagado", res.get("ppd", 0)))
-            total_g = pue_g + ppd_g
-            pct_pue_g = (pue_g / total_g * 100) if total_g > 0 else 0
-            pct_ppd_g = (ppd_g / total_g * 100) if total_g > 0 else 0
+            ppd_g = float(res.get("ppd", 0))
+            ppd_pendiente_g = float(res.get("diferencia", 0))
+            ppd_pagado_g = float(res.get("complementos", 0))
+            total_g = float(res.get("facturacion", pue_g + ppd_g))
+            pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "n/a"
 
-            df_pago_pdf = pd.DataFrame([
-                {"Concepto": f"<font size=8 color='#6B7280'>Total Gastos Pagados</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},
-                {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Pago Inmediato (PUE)</font></b><br/><font color='#4B5563'>MXN {pue_g:,.2f} · {pct_pue_g:.1f}%</font>"},
-                {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Complementos Pagados (PPD)</font></b><br/><font color='#4B5563'>MXN {ppd_g:,.2f} · {pct_ppd_g:.1f}%</font>"}
-            ])[["Concepto"]]
+            filas_pago_pdf = [
+                {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},
+                {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Egresos PUE</font></b><br/><font color='#4B5563'>MXN {pue_g:,.2f} · {pct_pago(pue_g)}</font>"},
+                {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Egresos PPD</font></b><br/><font color='#4B5563'>MXN {ppd_g:,.2f} · {pct_pago(ppd_g)}</font>"}
+            ]
+            if ppd_pendiente_g >= 0:
+                filas_pago_pdf.extend([
+                    {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#2563EB'>●</font> <b><font color='#1F2937'>PPD pendiente</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pendiente_g:,.2f} · {pct_pago(ppd_pendiente_g)}</font>"},
+                    {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#60A5FA'>●</font> <b><font color='#1F2937'>PPD pagado</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pagado_g:,.2f} · {pct_pago(ppd_pagado_g)}</font>"}
+                ])
+            else:
+                filas_pago_pdf.extend([
+                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Complementos de Pago Recibidos</font></b><br/><font color='#4B5563'>MXN {ppd_pagado_g:,.2f}</font>"},
+                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Diferencia PPD (Facturación PPD − Complementos de Pago Recibidos)</font></b><br/><font color='#4B5563'>MXN {ppd_pendiente_g:,.2f}</font>"}
+                ])
+
+            df_pago_pdf = pd.DataFrame(filas_pago_pdf)[["Concepto"]]
 
             pdf_elements.append({
                 "type": "table",
