@@ -544,18 +544,6 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                                 "note": nota_base100
                                 
                             })
-                fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas)
-                st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
-                render_grafica(fig_ing, key="exec_poder_adquisitivo")
-                
-                nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
-                pdf_elements.append({
-                            "type": "image",
-                            "section_title": "4. Comportamiento de Ingresos en el Entorno",
-                            "title": "Poder Adquisitivo: Ingresos vs Inflación General",
-                            "fig": fig_ing,
-                            "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
-                        })
                 
             else:
                 nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
@@ -569,6 +557,19 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                     
                 })
      
+    if not ingresos and serie is not None and base is not None and len(anios) >= 2:
+        fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas)
+        st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
+        render_grafica(fig_ing, key="exec_poder_adquisitivo")
+
+        nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
+        pdf_elements.append({
+            "type": "image",
+            "section_title": "4. Comportamiento de Ingresos en el Entorno",
+            "title": "Poder Adquisitivo: Ingresos vs Inflación General",
+            "fig": fig_ing,
+            "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
+        })
    
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA PDF - VISTA ECONÓMICA
