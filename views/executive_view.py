@@ -533,7 +533,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             col_tabla.dataframe(
                 tabla_conc.head(10),
                 hide_index=True,
-                use_container_width=True,
+                width='stretch',
                 height=ALTURA_CONC,
                 column_config={"Facturación Total": st.column_config.NumberColumn(format="$%.2f")}
             )
