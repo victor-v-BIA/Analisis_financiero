@@ -161,15 +161,22 @@ def ncr_por_año_egresos(fac: pd.DataFrame) -> pd.DataFrame:
     }).fillna(0.0)
 
 
+def excluir_emisor_monex(df: pd.DataFrame, columna_rfc: str) -> pd.DataFrame:
+    """Excluye únicamente los registros cuyo RFC de emisor es Banco Monex."""
+    rfc_emisor = df[columna_rfc].fillna("").astype(str).str.strip().str.upper()
+    return df.loc[rfc_emisor != "BMI9704113PA"].copy()
+
+
 def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_anual: pd.DataFrame,
                          nomina_por_año: pd.Series, ejercicios: list[int]) -> pd.DataFrame:
-    """Una fila por año con los mismos rubros de los KPI de Egresos: Notas de Crédito y Nómina Pagada.
+    """Una fila por año con los rubros de egresos, usando facturas y pagos ya filtrados por RFC del emisor.
 
     `fac` trae tanto Factura como NCR (bandera Es_NCR) filtradas por los ejercicios seleccionados; Facturación/
     Pagado se calculan SOLO con Factura (`~Es_NCR`). `pagado_ppd_por_año` ya viene agrupada por Año desde la
     base de complementos de pago (Base PAGO). `ncr_anual` (salida de ncr_por_año_egresos) ya viene agrupada por
     Año de emisión. Las Notas de Crédito se ven únicamente con su total (sin detalle PUE/PPD). `nomina_por_año` ya viene agrupada por Año desde la Base de
     Nómina. Reindexa sobre `ejercicios` para que un año sin datos quede en 0 real, no se pierda.
+    Egreso Operativo Neto = Pagado Total - Notas de Crédito; Egreso Total = Egreso Operativo Neto + Nómina.
     """
     idx = pd.Index(sorted(ejercicios), name="Año")
     fac_factura = fac[~fac["Es_NCR"]]
@@ -181,8 +188,8 @@ def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_
     ncr_a = ncr_anual.reindex(idx, fill_value=0.0)
     nomina = nomina_por_año.reindex(idx, fill_value=0.0)
     cifras = resumen_egresos(fact_pue, fact_ppd, pagado_ppd, nomina)          # la misma función de las tarjetas y las gráficas
-    fact_total, pagado_total, egreso_total, saldo_ppd = cifras["facturacion"], cifras["pagado_total"], cifras["egreso_total"], cifras["diferencia"]
-    egreso_operativo_neto = pagado_total - ncr_a["NCR_Total"]                  # indicador aparte: las NCR no se descuentan del Egreso Total
+    fact_total, pagado_total, saldo_ppd = cifras["facturacion"], cifras["pagado_total"], cifras["diferencia"]
+    egreso_operativo_neto = pagado_total - ncr_a["NCR_Total"]
     pct_saldo_ppd = (saldo_ppd / fact_ppd * 100).where(fact_ppd != 0, 0.0)
 
     m = pd.DataFrame({
@@ -195,7 +202,7 @@ def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_
     })
     m["Egreso Operativo Neto"] = egreso_operativo_neto
     m["Pagos a Nómina"] = nomina
-    m["Egreso Total (Operación + Nómina)"] = egreso_total
+    m["Egreso Total (Operación + Nómina)"] = egreso_operativo_neto + nomina
     m["Saldo PPD por Pagar"] = saldo_ppd
     m["% Saldo PPD por Pagar"] = pct_saldo_ppd
     m.index = m.index.astype(str)

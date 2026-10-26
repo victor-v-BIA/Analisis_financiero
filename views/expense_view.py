@@ -15,7 +15,7 @@ from core.loader import (anios_5_archivos,_columnas_archivo,validar_columnas,
                          cargar_base, buscar_columna,preparar_complementos_egresos,_preparar_nomina)
 
 from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODULO,AYUDA_TOTAL,NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,NOMBRE_NOMINA,COLOR_NOMINA,AYUDA_TOP10_ANUAL)
-from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos)
+from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,excluir_emisor_monex,matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos)
 from utils import (dinero)
 from components.charts import  render_notas_reporte
 from views.income_view import _vista_economica
@@ -223,7 +223,17 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
             })
 
 
-    matriz = matriz_anual_egresos(fac, rep_por_año, ncr_anual_egr, nomina_por_año, ejercicios)
+    col_rfc_rep = buscar_columna(df_rep_f.columns, "RFC Emisor")
+    if col_rfc_rep is None:
+        st.error("No se puede generar el desglose anual: la Base de PAGO debe incluir la columna "
+                 "'RFC Emisor' para excluir los complementos de Banco Monex (BMI9704113PA).")
+        st.stop()
+    fac_desglose = excluir_emisor_monex(fac, "RFC_Emisor")
+    rep_desglose = excluir_emisor_monex(df_rep_f, col_rfc_rep)
+    rep_por_año_desglose = rep_desglose.groupby("Año")["Monto_Num"].sum()
+    ncr_anual_desglose = ncr_por_año_egresos(fac_desglose)
+    matriz = matriz_anual_egresos(fac_desglose, rep_por_año_desglose, ncr_anual_desglose,
+                                  nomina_por_año, ejercicios)
 
     texto = matriz.apply(lambda col: col.map(
         lambda v: "n/a" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
