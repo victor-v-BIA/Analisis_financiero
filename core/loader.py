@@ -18,7 +18,7 @@ from config import (CODIGO_VERSION, COLS_FACTURAS,
 from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
 
 def cargar_base(uploaded_file) -> pd.DataFrame:
-    """Lector universal: Excel (.xlsx/.xls) o CSV según la extensión de `uploaded_file.name`.
+    """Lector universal: Excel (.xlsx/.xls/.xlsb) o CSV según la extensión de `uploaded_file.name`.
 
     La lectura vive en `_cargar_base_cache` (`st.cache_data`, indexada por nombre + contenido + versión del código): cada
     llamada devuelve una copia independiente del DataFrame y el archivo ya NO se vuelve a parsear en cada re-ejecución
@@ -26,8 +26,8 @@ def cargar_base(uploaded_file) -> pd.DataFrame:
     return _cargar_base_cache(uploaded_file.name, uploaded_file.getvalue(), CODIGO_VERSION)
 
 def leer_archivo(nombre: str, contenido: bytes) -> pd.DataFrame:
-    """Lee un CSV o Excel (.xlsx/.xls, según `nombre`) como texto, sin inferir tipos."""
-    if nombre.lower().endswith((".xlsx", ".xls")):
+    """Lee un CSV o Excel (.xlsx/.xls/.xlsb, según `nombre`) como texto, sin inferir tipos."""
+    if nombre.lower().endswith((".xlsx", ".xls", ".xlsb")):
         df = pd.read_excel(io.BytesIO(contenido), engine="calamine", dtype=str)
     else:
         for codificacion in ("utf-8-sig", "latin-1"):
@@ -373,7 +373,7 @@ def _preparar_nomina(df_nomina: pd.DataFrame) -> pd.DataFrame | None:
 
 
 def _hojas_crudas(nombre: str, contenido: bytes) -> list[pd.DataFrame]:
-    """Todas las hojas de un .xlsx/.xls (o el .csv) como tablas sin encabezado, para inspeccionarlas dinámicamente."""
+    """Todas las hojas de un Excel (o el .csv) como tablas sin encabezado, para inspeccionarlas dinámicamente."""
     try:
         if nombre.lower().endswith(".csv"):
             for codificacion in ("utf-8-sig", "latin-1"):
@@ -557,7 +557,7 @@ def _cargar_bases_economicas(lado: str) -> dict:
 
     pertinentes = ("itaee", "inpc", "tiie") if lado == "ingresos" else ("inpp", "inpc")
     texto = "ITAEE, INPC y/o TIIE" if lado == "ingresos" else "INPP y/o INPC"
-    archivos = st.file_uploader(f"Carga las bases externas ({texto}) · .xlsx, .xls o .csv", type=["xlsx", "xls", "csv"],
+    archivos = st.file_uploader(f"Carga las bases externas ({texto}) · .xlsx, .xls, .xlsb o .csv", type=["xlsx", "xls", "xlsb", "csv"],
                                 accept_multiple_files=True, key=f"eco_up_{lado}")
     entradas = [(f.name, f.getvalue()) for f in archivos or []]
     if not entradas:
@@ -613,7 +613,7 @@ def _columnas_archivo(nombre: str, contenido: bytes, version: str) -> list[str]:
 @st.cache_data(show_spinner="Procesando bases CFDI...")
 def _cargar_base_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
     """Lectura cruda (Excel o CSV) de un archivo subido, en caché. Es lo que usa `cargar_base`."""
-    if nombre.lower().endswith((".xlsx", ".xls")):
+    if nombre.lower().endswith((".xlsx", ".xls", ".xlsb")):
         return pd.read_excel(io.BytesIO(contenido), engine="calamine")
     return pd.read_csv(io.BytesIO(contenido), encoding="utf-8")
 

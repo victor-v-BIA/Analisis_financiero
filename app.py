@@ -44,7 +44,7 @@ def main() -> None:
     with st.sidebar:
         st.header("Carga de Datos")
         archivos_subidos = st.file_uploader("Sube todos tus reportes aquí (Excel/CSV)",
-                                            type=['csv', 'xlsx', 'xls'], accept_multiple_files=True)
+                                            type=['csv', 'xlsx', 'xls', 'xlsb'], accept_multiple_files=True)
         st.caption("Opcional: incluye el archivo de Productos de CFDI recibidos (nombre con “Productos”) con "
                    "columnas Clave, RFC Emisor, Fecha e Importe para filtrar compras de divisas.")
 
