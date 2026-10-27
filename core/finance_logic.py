@@ -161,22 +161,97 @@ def ncr_por_año_egresos(fac: pd.DataFrame) -> pd.DataFrame:
     }).fillna(0.0)
 
 
-def excluir_emisor_monex(df: pd.DataFrame, columna_rfc: str) -> pd.DataFrame:
-    """Excluye únicamente los registros cuyo RFC de emisor es Banco Monex."""
-    rfc_emisor = df[columna_rfc].fillna("").astype(str).str.strip().str.upper()
-    return df.loc[rfc_emisor != "BMI9704113PA"].copy()
+def excluir_cfdis_divisas(facturas: pd.DataFrame, productos: pd.DataFrame) -> tuple[pd.DataFrame, set[str], dict[str, int]]:
+    """Excluye CFDI que coinciden sin ambigüedad con conceptos de compra de divisas.
+
+    El archivo de productos no tiene UUID, por lo que la relación se limita a RFC emisor, fecha e importe
+    exacto al centavo. Solo se aceptan grupos donde el número de conceptos y CFDI coincidentes es el mismo.
+    """
+    columnas = {
+        "Clave": buscar_columna(productos.columns, "Clave"),
+        "RFC Emisor": buscar_columna(productos.columns, "RFC Emisor"),
+        "Fecha": buscar_columna(productos.columns, "Fecha"),
+        "Importe": buscar_columna(productos.columns, "Importe"),
+    }
+    faltantes = [nombre for nombre, columna in columnas.items() if columna is None]
+    if faltantes:
+        raise ValueError(f"Faltan columnas requeridas en el archivo de productos: {faltantes}")
+
+    clave = (productos[columnas["Clave"]].fillna("").astype(str).str.strip()
+             .str.replace(r"\.0$", "", regex=True))
+    filas = productos.loc[clave.eq("84121603")].copy()
+    estadisticas = {"conceptos": len(filas), "coincidencias": 0, "sin_coincidencia": 0, "ambiguos": 0}
+    if filas.empty:
+        return facturas.copy(), set(), estadisticas
+
+    conceptos = pd.DataFrame({
+        "_RFC": filas[columnas["RFC Emisor"]].fillna("").astype(str).str.strip().str.upper(),
+        "_Fecha": a_fecha(filas[columnas["Fecha"]]),
+        "_Importe": a_numero(filas[columnas["Importe"]]).round(2),
+    }, index=filas.index)
+    conceptos = conceptos[
+        conceptos["_RFC"].ne("") & conceptos["_Fecha"].notna() & conceptos["_Importe"].notna()
+    ]
+    estadisticas["sin_coincidencia"] += len(filas) - len(conceptos)
+
+    facturas_validas = facturas.loc[~facturas["Es_NCR"]].copy()
+    candidatos = pd.DataFrame({
+        "_RFC": facturas_validas["RFC_Emisor"].fillna("").astype(str).str.strip().str.upper(),
+        "_Fecha": facturas_validas["Fecha"],
+        "_Importe": pd.to_numeric(facturas_validas["Total"], errors="coerce").round(2),
+        "_UUID": facturas_validas["UUID"].fillna("").astype(str).str.strip().str.upper(),
+    }, index=facturas_validas.index)
+    candidatos = candidatos[
+        candidatos["_RFC"].ne("") & candidatos["_Fecha"].notna()
+        & candidatos["_Importe"].notna() & candidatos["_UUID"].ne("")
+    ]
+
+    columnas_clave = ["_RFC", "_Fecha", "_Importe"]
+    conteo_conceptos = conceptos.groupby(columnas_clave).size().rename("_Conceptos")
+    conteo_facturas = candidatos.groupby(columnas_clave).size().rename("_Facturas")
+    conteos = pd.concat([conteo_conceptos, conteo_facturas], axis=1).fillna(0).astype(int)
+    exactos = conteos[conteos["_Conceptos"].eq(conteos["_Facturas"]) & conteos["_Conceptos"].gt(0)].index
+    no_coinciden = conteos[~conteos.index.isin(exactos)]
+    estadisticas["sin_coincidencia"] += int(no_coinciden.loc[no_coinciden["_Facturas"].eq(0), "_Conceptos"].sum())
+    estadisticas["ambiguos"] = int(no_coinciden.loc[no_coinciden["_Facturas"].gt(0), "_Conceptos"].sum())
+
+    if len(exactos):
+        conceptos_exactos = conceptos.set_index(columnas_clave).loc[exactos].reset_index()
+        candidatos_exactos = candidatos.set_index(columnas_clave).loc[exactos].reset_index()
+        # Los conteos por clave son iguales; con importes idénticos, las UUID no afectan el total excluido.
+        excluir = set(candidatos_exactos["_UUID"])
+        estadisticas["coincidencias"] = len(conceptos_exactos)
+    else:
+        excluir = set()
+
+    resultado = facturas.loc[
+        ~facturas["UUID"].fillna("").astype(str).str.strip().str.upper().isin(excluir)
+    ].copy()
+    return resultado, excluir, estadisticas
+
+
+def excluir_complementos_de_cfdis(complementos: pd.DataFrame, uuids: set[str]) -> tuple[pd.DataFrame, int | None]:
+    """Excluye complementos enlazados por UUID a CFDI de divisas; None indica que no existe columna de relación."""
+    if not uuids:
+        return complementos.copy(), 0
+    columna_relacion = buscar_columna(complementos.columns, "UUID DR") or buscar_columna(
+        complementos.columns, "Documento Relacionado")
+    if columna_relacion is None:
+        return complementos.copy(), None
+    relacionados = complementos[columna_relacion].fillna("").astype(str).str.strip().str.upper()
+    excluir = relacionados.isin(uuids)
+    return complementos.loc[~excluir].copy(), int(excluir.sum())
 
 
 def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_anual: pd.DataFrame,
                          nomina_por_año: pd.Series, ejercicios: list[int]) -> pd.DataFrame:
-    """Una fila por año con los rubros de egresos, usando facturas y pagos ya filtrados por RFC del emisor.
+    """Una fila por año con los mismos rubros de los KPI de Egresos: Notas de Crédito y Nómina Pagada.
 
     `fac` trae tanto Factura como NCR (bandera Es_NCR) filtradas por los ejercicios seleccionados; Facturación/
     Pagado se calculan SOLO con Factura (`~Es_NCR`). `pagado_ppd_por_año` ya viene agrupada por Año desde la
     base de complementos de pago (Base PAGO). `ncr_anual` (salida de ncr_por_año_egresos) ya viene agrupada por
     Año de emisión. Las Notas de Crédito se ven únicamente con su total (sin detalle PUE/PPD). `nomina_por_año` ya viene agrupada por Año desde la Base de
     Nómina. Reindexa sobre `ejercicios` para que un año sin datos quede en 0 real, no se pierda.
-    Egreso Operativo Neto = Pagado Total - Notas de Crédito; Egreso Total = Egreso Operativo Neto + Nómina.
     """
     idx = pd.Index(sorted(ejercicios), name="Año")
     fac_factura = fac[~fac["Es_NCR"]]
@@ -188,8 +263,8 @@ def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_
     ncr_a = ncr_anual.reindex(idx, fill_value=0.0)
     nomina = nomina_por_año.reindex(idx, fill_value=0.0)
     cifras = resumen_egresos(fact_pue, fact_ppd, pagado_ppd, nomina)          # la misma función de las tarjetas y las gráficas
-    fact_total, pagado_total, saldo_ppd = cifras["facturacion"], cifras["pagado_total"], cifras["diferencia"]
-    egreso_operativo_neto = pagado_total - ncr_a["NCR_Total"]
+    fact_total, pagado_total, egreso_total, saldo_ppd = cifras["facturacion"], cifras["pagado_total"], cifras["egreso_total"], cifras["diferencia"]
+    egreso_operativo_neto = pagado_total - ncr_a["NCR_Total"]                  # indicador aparte: las NCR no se descuentan del Egreso Total
     pct_saldo_ppd = (saldo_ppd / fact_ppd * 100).where(fact_ppd != 0, 0.0)
 
     m = pd.DataFrame({
@@ -202,7 +277,7 @@ def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_
     })
     m["Egreso Operativo Neto"] = egreso_operativo_neto
     m["Pagos a Nómina"] = nomina
-    m["Egreso Total (Operación + Nómina)"] = egreso_operativo_neto + nomina
+    m["Egreso Total (Operación + Nómina)"] = egreso_total
     m["Saldo PPD por Pagar"] = saldo_ppd
     m["% Saldo PPD por Pagar"] = pct_saldo_ppd
     m.index = m.index.astype(str)

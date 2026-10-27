@@ -45,11 +45,14 @@ def main() -> None:
         st.header("Carga de Datos")
         archivos_subidos = st.file_uploader("Sube todos tus reportes aquí (Excel/CSV)",
                                             type=['csv', 'xlsx', 'xls'], accept_multiple_files=True)
+        st.caption("Opcional: incluye el archivo de Productos de CFDI recibidos (nombre con “Productos”) con "
+                   "columnas Clave, RFC Emisor, Fecha e Importe para filtrar compras de divisas.")
 
         # Inicializar 5 variables de ruteo
         file_ingresos_facturas = None
         file_ingresos_pago = None
         file_egresos_facturas = None
+        file_egresos_productos = None
         file_egresos_pago = None
         file_nomina = None
 
@@ -71,6 +74,8 @@ def main() -> None:
                     file_ingresos_pago = f
 
                 # Clasificación Egresos (Proveedores)
+                if "producto" in nombre and "emitid" not in nombre:
+                    file_egresos_productos = f
                 elif "recibid" in nombre and "pago" not in nombre:
                     file_egresos_facturas = f
                 elif "recibid" in nombre and "pago" in nombre:
@@ -112,7 +117,8 @@ def main() -> None:
         modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5,
                         file_egresos_facturas, file_egresos_pago, file_nomina)
     else:
-        modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5, file_ingresos_facturas)
+        modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5,
+                       file_ingresos_facturas, file_egresos_productos)
 
 
 if __name__ == "__main__":

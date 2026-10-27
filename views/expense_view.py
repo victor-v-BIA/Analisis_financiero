@@ -15,7 +15,9 @@ from core.loader import (anios_5_archivos,_columnas_archivo,validar_columnas,
                          cargar_base, buscar_columna,preparar_complementos_egresos,_preparar_nomina)
 
 from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODULO,AYUDA_TOTAL,NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,NOMBRE_NOMINA,COLOR_NOMINA,AYUDA_TOP10_ANUAL)
-from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,excluir_emisor_monex,matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos)
+from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,
+                                matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos,
+                                excluir_cfdis_divisas,excluir_complementos_de_cfdis)
 from utils import (dinero)
 from components.charts import  render_notas_reporte
 from views.income_view import _vista_economica
@@ -27,7 +29,7 @@ from components.pdf_generator import generate_modular_pdf
 
 
 def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5=None,
-                   file_ingresos_facturas=None) -> None:
+                   file_ingresos_facturas=None, file_egresos_productos=None) -> None:
     """Módulo de Egresos: facturación recibida (candados estrictos, sin alterar) + complementos pagados.
 
     Revelación progresiva: el hard stop de Facturación Recibida se evalúa ANTES de dibujar cualquier otro
@@ -57,9 +59,25 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         st.error(f"'{file_egresos_facturas.name}' no tiene el formato esperado de facturación recibida. "
                  f"{e.args[0]}")
         st.stop()
+    facturas_sin_filtro_divisas = facturas.copy()
+    uuids_divisas = set()
+    if file_egresos_productos is not None:
+        try:
+            productos = cargar_base(file_egresos_productos)
+            facturas, uuids_divisas, estadisticas_divisas = excluir_cfdis_divisas(facturas, productos)
+        except (KeyError, ValueError) as e:
+            st.error(f"'{file_egresos_productos.name}' no tiene la estructura esperada para detectar compras "
+                     f"de divisas. {e}")
+            st.stop()
+        st.info(
+            f"Filtro de divisas: {estadisticas_divisas['coincidencias']} concepto(s) de 84121603 "
+            f"coincidieron de forma exacta con CFDI por RFC, fecha e importe. "
+            f"{estadisticas_divisas['sin_coincidencia']} sin coincidencia y "
+            f"{estadisticas_divisas['ambiguos']} ambiguo(s) no se excluyeron."
+        )
     if n_sin_tc:
         st.warning(f"{n_sin_tc} factura(s) recibida(s) en moneda extranjera sin Tipo de Cambio válido se excluyeron: no se pueden convertir a MXN.")
-    if facturas.empty:
+    if facturas.empty and not uuids_divisas:
         st.warning("No quedaron facturas recibidas tras aplicar los filtros (Estatus 'Vigente'/'Activo', Tipo "
                    f"Documento = 'Factura' y la ventana de análisis {anios_5[0] if anios_5 else ''}–"
                    f"{anios_5[-1] if anios_5 else ''}).")
@@ -82,10 +100,14 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         st.info("Sube la base de Nómina para calcular el egreso total")
         st.stop()
 
+    fac_sin_filtro_divisas = facturas_sin_filtro_divisas[
+        facturas_sin_filtro_divisas["Fecha"].dt.year.isin(ejercicios)]
     fac = facturas[facturas["Fecha"].dt.year.isin(ejercicios)]
-    if fac.empty:
+    if fac.empty and fac_sin_filtro_divisas.empty:
         st.warning("No hay facturas recibidas para los ejercicios seleccionados.")
         st.stop()
+    if fac.empty and uuids_divisas:
+        st.info("Los CFDI coincidentes con compras de divisas cubren toda la facturación de los ejercicios seleccionados.")
 
     # -- Complementos de Pago (Base PAGO, Flujo de Efectivo) --
     archivo_rep, etiqueta_base = file_egresos_pago, "Base de PAGO"
@@ -103,6 +125,13 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     if col_est_rep is not None:
         df_rep = df_rep[df_rep[col_est_rep].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])]
     df_rep = preparar_complementos_egresos(df_rep, col_monto, col_fecha)
+    if uuids_divisas:
+        df_rep, complementos_excluidos = excluir_complementos_de_cfdis(df_rep, uuids_divisas)
+        if complementos_excluidos is None:
+            st.warning("No se pudieron excluir complementos de las facturas de divisas: la Base de PAGO no "
+                       "incluye UUID DR o Documento Relacionado.")
+        elif complementos_excluidos:
+            st.info(f"Se excluyeron {complementos_excluidos} complemento(s) relacionado(s) con los CFDI de divisas.")
 
     df_rep_f = df_rep[df_rep["Año"].isin(ejercicios)]
     total_rep = float(df_rep_f["Monto_Num"].sum())
@@ -223,17 +252,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
             })
 
 
-    col_rfc_rep = buscar_columna(df_rep_f.columns, "RFC Emisor")
-    if col_rfc_rep is None:
-        st.error("No se puede generar el desglose anual: la Base de PAGO debe incluir la columna "
-                 "'RFC Emisor' para excluir los complementos de Banco Monex (BMI9704113PA).")
-        st.stop()
-    fac_desglose = excluir_emisor_monex(fac, "RFC_Emisor")
-    rep_desglose = excluir_emisor_monex(df_rep_f, col_rfc_rep)
-    rep_por_año_desglose = rep_desglose.groupby("Año")["Monto_Num"].sum()
-    ncr_anual_desglose = ncr_por_año_egresos(fac_desglose)
-    matriz = matriz_anual_egresos(fac_desglose, rep_por_año_desglose, ncr_anual_desglose,
-                                  nomina_por_año, ejercicios)
+    matriz = matriz_anual_egresos(fac, rep_por_año, ncr_anual_egr, nomina_por_año, ejercicios)
 
     texto = matriz.apply(lambda col: col.map(
         lambda v: "n/a" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
@@ -262,7 +281,9 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         })
         
         st.divider()
-        _vista_economica("egresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5, pdf_elements=pdf_elements)
+        _vista_economica("egresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5,
+                         pdf_elements=pdf_elements,
+                         egresos_facturas=facturas if file_egresos_productos is not None else None)
         return
 
     _bloque_egresos(_preparar_concentracion(fac_factura, "Nombre_Emisor", "RFC_Emisor"), cargar_base(file_nomina), df_rep_f, ejercicios,

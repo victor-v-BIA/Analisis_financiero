@@ -427,7 +427,8 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                 )
 
 
-def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios_5, pdf_elements: list) -> None:
+def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios_5, pdf_elements: list,
+                     egresos_facturas: pd.DataFrame | None = None) -> None:
     st.markdown(CSS_VISTA_ECONOMICA, unsafe_allow_html=True)
     if f_ingresos_fac is None or f_egresos_fac is None:
         st.info("La Vista Económica compara Ingresos contra Gastos: carga también la Facturación "
@@ -436,7 +437,15 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
     anios = sorted(int(a) for a in ejercicios)
     anios_str = [str(a) for a in anios]
     ing_d = _facturacion_anual_cache(_nb(f_ingresos_fac), "ingresos", anios_5, CODIGO_VERSION)
-    gas_d = _facturacion_anual_cache(_nb(f_egresos_fac), "egresos", anios_5, CODIGO_VERSION)
+    if lado == "egresos" and egresos_facturas is not None:
+        facturas_gastos = egresos_facturas[~egresos_facturas["Es_NCR"]]
+        totales_gastos = facturas_gastos.groupby(facturas_gastos["Fecha"].dt.year)["Total"].sum()
+        gas_d = {
+            int(anio): float(monto)
+            for anio, monto in totales_gastos.reindex([int(a) for a in anios_5], fill_value=0.0).items()
+        }
+    else:
+        gas_d = _facturacion_anual_cache(_nb(f_egresos_fac), "egresos", anios_5, CODIGO_VERSION)
     for d in (ing_d, gas_d):
         if "motivo" in d:
             st.info(f"Información insuficiente: {d['motivo']}")
