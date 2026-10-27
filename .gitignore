@@ -11,3 +11,4 @@ __pycache__/
 .Python
 .md
 .xml
+google_credentials.json

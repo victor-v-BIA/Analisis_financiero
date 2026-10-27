@@ -6,19 +6,35 @@ import pandas as pd
 import re
 from config import (_PARENTESIS,_GRUPO_FINANCIERO_FINAL, _SUFIJOS_CORPORATIVOS, _CONECTORES_MINUSCULA, COL_FECHA_REP,MESES_ES)
 
+ContenidoArchivo = bytes | tuple[tuple[str, bytes], ...]
+
+
 #  Clase auxiliar
 class _ArchivoMem:
-    """Archivo en memoria con la interfaz mínima que usan los lectores (`name`, `getvalue()`, `seek`). Permite pasar los
-    archivos subidos como (nombre, bytes) a funciones con `st.cache_data` (un archivo subido no es hasheable)."""
+    """Archivo en memoria compatible con lectores y caché, con bytes o partes agrupadas."""
 
-    def __init__(self, nombre: str, contenido: bytes):
+    def __init__(self, nombre: str, contenido: ContenidoArchivo):
         self.name, self._contenido = nombre, contenido
 
-    def getvalue(self) -> bytes:
+    def getvalue(self) -> ContenidoArchivo:
         return self._contenido
 
     def seek(self, *_args) -> int:
         return 0
+
+
+class _ArchivoGrupo:
+    """Grupo de archivos homogéneos que conserva los nombres y contenidos de cada parte."""
+
+    def __init__(self, archivos):
+        self.archivos = tuple((archivo.name, archivo.getvalue()) for archivo in archivos)
+        if not self.archivos:
+            raise ValueError("El grupo de archivos no puede estar vacío.")
+        self.name = f"{len(self.archivos)} archivos: " + ", ".join(nombre for nombre, _ in self.archivos)
+
+    def getvalue(self) -> ContenidoArchivo:
+        return self.archivos
+
 
 def _norm(texto: str) -> str:
     sin_acentos = unicodedata.normalize("NFKD", str(texto)).encode("ascii", "ignore").decode()
@@ -198,7 +214,7 @@ def _anios_txt(anios: list[int]) -> str:
     anios = sorted(anios)
     return f"{anios[0]}–{anios[-1]}" if len(anios) >= 2 and anios == list(range(anios[0], anios[-1] + 1)) else ", ".join(map(str, anios))
 
-def _nb(archivo) -> tuple[str, bytes]:
+def _nb(archivo) -> tuple[str, ContenidoArchivo]:
     """(nombre, contenido) de un archivo subido: la llave de los cálculos en caché del Dashboard Ejecutivo."""
     return archivo.name, archivo.getvalue()
 

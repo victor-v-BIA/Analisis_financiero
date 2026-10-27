@@ -5,6 +5,7 @@ validar columnas, limpiar formatos de texto/fechas y gestionar la caché de Stre
 '''
 import pandas as pd
 import streamlit as st
+from pyarrow import ArrowException
 import io
 import unicodedata
 import re
@@ -15,31 +16,78 @@ from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
                     RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT)
 
-from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
+from utils import (_ArchivoMem, ContenidoArchivo, _norm, a_numero, a_fecha, buscar_columna)
+
 
 def cargar_base(uploaded_file) -> pd.DataFrame:
-    """Lector universal: Excel (.xlsx/.xls/.xlsb) o CSV según la extensión de `uploaded_file.name`.
+    """Lector universal: Excel, CSV o Parquet, también para grupos de archivos homogéneos.
 
     La lectura vive en `_cargar_base_cache` (`st.cache_data`, indexada por nombre + contenido + versión del código): cada
     llamada devuelve una copia independiente del DataFrame y el archivo ya NO se vuelve a parsear en cada re-ejecución
     de la interfaz. Al leer del contenido en memoria no depende de la posición del cursor del archivo subido."""
     return _cargar_base_cache(uploaded_file.name, uploaded_file.getvalue(), CODIGO_VERSION)
 
-def leer_archivo(nombre: str, contenido: bytes) -> pd.DataFrame:
-    """Lee un CSV o Excel (.xlsx/.xls/.xlsb, según `nombre`) como texto, sin inferir tipos."""
-    if nombre.lower().endswith((".xlsx", ".xls", ".xlsb")):
-        df = pd.read_excel(io.BytesIO(contenido), engine="calamine", dtype=str)
-    else:
-        for codificacion in ("utf-8-sig", "latin-1"):
-            try:
-                df = pd.read_csv(io.BytesIO(contenido), dtype=str, sep=None, engine="python",
-                                 encoding=codificacion)
-                break
-            except UnicodeDecodeError:
-                continue
+def leer_archivo(nombre: str, contenido: ContenidoArchivo) -> pd.DataFrame:
+    """Lee CSV, Excel o Parquet como texto; concatena grupos tras validar las columnas."""
+    df = _leer_archivos_cache(nombre, contenido, True, CODIGO_VERSION)
     df = df.fillna("")
     df.columns = [str(c).strip() for c in df.columns]
     return df.apply(lambda s: s.astype(str).str.strip())
+
+
+def _partes_archivo(nombre: str, contenido: ContenidoArchivo) -> tuple[tuple[str, bytes], ...]:
+    """Normaliza un archivo individual o el contenido serializable de un _ArchivoGrupo."""
+    if (isinstance(contenido, tuple) and contenido
+            and all(isinstance(parte, tuple) and len(parte) == 2 for parte in contenido)):
+        return contenido
+    return ((nombre, contenido),)
+
+
+def _leer_csv(contenido: bytes, como_texto: bool) -> pd.DataFrame:
+    if not como_texto:
+        return pd.read_csv(io.BytesIO(contenido), encoding="utf-8")
+    for codificacion in ("utf-8-sig", "latin-1"):
+        try:
+            return pd.read_csv(io.BytesIO(contenido), dtype=str, sep=None, engine="python",
+                               encoding=codificacion)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("No se pudo identificar la codificación del CSV.")
+
+
+@st.cache_data(show_spinner=False)
+def _leer_archivos_cache(nombre: str, contenido: ContenidoArchivo, como_texto: bool, version: str) -> pd.DataFrame:
+    """Lee y concatena archivos con el mismo esquema, con caché compartida entre validación y procesamiento."""
+    partes = _partes_archivo(nombre, contenido)
+    tablas = []
+    columnas_referencia = None
+    nombre_referencia = None
+    for nombre_parte, contenido_parte in partes:
+        extension = Path(nombre_parte).suffix.lower()
+        if extension == ".parquet":
+            tabla = pd.read_parquet(io.BytesIO(contenido_parte), engine="pyarrow")
+        elif extension in (".xlsx", ".xls", ".xlsb"):
+            opciones = {"dtype": str} if como_texto else {}
+            tabla = pd.read_excel(io.BytesIO(contenido_parte), engine="calamine", **opciones)
+        else:
+            tabla = _leer_csv(contenido_parte, como_texto)
+
+        columnas = {_norm(col): col for col in tabla.columns}
+        if len(columnas) != len(tabla.columns):
+            raise ValueError(f"El archivo '{nombre_parte}' tiene encabezados repetidos o ambiguos.")
+        if columnas_referencia is None:
+            columnas_referencia = columnas
+            nombre_referencia = nombre_parte
+        elif columnas.keys() != columnas_referencia.keys():
+            raise ValueError(
+                f"El archivo '{nombre_parte}' no tiene las mismas columnas que '{nombre_referencia}'. "
+                "Verifica que todas las partes pertenezcan a la misma base."
+            )
+        else:
+            tabla = tabla.rename(columns={columna: columnas_referencia[normalizada]
+                                          for normalizada, columna in columnas.items()})
+        tablas.append(tabla)
+    return pd.concat(tablas, ignore_index=True, sort=False)
 
 
 
@@ -79,7 +127,7 @@ def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) 
                  f"cálculo: {faltantes}")
         st.stop()
 
-def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
+def leer_facturas(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFrame, list[str]]:
     """Facturas emitidas: Activo/Vigente + (Factura o NCR); Fecha sin hora; PUE/PPD; Total numérico (una fila por UUID).
 
     Se conservan las Notas de Crédito (Tipo Documento = 'NCR') con la bandera `Es_NCR`, para poder calcular el
@@ -154,7 +202,7 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
     return df, avisos
 
 
-def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
+def leer_facturas_egresos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFrame, list[str]]:
     """Facturación recibida (Egresos): candados exactos confirmados por el usuario, sumatoria bruta (sin restas).
 
     Único criterio de vigencia: Estatus (limpio, en mayúsculas) igual a 'VIGENTE' o 'ACTIVO'. Único criterio de
@@ -244,7 +292,7 @@ def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, 
     return df, avisos
 
 
-def leer_complementos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
+def leer_complementos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFrame, list[str]]:
     """Complementos de pago: Fecha_Cobro (sin hora) y Cobro Efectivo = Saldo Inicial - Saldo Final.
 
     Fecha_Cobro = 'Fecha de Pago' del complemento.
@@ -373,7 +421,9 @@ def _preparar_nomina(df_nomina: pd.DataFrame) -> pd.DataFrame | None:
 
 
 def _hojas_crudas(nombre: str, contenido: bytes) -> list[pd.DataFrame]:
-    """Todas las hojas de un Excel (o el .csv) como tablas sin encabezado, para inspeccionarlas dinámicamente."""
+    """Tablas de un Excel, Parquet o CSV para inspeccionar bases económicas."""
+    if nombre.lower().endswith(".parquet"):
+        return [pd.read_parquet(io.BytesIO(contenido), engine="pyarrow")]
     try:
         if nombre.lower().endswith(".csv"):
             for codificacion in ("utf-8-sig", "latin-1"):
@@ -557,7 +607,8 @@ def _cargar_bases_economicas(lado: str) -> dict:
 
     pertinentes = ("itaee", "inpc", "tiie") if lado == "ingresos" else ("inpp", "inpc")
     texto = "ITAEE, INPC y/o TIIE" if lado == "ingresos" else "INPP y/o INPC"
-    archivos = st.file_uploader(f"Carga las bases externas ({texto}) · .xlsx, .xls, .xlsb o .csv", type=["xlsx", "xls", "xlsb", "csv"],
+    archivos = st.file_uploader(f"Carga las bases externas ({texto}) · Excel, CSV o Parquet",
+                                type=["xlsx", "xls", "xlsb", "csv", "parquet"],
                                 accept_multiple_files=True, key=f"eco_up_{lado}")
     entradas = [(f.name, f.getvalue()) for f in archivos or []]
     if not entradas:
@@ -577,7 +628,11 @@ def _cargar_bases_economicas(lado: str) -> dict:
 
     series: dict = {}
     for nombre, contenido in entradas:
-        r = _procesar_archivo_economico(nombre, contenido, CODIGO_VERSION)
+        try:
+            r = _procesar_archivo_economico(nombre, contenido, CODIGO_VERSION)
+        except (ArrowException, OSError, ValueError) as exc:
+            st.error(f"No se pudo leer la base económica «{nombre}»: {exc}")
+            continue
         if r["tipo"] is None:
             st.warning(f"No se reconoció el formato de «{nombre}» (se esperan una base de ITAEE, INPP, INPC o una serie "
                        "fecha-valor como la TIIE).")
@@ -591,31 +646,29 @@ def _cargar_bases_economicas(lado: str) -> dict:
 # =============== FUNCIONES CON @st.cache_data
 
 @st.cache_data(show_spinner="Procesando facturas…")
-def _facturas_cache(nombre: str, contenido: bytes, version: str):
+def _facturas_cache(nombre: str, contenido: ContenidoArchivo, version: str):
     return leer_facturas(nombre, contenido)
 
 
 @st.cache_data(show_spinner="Procesando facturación recibida…")
-def _facturas_egresos_cache(nombre: str, contenido: bytes, version: str):
+def _facturas_egresos_cache(nombre: str, contenido: ContenidoArchivo, version: str):
     return leer_facturas_egresos(nombre, contenido)
 
 
 @st.cache_data(show_spinner="Procesando complementos de pago…")
-def _complementos_cache(nombre: str, contenido: bytes, version: str):
+def _complementos_cache(nombre: str, contenido: ContenidoArchivo, version: str):
     return leer_complementos(nombre, contenido)
 
 
 @st.cache_data(show_spinner=False)
-def _columnas_archivo(nombre: str, contenido: bytes, version: str) -> list[str]:
+def _columnas_archivo(nombre: str, contenido: ContenidoArchivo, version: str) -> list[str]:
     return list(leer_archivo(nombre, contenido).columns)
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _cargar_base_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
-    """Lectura cruda (Excel o CSV) de un archivo subido, en caché. Es lo que usa `cargar_base`."""
-    if nombre.lower().endswith((".xlsx", ".xls", ".xlsb")):
-        return pd.read_excel(io.BytesIO(contenido), engine="calamine")
-    return pd.read_csv(io.BytesIO(contenido), encoding="utf-8")
+def _cargar_base_cache(nombre: str, contenido: ContenidoArchivo, version: str) -> pd.DataFrame:
+    """Lectura cruda (Excel o CSV) de uno o varios archivos subidos, en caché."""
+    return _leer_archivos_cache(nombre, contenido, False, version)
 
 
 @st.cache_data(show_spinner=False)
