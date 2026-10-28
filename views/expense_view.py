@@ -524,57 +524,60 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 pass
 
         # 2. Método de Pago de Gastos
-        pdf_elements.append({
-            "type": "image",
-            "title": ("Método de Pago de Gastos" if comp_df is not None
-                      else "Facturación por Método PUE/PPD (pagos PPD no disponibles)"),
-            "fig": fig_metodo_pago,
-            "preserve_textfont_size": True,
-        })
         if comp_df is None:
             pdf_elements.append({
                 "type": "table",
-                "title": "Importes facturados por método de pago",
+                "title": "Facturación por Método PUE/PPD (pagos PPD no disponibles)",
                 "df": pd.DataFrame({
-                    "Método facturado": [NOMBRE_EGR_PUE, NOMBRE_EGR_PPD],
-                    "Importe": [dinero(pue_t), dinero(ppd_t)],
+                    "Concepto": [
+                        _html_resumen_metodo_pago(
+                            res, incluir_detalle_ppd=False, formato_pdf=True
+                        )
+                    ],
                 }),
+                "white_background": True,
             })
         else:
-          try:
-            pue_g = float(res.get("pue", 0))
-            ppd_g = float(res.get("ppd", 0))
-            ppd_pendiente_g = float(res.get("diferencia", 0))
-            ppd_pagado_g = float(res.get("complementos", 0))
-            total_g = float(res.get("facturacion", pue_g + ppd_g))
-            pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "n/a"
+            try:
+                pdf_elements.append({
+                    "type": "image",
+                    "title": "Método de Pago de Gastos",
+                    "fig": fig_metodo_pago,
+                    "preserve_textfont_size": True,
+                })
+                pue_g = float(res.get("pue", 0))
+                ppd_g = float(res.get("ppd", 0))
+                ppd_pendiente_g = float(res.get("diferencia", 0))
+                ppd_pagado_g = float(res.get("complementos", 0))
+                total_g = float(res.get("facturacion", pue_g + ppd_g))
+                pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "n/a"
 
-            filas_pago_pdf = [
-                {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},
-                {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Egresos PUE</font></b><br/><font color='#4B5563'>MXN {pue_g:,.2f} · {pct_pago(pue_g)}</font>"},
-                {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Egresos PPD</font></b><br/><font color='#4B5563'>MXN {ppd_g:,.2f} · {pct_pago(ppd_g)}</font>"}
-            ]
-            if ppd_pendiente_g >= 0:
-                filas_pago_pdf.extend([
-                    {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#2563EB'>●</font> <b><font color='#1F2937'>PPD pendiente</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pendiente_g:,.2f} · {pct_pago(ppd_pendiente_g)}</font>"},
-                    {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#60A5FA'>●</font> <b><font color='#1F2937'>PPD pagado</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pagado_g:,.2f} · {pct_pago(ppd_pagado_g)}</font>"}
-                ])
-            else:
-                filas_pago_pdf.extend([
-                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Complementos de Pago Recibidos</font></b><br/><font color='#4B5563'>MXN {ppd_pagado_g:,.2f}</font>"},
-                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Diferencia PPD (Facturación PPD − Complementos de Pago Recibidos)</font></b><br/><font color='#4B5563'>MXN {ppd_pendiente_g:,.2f}</font>"}
-                ])
+                filas_pago_pdf = [
+                    {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},
+                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Egresos PUE</font></b><br/><font color='#4B5563'>MXN {pue_g:,.2f} · {pct_pago(pue_g)}</font>"},
+                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Egresos PPD</font></b><br/><font color='#4B5563'>MXN {ppd_g:,.2f} · {pct_pago(ppd_g)}</font>"}
+                ]
+                if ppd_pendiente_g >= 0:
+                    filas_pago_pdf.extend([
+                        {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#2563EB'>●</font> <b><font color='#1F2937'>PPD pendiente</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pendiente_g:,.2f} · {pct_pago(ppd_pendiente_g)}</font>"},
+                        {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#60A5FA'>●</font> <b><font color='#1F2937'>PPD pagado</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pagado_g:,.2f} · {pct_pago(ppd_pagado_g)}</font>"}
+                    ])
+                else:
+                    filas_pago_pdf.extend([
+                        {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Complementos de Pago Recibidos</font></b><br/><font color='#4B5563'>MXN {ppd_pagado_g:,.2f}</font>"},
+                        {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Diferencia PPD (Facturación PPD − Complementos de Pago Recibidos)</font></b><br/><font color='#4B5563'>MXN {ppd_pendiente_g:,.2f}</font>"}
+                    ])
 
-            df_pago_pdf = pd.DataFrame(filas_pago_pdf)[["Concepto"]]
+                df_pago_pdf = pd.DataFrame(filas_pago_pdf)[["Concepto"]]
 
-            pdf_elements.append({
-                "type": "table",
-                "title": "Resumen — Método de Pago de Gastos",
-                "df": df_pago_pdf,
-                "white_background": True
-            })
-          except Exception:
-            pass
+                pdf_elements.append({
+                    "type": "table",
+                    "title": "Resumen — Método de Pago de Gastos",
+                    "df": df_pago_pdf,
+                    "white_background": True
+                })
+            except Exception:
+                pass
 
     st.divider()
     st.subheader("Egresos y Riesgo de Dependencia")

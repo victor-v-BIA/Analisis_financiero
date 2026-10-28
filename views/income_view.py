@@ -38,10 +38,11 @@ from components.pdf_generator import generate_modular_pdf
 
 def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
                              egresos: pd.Series, ingresos_nomina: pd.Series | None = None,
-                             mostrar_diferencia: bool = True) -> go.Figure:
+                             mostrar_diferencia: bool = True,
+                             forzar_egresos_negativos: bool = False) -> go.Figure:
     """Crea una serie mensual con ingresos y egresos alrededor de cero y su diferencia."""
     x = [str(periodo) for periodo in periodos]
-    egresos_negativos = -egresos
+    egresos_negativos = -egresos.abs() if forzar_egresos_negativos else -egresos
     ingresos_totales = ingresos + ingresos_nomina if ingresos_nomina is not None else ingresos
     diferencia = ingresos_totales - egresos
     fig = go.Figure()
@@ -61,7 +62,7 @@ def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
     ))
     if mostrar_diferencia:
         fig.add_trace(go.Scatter(
-            x=x, y=diferencia, name="diferencia", mode="lines+markers",
+            x=x, y=diferencia, name="Diferencia", mode="lines+markers",
             line=dict(color="#F97316", width=3), marker=dict(size=6),
             hovertemplate="<b>%{x}</b><br>Diferencia: $%{y:,.2f}<extra></extra>",
         ))
@@ -129,7 +130,8 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     ncr_egr = sumar_por_mes(fac_egr[fac_egr["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
     ingresos_devengados = sumar_por_mes(facturas_ing, "Fecha", "Total") - ncr_ing
     egresos_devengados = sumar_por_mes(facturas_egr, "Fecha", "Total") - ncr_egr
-    fig_neta = _figura_ingresos_egresos(periodos, ingresos_devengados, egresos_devengados)
+    fig_neta = _figura_ingresos_egresos(
+        periodos, ingresos_devengados, egresos_devengados, forzar_egresos_negativos=True)
     st.markdown("**Facturación Neta Mensual**")
     render_grafica(fig_neta, key="ing_fig_neta", incluir_notas=False, width="stretch")
     pdf_elements.append({
@@ -729,7 +731,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             })
         st.divider()
         st.markdown("**Ingresos facturados**")
-        fig_ing_fact = _fig_ingresos_facturados(d, col_monto)
+        fig_ing_fact = _fig_ingresos_facturados(d, col_monto, nomina_mensual=nomina_mensual)
         render_grafica(fig_ing_fact, key="ingresos_facturados")
         # nota_ing_fact = st.text_area("Conclusión - Ingresos Facturados", max_chars=600, key="note_ing_fact")
         
@@ -853,7 +855,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
 
         st.divider()
         st.markdown("**Ingresos facturados**")
-        fig_ing_fact = _fig_ingresos_facturados(d, col_monto)
+        fig_ing_fact = _fig_ingresos_facturados(d, col_monto, nomina_mensual=nomina_mensual)
         render_grafica(fig_ing_fact, key="ingresos_facturados")
         if pdf_elements is not None:
             pdf_elements.append({

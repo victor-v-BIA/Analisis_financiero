@@ -394,9 +394,22 @@ def _fig_lineas_por_anio(tabla: pd.DataFrame, rotulo: str) -> go.Figure:
     return fig
 
 
-def _fig_ingresos_facturados(d: pd.DataFrame, col_monto: str) -> go.Figure:
-    """Ingresos facturados: una línea por Año con el monto mensual de `col_monto` (SIN `cumsum()`); ver `_fig_lineas_por_anio`."""
-    return _fig_lineas_por_anio(_serie_mensual_por_anio(d, col_monto), col_monto)
+def _fig_ingresos_facturados(
+    d: pd.DataFrame,
+    col_monto: str,
+    nomina_mensual: pd.Series | None = None,
+) -> go.Figure:
+    """Una línea por Año con facturación mensual y, cuando existe, nómina mensual sumada."""
+    mensual = _serie_mensual_por_anio(d, col_monto)
+    if nomina_mensual is not None:
+        nomina = pd.DataFrame({
+            "Mes": nomina_mensual.index.month,
+            "Año": nomina_mensual.index.year,
+            "Monto": nomina_mensual.to_numpy(),
+        })
+        nomina = nomina.pivot_table(index="Mes", columns="Año", values="Monto", aggfunc="sum")
+        mensual = mensual.add(nomina, fill_value=0.0).reindex(range(1, 13))
+    return _fig_lineas_por_anio(mensual, col_monto)
 
 
 
@@ -673,12 +686,41 @@ def _fig_pie_metodo_pago(res: dict, paleta: dict | None = None) -> go.Figure:
     return fig
 
 
-def _html_resumen_metodo_pago(res: dict, paleta: dict | None = None) -> str:
+def _html_resumen_metodo_pago(
+    res: dict,
+    paleta: dict | None = None,
+    incluir_detalle_ppd: bool = True,
+    formato_pdf: bool = False,
+) -> str:
     """Tabla lateral de Método de pago de gastos: Monto total (facturación recibida = PUE + PPD) en la cabecera, Egresos PUE, Egresos PPD y, si la
-    diferencia es >= 0, sus viñetas PPD pendiente / PPD pagado; si es negativa, los Complementos y la Diferencia PPD (firmada) como importes separados."""
+    diferencia es >= 0, sus viñetas PPD pendiente / PPD pagado; si es negativa, los Complementos y la Diferencia PPD (firmada) como importes separados.
+    `formato_pdf` usa etiquetas compatibles con ReportLab y `incluir_detalle_ppd=False` omite el desglose si no hay base PAGO."""
     paleta = {"pue": COLOR_EGR_PUE, "ppd": COLOR_EGR_PPD, "pendiente": "#2563EB"} if paleta is None else paleta
     tot = res["facturacion"]
     pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
+    if formato_pdf:
+        fila_pdf = lambda color, nombre, v: (
+            f'<font color="{color}">●</font> <b>{nombre}</b><br/>'
+            f'<font color="#4B5563">{_mxn_2d(v)} · {pct(v)}</font>')
+        filas = [
+            f'<font size="8" color="#6B7280">Monto total</font><br/>'
+            f'<b><font size="13" color="#1F2937">{_mxn_2d(tot)}</font></b>',
+            fila_pdf(paleta["pue"], NOMBRE_EGR_PUE, res["pue"]),
+            fila_pdf(paleta["ppd"], NOMBRE_EGR_PPD, res["ppd"]),
+        ]
+        if incluir_detalle_ppd:
+            if res["diferencia"] >= 0:
+                filas.extend([
+                    fila_pdf(paleta["pendiente"], "PPD pendiente", res["diferencia"]),
+                    fila_pdf(paleta["ppd"], "PPD pagado", res["complementos"]),
+                ])
+            else:
+                filas.extend([
+                    fila_pdf(paleta["ppd"], "Complementos de Pago Recibidos", res["complementos"]),
+                    fila_pdf(paleta["pendiente"], "Diferencia PPD (Facturación PPD − Complementos de Pago Recibidos)", res["diferencia"]),
+                ])
+        return "<br/><br/>".join(filas)
+
     fila = lambda color, nombre, v, sangria=0, fuerte=True, con_pct=True: (
         f'<div style="margin-left:{sangria}px;margin-top:8px;"><span style="color:{color}">●</span> '
         f'{"<b>" if fuerte else ""}{nombre}{"</b>" if fuerte else ""}<br>'
@@ -686,10 +728,10 @@ def _html_resumen_metodo_pago(res: dict, paleta: dict | None = None) -> str:
     html = (f'<div style="padding:6px 4px"><div style="opacity:.75">Monto total</div>'
             f'<div style="font-size:1.6rem;font-weight:700">{_mxn_2d(tot)}</div>'
             + fila(paleta["pue"], NOMBRE_EGR_PUE, res["pue"]) + fila(paleta["ppd"], NOMBRE_EGR_PPD, res["ppd"]))
-    if res["diferencia"] >= 0:
+    if incluir_detalle_ppd and res["diferencia"] >= 0:
         html += (fila(paleta["pendiente"], "PPD pendiente", res["diferencia"], sangria=28, fuerte=False)
                  + fila(paleta["ppd"], "PPD pagado", res["complementos"], sangria=28, fuerte=False))
-    else:
+    elif incluir_detalle_ppd:
         html += (fila(paleta["ppd"], "Complementos de Pago Recibidos", res["complementos"], con_pct=False)
                  + fila(paleta["pendiente"], "Diferencia PPD (Facturación PPD − Complementos de Pago Recibidos)", res["diferencia"], con_pct=False)
                  + '<div style="margin-top:10px;opacity:.8;font-size:.85rem">Los Complementos de Pago Recibidos superan la facturación PPD: la diferencia '
