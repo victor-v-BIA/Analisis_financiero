@@ -18,7 +18,7 @@ from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODUL
 from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,
                                 matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos,
                                 excluir_cfdis_divisas,excluir_complementos_de_cfdis)
-from utils import (dinero)
+from utils import (dinero, a_fecha)
 from components.charts import  render_notas_reporte
 from views.income_view import _vista_economica
 from components.charts import (_fig_egresos_tiempo,_fig_lineas_por_anio,_fig_pie_nomina_gastos,
@@ -144,9 +144,10 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     col_estatus_nom = buscar_columna(df_nomina.columns, "Estatus")
     col_total_nom = buscar_columna(df_nomina.columns, "Total")
     col_fecha_nom = (buscar_columna(df_nomina.columns, "Fecha de Pago")
-                     or buscar_columna(df_nomina.columns, "Fecha Pago"))
+                     or buscar_columna(df_nomina.columns, "Fecha Pago")
+                     or buscar_columna(df_nomina.columns, "Fecha de Certificación"))
     faltantes_nom = [c for c, col in (("Estatus", col_estatus_nom), ("Total", col_total_nom),
-                                      ("Fecha de Pago", col_fecha_nom)) if col is None]
+                                      ("Fecha de Pago/Certificación", col_fecha_nom)) if col is None]
     if faltantes_nom:
         st.error(f"🚨 Faltan columnas en la Base de Nómina: {faltantes_nom}")
         st.stop()
@@ -156,7 +157,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     df_nomina["Total_Num"] = pd.to_numeric(
         df_nomina[col_total_nom].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False),
         errors="coerce").fillna(0)
-    df_nomina["Año"] = pd.to_datetime(df_nomina[col_fecha_nom], errors="coerce").dt.year
+    df_nomina["Año"] = a_fecha(df_nomina[col_fecha_nom]).dt.year
 
     df_nomina_f = df_nomina[df_nomina["Año"].isin(ejercicios)]
     nomina_total = float(df_nomina_f["Total_Num"].sum())

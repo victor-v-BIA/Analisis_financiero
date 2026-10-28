@@ -587,13 +587,15 @@ def _rep_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
 def _nomina_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
     """Serie 'Mes' (Period[M]) -> suma de nómina Vigente/Activa (columna 'Total', tratada como nómina neta
     documentada -el archivo no trae Percepciones/Deducciones por separado-), agrupada por mes de 'Fecha de
-    Pago' ('Fecha Pago' alternativa). Devuelve (serie | None, motivo | None); `serie` es `None` si falta
+    Pago' ('Fecha Pago' o 'Fecha de Certificación' alternativas). Devuelve (serie | None, motivo | None); `serie` es `None` si falta
     'Total', 'Fecha de Pago' o 'Estatus'.
     """
-    col_fecha = buscar_columna(df.columns, "Fecha de Pago") or buscar_columna(df.columns, "Fecha Pago")
+    col_fecha = (buscar_columna(df.columns, "Fecha de Pago")
+                 or buscar_columna(df.columns, "Fecha Pago")
+                 or buscar_columna(df.columns, "Fecha de Certificación"))
     col_total = buscar_columna(df.columns, "Total")
     col_estatus = buscar_columna(df.columns, "Estatus")
-    faltantes = [n for n, c in (("Fecha de Pago", col_fecha), ("Total", col_total),
+    faltantes = [n for n, c in (("Fecha de Pago/Certificación", col_fecha), ("Total", col_total),
                                 ("Estatus", col_estatus)) if c is None]
     if faltantes:
         return None, "faltan columnas: " + ", ".join(faltantes)

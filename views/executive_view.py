@@ -41,11 +41,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     al detalle operativo de cada módulo."""
     st.title("Dashboard Ejecutivo (Riesgo y Viabilidad)")
 
-    if any(f is None for f in (f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago, f_nomina)):
-        st.info("Para generar el análisis de riesgo y capacidad de pago, por favor arrastra tus "
-                "5 reportes contables a la zona de carga.")
-        st.stop()
-
     pdf_elements = []
 
     # ---------------------------------------------------------------
@@ -58,13 +53,33 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 
     df_pagos_ingresos, df_pagos_egresos = f_ingresos_pago, f_egresos_pago
 
-    a_fac_ing, a_pago_ing = _nb(f_ingresos_fac), _nb(df_pagos_ingresos)
-    a_fac_egr, a_pago_egr = _nb(f_egresos_fac), _nb(df_pagos_egresos)
-    a_nomina = _nb(f_nomina)
+    a_fac_ing = _nb(f_ingresos_fac) if f_ingresos_fac is not None else None
+    a_pago_ing = _nb(df_pagos_ingresos) if df_pagos_ingresos is not None else None
+    a_fac_egr = _nb(f_egresos_fac) if f_egresos_fac is not None else None
+    a_pago_egr = _nb(df_pagos_egresos) if df_pagos_egresos is not None else None
+    a_nomina = _nb(f_nomina) if f_nomina is not None else None
     anios_5 = anios_5_archivos(f_ingresos_fac, f_egresos_fac)
 
-    anual_ing, motivo_ing = _anual_ppd_cache("clientes", a_fac_ing, a_pago_ing, anios_5, CODIGO_VERSION)
-    anual_egr, motivo_egr = _anual_ppd_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, CODIGO_VERSION)
+    if a_fac_ing is not None and a_pago_ing is not None:
+        anual_ing, motivo_ing = _anual_ppd_cache("clientes", a_fac_ing, a_pago_ing, anios_5, CODIGO_VERSION)
+    else:
+        faltantes_ing = [
+            nombre for nombre, archivo in (
+                ("Facturación Emitida", a_fac_ing),
+                ("Complementos de Pago de Ingresos", a_pago_ing),
+            ) if archivo is None
+        ]
+        anual_ing, motivo_ing = None, "Falta: " + ", ".join(faltantes_ing)
+    if a_fac_egr is not None and a_pago_egr is not None:
+        anual_egr, motivo_egr = _anual_ppd_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, CODIGO_VERSION)
+    else:
+        faltantes_egr = [
+            nombre for nombre, archivo in (
+                ("Facturación Recibida", a_fac_egr),
+                ("Complementos de Pago de Egresos", a_pago_egr),
+            ) if archivo is None
+        ]
+        anual_egr, motivo_egr = None, "Falta: " + ", ".join(faltantes_egr)
 
     def _bloque_anual(columna, titulo, anual, motivo, nombre_serie, lado, ayuda):
         with columna:
@@ -135,7 +150,20 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                  help="Mide el flujo de efectivo comprobable ante el SAT. Representa la diferencia entre los cobros (PUE + Complementos) y pagos ( PUE + Complementos + Nomina). ")
     
 
-    balance = _balance_cache(a_fac_ing, a_pago_ing, a_fac_egr, a_pago_egr, a_nomina, anios_5, CODIGO_VERSION)
+    faltantes_balance = [
+        nombre for nombre, archivo in (
+            ("Facturación Emitida", a_fac_ing),
+            ("Complementos de Pago de Ingresos", a_pago_ing),
+            ("Facturación Recibida", a_fac_egr),
+            ("Complementos de Pago de Egresos", a_pago_egr),
+            ("Nómina", a_nomina),
+        ) if archivo is None
+    ]
+    if faltantes_balance:
+        balance = {"disponible": False, "motivos": {"Archivos faltantes": ", ".join(faltantes_balance)}}
+    else:
+        balance = _balance_cache(a_fac_ing, a_pago_ing, a_fac_egr, a_pago_egr, a_nomina,
+                                 anios_5, CODIGO_VERSION)
     nombre_cobros, nombre_pagos = "Cobros", "Pagos considerados"
 
     if not balance["disponible"]:
@@ -356,10 +384,21 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         de sus proveedores para financiarse. Si ocurre lo contrario, la empresa asume el costo de financiar a sus clientes.'''))
 
     # --- Vistas Histórico Anual (Y) y Detalle Mensual (M) ---
-    plazos_ing_y = _tiempos_cache("clientes", a_fac_ing, a_pago_ing, anios_5, "Y", CODIGO_VERSION)
-    plazos_egr_y = _tiempos_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, "Y", CODIGO_VERSION)
-    plazos_ing_m = _tiempos_cache("clientes", a_fac_ing, a_pago_ing, anios_5, "M", CODIGO_VERSION)
-    plazos_egr_m = _tiempos_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, "M", CODIGO_VERSION)
+    faltantes_plazos = [
+        nombre for nombre, archivo in (
+            ("Facturación Emitida", a_fac_ing),
+            ("Complementos de Pago de Ingresos", a_pago_ing),
+            ("Facturación Recibida", a_fac_egr),
+            ("Complementos de Pago de Egresos", a_pago_egr),
+        ) if archivo is None
+    ]
+    if faltantes_plazos:
+        plazos_ing_y = plazos_egr_y = plazos_ing_m = plazos_egr_m = pd.DataFrame()
+    else:
+        plazos_ing_y = _tiempos_cache("clientes", a_fac_ing, a_pago_ing, anios_5, "Y", CODIGO_VERSION)
+        plazos_egr_y = _tiempos_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, "Y", CODIGO_VERSION)
+        plazos_ing_m = _tiempos_cache("clientes", a_fac_ing, a_pago_ing, anios_5, "M", CODIGO_VERSION)
+        plazos_egr_m = _tiempos_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, "M", CODIGO_VERSION)
 
     fig_plazos_y = None
     fig_plazos_m = None
@@ -436,6 +475,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             if fig_plazos_y is None:
                 monthly_pdf_element["section_title"] = "4. Tiempos Documentados de Cobro y Pago"
             pdf_elements.append(monthly_pdf_element)
+    elif faltantes_plazos:
+        st.info("No se muestran estas gráficas porque faltan: " + ", ".join(faltantes_plazos) + ".")
 
     # ---------------------------------------------------------------
     # Indicador 3: Concentración de Ingresos
@@ -447,7 +488,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                        cuenta o el retraso en sus pagos compromete directamente la viabilidad operativa.'''))
     
 
-    conc = _concentracion_cache(a_fac_ing, anios_5, CODIGO_VERSION)
+    if a_fac_ing is None:
+        conc = {"motivo": "Falta Facturación Emitida", "sin_cliente": False}
+    else:
+        conc = _concentracion_cache(a_fac_ing, anios_5, CODIGO_VERSION)
     if conc["motivo"] is None and not conc["sin_cliente"]:
         por_cliente = conc["por_cliente"]
         total_general = conc["total_general"]
@@ -539,6 +583,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 height=ALTURA_CONC,
                 column_config={"Facturación Total": st.column_config.NumberColumn(format="$%.2f")}
             )
+    elif conc["motivo"] is not None:
+        st.info(f"No se muestra esta sección: {conc['motivo']}.")
 
     # ---------------------------------------------------------------
     # Indicador 5 (Sección 6): Clientes sin facturación en el periodo
@@ -550,7 +596,15 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     st.subheader("6. Clientes sin facturación en el periodo", help=ayuda_sf)
 
 
-    resumen_sf = _resumen_sf_cache(a_fac_ing, anios_5, CODIGO_VERSION)
+    if a_fac_ing is None:
+        resumen_sf = {
+            "motivo": "Falta Facturación Emitida",
+            "vacia": False,
+            "anios": [],
+            "defecto": None,
+        }
+    else:
+        resumen_sf = _resumen_sf_cache(a_fac_ing, anios_5, CODIGO_VERSION)
     if resumen_sf["motivo"] is not None:
         st.warning(f"No se pudo calcular: {resumen_sf['motivo']}.")
     elif resumen_sf["vacia"]:
