@@ -15,7 +15,7 @@ from core.loader import (anios_5_archivos,_columnas_archivo,validar_columnas,
 from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODULO,AYUDA_TOTAL,NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,NOMBRE_NOMINA,COLOR_NOMINA,AYUDA_TOP10_ANUAL)
 from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,
                                 matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos,
-                                excluir_cfdis_divisas,excluir_complementos_de_cfdis)
+                                excluir_cfdis_divisas,excluir_complementos_de_cfdis,_es_nomina_ingresos)
 from utils import dinero
 from components.charts import  render_notas_reporte
 from views.income_view import _vista_economica
@@ -395,7 +395,10 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     total_mes = mensual.sum(axis=1).rename_axis("Periodo").reset_index(name="Monto")
     total_mes["Año"], total_mes["Mes"] = total_mes["Periodo"].str[:4].astype(int), total_mes["Periodo"].str[5:7].astype(int)
     tabla_mes = total_mes.pivot_table(index="Mes", columns="Año", values="Monto", aggfunc="sum").reindex(range(1, 13)).sort_index(axis=1)
-    res_nom = _resumen_nomina_gastos(res)
+    nomina_formato_ingresos = nomina_raw is not None and _es_nomina_ingresos(nomina_raw)
+    gastos_label = ("Gastos Operativos (PUE + PPD)" if nomina_formato_ingresos
+                    else "Gastos (Proveedores)")
+    res_nom = _resumen_nomina_gastos(res, incluir_ppd_facturado=nomina_formato_ingresos)
 
     if comp_df is not None and nomina_disponible:
         for nombre, diferencia in (("Las barras de egresos en el tiempo",
@@ -444,19 +447,21 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     c1, c2 = st.columns([1, 1])
 
     # Secciones cuadradas: Nómina vs. Gastos
-    fig_nom_gastos = _fig_pie_nomina_gastos(res_nom)
+    fig_nom_gastos = _fig_pie_nomina_gastos(res_nom, gastos_label)
     with c1:
-        st.markdown("**Nómina vs. Gastos**")
+        st.markdown(f"**Nómina vs. {gastos_label}**" if nomina_formato_ingresos else "**Nómina vs. Gastos**")
         with st.container(key="egr_nomina_vs_gastos_layout"):
             p1, t1 = st.columns([1, 1])
             with p1:
                 with st.container(key="egr_nomina_vs_gastos_pdf", width="stretch"):
                     render_grafica(fig_nom_gastos, key="egr_nomina_vs_gastos", incluir_notas=False)
             with t1:
-                st.markdown(_html_resumen_nomina_gastos(res_nom), unsafe_allow_html=True)
+                st.markdown(_html_resumen_nomina_gastos(res_nom, gastos_label), unsafe_allow_html=True)
             if not nomina_disponible:
                 st.caption("Nómina no disponible; se muestra $0 como referencia y no como gasto confirmado.")
-            if comp_df is None:
+            if nomina_formato_ingresos:
+                st.caption("Gastos incluye PUE + PPD facturados; el importe PPD no representa pagos efectivos.")
+            elif comp_df is None:
                 st.caption("Composición parcial; no incluye pagos PPD.")
         # nota_nom_gastos = st.text_area("Conclusión - Nómina vs. Gastos", max_chars=600, key="note_egr_nom_gastos")
 
@@ -496,8 +501,9 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         pdf_elements.append({
             "type": "image",
             "section_title": "3. Composición y Métodos de Pago",
-            "title": ("Nómina vs. Gastos" if comp_df is not None
-                      else "Nómina vs. Gastos identificados; pagos PPD no disponibles"),
+            "title": ("Nómina vs. Gastos facturados (PUE + PPD)" if nomina_formato_ingresos
+                      else ("Nómina vs. Gastos" if comp_df is not None
+                            else "Nómina vs. Gastos identificados; pagos PPD no disponibles")),
             "fig": fig_nom_gastos,
             "preserve_textfont_size": True,
         })
@@ -507,8 +513,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         pct_gastos = (gastos_val / total_egr_nom * 100) if total_egr_nom > 0 else 0
         pct_nomina = (nomina_val / total_egr_nom * 100) if total_egr_nom > 0 else 0
         df_nom_pdf = pd.DataFrame([
-            {"Concepto": f"<font size=8 color='#6B7280'>{'Monto Total' if comp_df is not None else 'Monto Total '}</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
-            {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>{'Gastos (Proveedores)' if comp_df is not None else ' Gastos Operativos'}</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
+            {"Concepto": f"<font size=8 color='#6B7280'>{'Monto Total' if nomina_formato_ingresos else 'Monto Total'}</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
+            {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>{gastos_label if nomina_formato_ingresos or comp_df is not None else 'Gastos Operativos'}</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
             {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Nómina Total{' ' if not nomina_disponible else ''}</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
         ])[["Concepto"]]
         pdf_elements.append({

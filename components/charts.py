@@ -556,10 +556,10 @@ def _fig_bump_anual(df: pd.DataFrame, col_monto: str) -> go.Figure:
 
 
 
-def _fig_pie_nomina_gastos(r: dict) -> go.Figure:
-    """Pie (`go.Pie`, hole=0.5, leyenda nativa oculta) del egreso total acumulado: Gastos (proveedores) vs Pagos a Nómina."""
+def _fig_pie_nomina_gastos(r: dict, gastos_label: str = "Gastos") -> go.Figure:
+    """Pie de la composición acumulada de gastos y nómina, con leyenda nativa oculta."""
     valores = [r["gastos"], r["nomina"]]
-    labels = ["Gastos", NOMBRE_NOMINA]
+    labels = [gastos_label, NOMBRE_NOMINA]
     
     # Determinamos de forma dinámica cuál valor es el mayor para ponerle texto blanco y al menor negro
     # Si el gasto es mayor o igual a la nómina, el primer color es blanco y el segundo negro, y viceversa.
@@ -596,7 +596,7 @@ def _fig_pie_nomina_gastos(r: dict) -> go.Figure:
     return fig
 
 
-def _html_resumen_nomina_gastos(r: dict) -> str:
+def _html_resumen_nomina_gastos(r: dict, gastos_label: str = "Gastos (Proveedores)") -> str:
     """Tabla lateral: Monto total (Gastos + Nómina) en la cabecera y debajo el monto y % de Pagos a Nómina y de Gastos."""
     tot = r["total"]
     pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
@@ -604,7 +604,7 @@ def _html_resumen_nomina_gastos(r: dict) -> str:
                                      f'<span style="margin-left:18px">{_mxn_2d(v)} · {pct(v)}</span></div>')
     return (f'<div style="padding:6px 4px"><div style="opacity:.75">Monto total (Gastos + Nómina)</div>'
             f'<div style="font-size:1.4rem;font-weight:700">{_mxn_2d(tot)}</div>'
-            + fila(COLOR_NOMINA, NOMBRE_NOMINA, r["nomina"]) + fila(COLOR_GASTOS, "Gastos (Proveedores)", r["gastos"]) + "</div>")
+            + fila(COLOR_NOMINA, NOMBRE_NOMINA, r["nomina"]) + fila(COLOR_GASTOS, gastos_label, r["gastos"]) + "</div>")
 
 
 def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:

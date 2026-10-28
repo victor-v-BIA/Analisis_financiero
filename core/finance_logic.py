@@ -609,16 +609,28 @@ def _nomina_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]
     return mensual.groupby("Mes")["Valor"].sum(), None
 
 
-def _nomina_ingresos_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
-    """Nómina del formato de ingresos, que usa Fecha de Certificación y Total."""
+def _columnas_nomina_ingresos(df: pd.DataFrame) -> tuple[str, str, str] | None:
     col_fecha = buscar_columna(df.columns, "Fecha de Certificación")
     col_total = buscar_columna(df.columns, "Total")
     col_estatus = buscar_columna(df.columns, "Estatus")
-    col_tipo = buscar_columna(df.columns, "Tipo de Factura")
     col_fecha_pago = buscar_columna(df.columns, "Fecha de Pago") or buscar_columna(df.columns, "Fecha Pago")
     if col_fecha is None or col_total is None or col_estatus is None or col_fecha_pago is not None:
+        return None
+    return col_fecha, col_total, col_estatus
+
+
+def _es_nomina_ingresos(df: pd.DataFrame) -> bool:
+    return _columnas_nomina_ingresos(df) is not None
+
+
+def _nomina_ingresos_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
+    """Nómina del formato de ingresos, que usa Fecha de Certificación y Total."""
+    columnas = _columnas_nomina_ingresos(df)
+    if columnas is None:
         return None, "se requiere el formato de nómina con Fecha de Certificación, Total y Estatus"
 
+    col_fecha, col_total, col_estatus = columnas
+    col_tipo = buscar_columna(df.columns, "Tipo de Factura")
     activos = df[col_estatus].astype(str).str.strip().str.upper().isin(["VIGENTE", "ACTIVO"])
     d = df[activos]
     if col_tipo is not None:
@@ -1502,6 +1514,7 @@ def _ranking_anual(df: pd.DataFrame, col_monto: str, top: int = 10) -> pd.DataFr
 
 
 
-def _resumen_nomina_gastos(res: dict) -> dict:
-    """Nómina vs. Gastos alineado con el Egreso Total: proveedores = PUE + Complementos; nómina = Total de la nómina activa."""
-    return {"total": res["egreso_total"], "gastos": res["pue"] + res["complementos"], "nomina": res["nomina"]}
+def _resumen_nomina_gastos(res: dict, incluir_ppd_facturado: bool = False) -> dict:
+    """Nómina vs. Gastos: por defecto proveedores = PUE + Complementos; opcionalmente PUE + PPD facturado."""
+    gastos = res["pue"] + (res["ppd"] if incluir_ppd_facturado else res["complementos"])
+    return {"total": gastos + res["nomina"], "gastos": gastos, "nomina": res["nomina"]}
