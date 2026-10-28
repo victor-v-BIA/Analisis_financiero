@@ -29,7 +29,6 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     FASE 3 (Silver Bullet): Filtra columnas desde la lectura (usecols).
     """
     # 0. MANEJO DE MÚLTIPLES ARCHIVOS (_ArchivoGrupo)
-    # Si recibimos una tupla o lista, leemos cada uno y los unimos
     if isinstance(contenido, (tuple, list)):
         dfs = [leer_archivo(nombre, cont) for cont in contenido]
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
@@ -59,14 +58,23 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         df = pd.read_parquet(io.BytesIO(contenido), columns=cols_a_leer)
         
     elif nombre_lower.endswith(".xlsb"):
-        df = pd.read_excel(io.BytesIO(contenido), engine="pyxlsb", usecols=es_columna_util)
-        
+        # Extraemos encabezados primero para evitar el bug de callables en pyxlsb
+        with pd.ExcelFile(io.BytesIO(contenido), engine="pyxlsb") as xls:
+            df_dummy = pd.read_excel(xls, nrows=0)
+            cols_a_leer = [c for c in df_dummy.columns if es_columna_util(c)]
+            df = pd.read_excel(xls, usecols=cols_a_leer)
+            
     elif nombre_lower.endswith((".xlsx", ".xls")):
-        df = pd.read_excel(io.BytesIO(contenido), engine="calamine", usecols=es_columna_util)
-        
+        # Extraemos encabezados primero para evitar el bug de callables en calamine
+        with pd.ExcelFile(io.BytesIO(contenido), engine="calamine") as xls:
+            df_dummy = pd.read_excel(xls, nrows=0)
+            cols_a_leer = [c for c in df_dummy.columns if es_columna_util(c)]
+            df = pd.read_excel(xls, usecols=cols_a_leer)
+            
     else:
         for codificacion in ("utf-8-sig", "latin-1"):
             try:
+                # read_csv sí soporta callables nativamente sin problemas
                 df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", 
                                  encoding=codificacion, usecols=es_columna_util)
                 break
