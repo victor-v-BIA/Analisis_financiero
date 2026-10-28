@@ -783,7 +783,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 
                 # Intentamos extraer por clave exacta o por posición si el diccionario usa nombres estándar
                 total_monto = float(dic_resumen.get("Total", dic_resumen.get("Total Facturado", valores_lista[0] if len(valores_lista) > 0 else 0)))
-                pue_monto = float(dic_resumen.get("PUE", dic_resumen.get("Cobros inmediatos (PUE)", valores_lista[1] if len(valores_lista) > 1 else 0)))
+                pue_monto = float(dic_resumen.get("PUE", dic_resumen.get("Facturado PUE", valores_lista[1] if len(valores_lista) > 1 else 0)))
                 ppd_monto = float(dic_resumen.get("PPD", dic_resumen.get("Cobros a plazos (PPD Total)", valores_lista[2] if len(valores_lista) > 2 else 0)))
                 
                 # Para PPD pendiente y cobrado
@@ -803,7 +803,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 # Creamos el DataFrame formateado con la estructura jerárquica idéntica a la vista web
                 filas_resumen = [
                     {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_monto:,.2f}</font></b>"},
-                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Cobros inmediatos (PUE)</font></b><br/><font color='#4B5563'>MXN {pue_monto:,.2f} · {pct_pue:.1f}%</font>"},
+                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Facturado PUE</font></b><br/><font color='#4B5563'>MXN {pue_monto:,.2f} · {pct_pue:.1f}%</font>"},
                     {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Cobros a plazos (PPD Total)</font></b><br/><font color='#4B5563'>MXN {ppd_monto:,.2f} · {pct_ppd:.1f}%</font>"},
                     {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#2563EB'>●</font> <b><font color='#1F2937'>PPD pendiente</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pendiente:,.2f} · {pct_pendiente:.1f}%</font>"},
                     {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#60A5FA'>●</font> <b><font color='#1F2937'>PPD cobrado</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_cobrado:,.2f} · {pct_cobrado:.1f}%</font>"}
@@ -902,6 +902,32 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                           else "Método de Cobro (complementos no relacionados por factura)"),
                 "fig": fig_pie,
                 "preserve_textfont_size": True,
+            })
+            resumen_pdf = (
+                resumen if complementos_periodo is not None
+                else {
+                    "total": monto_pue + monto_ppd,
+                    "pue": monto_pue,
+                    "ppd": monto_ppd,
+                    "pendiente": 0.0,
+                    "cobrado": 0.0,
+                }
+            )
+            pdf_elements.append({
+                "type": "table",
+                "title": "Resumen — Método de pago facturado",
+                "df": pd.DataFrame({
+                    "Concepto": [
+                        _html_resumen_metodo_cobro(
+                            resumen_pdf,
+                            col_monto,
+                            rotular_base=False,
+                            incluir_detalle_ppd=complementos_periodo is not None,
+                            formato_pdf=True,
+                        )
+                    ],
+                }),
+                "white_background": True,
             })
 
         st.divider()

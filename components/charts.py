@@ -469,14 +469,40 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
     )
     return fig
 
-def _html_resumen_metodo_cobro(r: dict, col_monto: str, lado: str = "ingresos", paleta: dict | None = None, rotular_base: bool = True) -> str:
+def _html_resumen_metodo_cobro(
+    r: dict,
+    col_monto: str,
+    lado: str = "ingresos",
+    paleta: dict | None = None,
+    rotular_base: bool = True,
+    incluir_detalle_ppd: bool = True,
+    formato_pdf: bool = False,
+) -> str:
     """Tabla lateral (HTML): Monto total en la cabecera y debajo PUE, PPD Total (con sus dos viñetas, pendiente y cobrado), cada uno con monto y %
-    sobre el total. Montos como 'MXN 1,234.00' (sin '$', que Streamlit podría interpretar como fórmula)."""
+    sobre el total. Montos como 'MXN 1,234.00' (sin '$', que Streamlit podría interpretar como fórmula). `formato_pdf` genera etiquetas ReportLab;
+    `incluir_detalle_ppd=False` omite el desglose de pagos cuando no se dispone de esa información."""
     tot = r["total"]
     paleta = PALETA_ING if paleta is None else paleta
-    inmediato, plazo, realizado = (("Cobros inmediatos (PUE)", "Cobros a plazos (PPD)", "PPD cobrado") if lado == "ingresos"
+    inmediato, plazo, realizado = (("Facturado PUE", "Facturado PPD", "PPD cobrado") if lado == "ingresos"
                                    else ("Pagos inmediatos (PUE)", "Pagos a plazos (PPD)", "PPD pagado"))
     pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
+    if formato_pdf:
+        fila_pdf = lambda color, nombre, v: (
+            f'<font color="{color}">●</font> <b>{nombre}</b><br/>'
+            f'<font color="#4B5563">{_mxn_2d(v)} · {pct(v)}</font>')
+        filas = [
+            f'<font size="8" color="#6B7280">Monto total</font><br/>'
+            f'<b><font size="13" color="#1F2937">{_mxn_2d(tot)}</font></b>',
+            fila_pdf(paleta["pue"], inmediato, r["pue"]),
+            fila_pdf(paleta["ppd"], plazo, r["ppd"]),
+        ]
+        if incluir_detalle_ppd:
+            filas.extend([
+                fila_pdf(paleta["pendiente"], "PPD pendiente", r["pendiente"]),
+                fila_pdf(paleta["ppd"], realizado, r["cobrado"]),
+            ])
+        return "<br/><br/>".join(filas)
+
     fila = lambda color, nombre, v, sangria=0, fuerte=True: (
         f'<div style="margin-left:{sangria}px;margin-top:8px;"><span style="color:{color}">●</span> '
         f'{"<b>" if fuerte else ""}{nombre}{"</b>" if fuerte else ""}<br>'
@@ -485,8 +511,9 @@ def _html_resumen_metodo_cobro(r: dict, col_monto: str, lado: str = "ingresos", 
             f'<div style="font-size:1.6rem;font-weight:700">{_mxn_2d(tot)}</div>'
             + fila(paleta["pue"], inmediato, r["pue"])
             + fila(paleta["ppd"], plazo, r["ppd"])
-            + fila(paleta["pendiente"], "PPD pendiente", r["pendiente"], sangria=28, fuerte=False)
-            + fila(paleta["ppd"], realizado, r["cobrado"], sangria=28, fuerte=False)
+            + (fila(paleta["pendiente"], "PPD pendiente", r["pendiente"], sangria=28, fuerte=False)
+               + fila(paleta["ppd"], realizado, r["cobrado"], sangria=28, fuerte=False)
+               if incluir_detalle_ppd else "")
             + (f'<div style="margin-top:10px;opacity:.8;font-size:.85rem">Los Complementos de Pago Emitidos superan la facturación PPD: la diferencia '
                f'({_mxn_2d(r["pendiente"])}) se muestra fuera del gráfico.</div>' if r["pendiente"] < -0.005 else "") + "</div>")
 

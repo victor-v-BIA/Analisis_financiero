@@ -526,6 +526,12 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         # 2. Método de Pago de Gastos
         if comp_df is None:
             pdf_elements.append({
+                "type": "image",
+                "title": "Facturación recibida por método de pago",
+                "fig": fig_metodo_pago,
+                "preserve_textfont_size": True,
+            })
+            pdf_elements.append({
                 "type": "table",
                 "title": "Facturación por Método PUE/PPD (pagos PPD no disponibles)",
                 "df": pd.DataFrame({
