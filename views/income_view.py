@@ -192,9 +192,9 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
             "No incluye " + " y ".join(faltan_flujo) +
             "; no se muestra una diferencia neta que pudiera inducir a error."
         )
-    st.markdown("**Flujo Fiscal Mensual**" if flujo_completo else "**Flujo Identificado Mensual (parcial)**")
+    st.markdown("**Flujo Fiscal Mensual**" if flujo_completo else "**Flujo Fiscal**")
     fig_flujo = _figura_ingresos_egresos(
-        periodos, ingresos_flujo, egresos_flujo, ingresos_nomina=ingresos_nomina,
+        periodos, ingresos_flujo, egresos_flujo,
         mostrar_diferencia=flujo_completo)
     render_grafica(fig_flujo, key="ing_fig_flujo", incluir_notas=False, width="stretch")
     pdf_elements.append({

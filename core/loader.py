@@ -4,10 +4,9 @@ Encargado de leer los archivos subidos (Excel/CSV),
 validar columnas, limpiar formatos de texto/fechas y gestionar la caché de Streamlit.
 '''
 import pandas as pd
+import pyarrow as pa
 import streamlit as st
-from pyarrow import ArrowException
 import io
-import unicodedata
 import re
 import numpy as np
 from pathlib import Path
@@ -16,81 +15,43 @@ from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
                     RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT)
 
-from utils import (_ArchivoMem, ContenidoArchivo, _norm, a_numero, a_fecha, buscar_columna)
-
+from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
 
 def cargar_base(uploaded_file) -> pd.DataFrame:
-    """Lector universal: Excel, CSV o Parquet, también para grupos de archivos homogéneos.
-
-    La lectura vive en `_cargar_base_cache` (`st.cache_data`, indexada por nombre + contenido + versión del código): cada
-    llamada devuelve una copia independiente del DataFrame y el archivo ya NO se vuelve a parsear en cada re-ejecución
-    de la interfaz. Al leer del contenido en memoria no depende de la posición del cursor del archivo subido."""
+    """Lector universal que delega a la función con caché."""
     return _cargar_base_cache(uploaded_file.name, uploaded_file.getvalue(), CODIGO_VERSION)
 
-def leer_archivo(nombre: str, contenido: ContenidoArchivo) -> pd.DataFrame:
-    """Lee CSV, Excel o Parquet como texto; concatena grupos tras validar las columnas."""
-    df = _leer_archivos_cache(nombre, contenido, True, CODIGO_VERSION)
-    df = df.fillna("")
+def leer_archivo(nombre: str, contenido: bytes) -> pd.DataFrame:
+    """
+    Lee archivos infiriendo tipos nativos para ahorrar memoria.
+    Soporta .parquet, .xlsb, .xlsx y .csv.
+    """
+    nombre_lower = nombre.lower()
+    
+    # 1. Lectura optimizada por tipo de archivo
+    if nombre_lower.endswith((".parquet", ".pqt")):
+        df = pd.read_parquet(io.BytesIO(contenido))
+    elif nombre_lower.endswith(".xlsb"):
+        df = pd.read_excel(io.BytesIO(contenido), engine="pyxlsb")
+    elif nombre_lower.endswith((".xlsx", ".xls")):
+        df = pd.read_excel(io.BytesIO(contenido), engine="calamine")
+    else:
+        for codificacion in ("utf-8-sig", "latin-1"):
+            try:
+                df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", encoding=codificacion)
+                break
+            except UnicodeDecodeError:
+                continue
+
+    # 2. Limpiar espacios solo en los nombres de las columnas
     df.columns = [str(c).strip() for c in df.columns]
-    return df.apply(lambda s: s.astype(str).str.strip())
-
-
-def _partes_archivo(nombre: str, contenido: ContenidoArchivo) -> tuple[tuple[str, bytes], ...]:
-    """Normaliza un archivo individual o el contenido serializable de un _ArchivoGrupo."""
-    if (isinstance(contenido, tuple) and contenido
-            and all(isinstance(parte, tuple) and len(parte) == 2 for parte in contenido)):
-        return contenido
-    return ((nombre, contenido),)
-
-
-def _leer_csv(contenido: bytes, como_texto: bool) -> pd.DataFrame:
-    if not como_texto:
-        return pd.read_csv(io.BytesIO(contenido), encoding="utf-8")
-    for codificacion in ("utf-8-sig", "latin-1"):
-        try:
-            return pd.read_csv(io.BytesIO(contenido), dtype=str, sep=None, engine="python",
-                               encoding=codificacion)
-        except UnicodeDecodeError:
-            continue
-    raise ValueError("No se pudo identificar la codificación del CSV.")
-
-
-@st.cache_data(show_spinner=False)
-def _leer_archivos_cache(nombre: str, contenido: ContenidoArchivo, como_texto: bool, version: str) -> pd.DataFrame:
-    """Lee y concatena archivos con el mismo esquema, con caché compartida entre validación y procesamiento."""
-    partes = _partes_archivo(nombre, contenido)
-    tablas = []
-    columnas_referencia = None
-    nombre_referencia = None
-    for nombre_parte, contenido_parte in partes:
-        extension = Path(nombre_parte).suffix.lower()
-        if extension == ".parquet":
-            tabla = pd.read_parquet(io.BytesIO(contenido_parte), engine="pyarrow")
-        elif extension in (".xlsx", ".xls", ".xlsb"):
-            opciones = {"dtype": str} if como_texto else {}
-            tabla = pd.read_excel(io.BytesIO(contenido_parte), engine="calamine", **opciones)
-        else:
-            tabla = _leer_csv(contenido_parte, como_texto)
-
-        columnas = {_norm(col): col for col in tabla.columns}
-        if len(columnas) != len(tabla.columns):
-            raise ValueError(f"El archivo '{nombre_parte}' tiene encabezados repetidos o ambiguos.")
-        if columnas_referencia is None:
-            columnas_referencia = columnas
-            nombre_referencia = nombre_parte
-        elif columnas.keys() != columnas_referencia.keys():
-            raise ValueError(
-                f"El archivo '{nombre_parte}' no tiene las mismas columnas que '{nombre_referencia}'. "
-                "Verifica que todas las partes pertenezcan a la misma base."
-            )
-        else:
-            tabla = tabla.rename(columns={columna: columnas_referencia[normalizada]
-                                          for normalizada, columna in columnas.items()})
-        tablas.append(tabla)
-    return pd.concat(tablas, ignore_index=True, sort=False)
-
-
-
+    
+    # 3. Limpiar espacios SOLO en las columnas que realmente contienen texto (Ahorro masivo de RAM)
+    cols_texto = df.select_dtypes(include=['object', 'string']).columns
+    for col in cols_texto:
+        df[col] = df[col].astype(str).str.strip()
+        
+    return df
 
 def resolver_columnas(df: pd.DataFrame, requeridas: dict[str, list[str]],
                       opcionales: dict[str, list[str]] | None = None) -> pd.DataFrame:
@@ -111,7 +72,6 @@ def resolver_columnas(df: pd.DataFrame, requeridas: dict[str, list[str]],
         raise KeyError(f"Faltan columnas: {faltantes}. Columnas encontradas: {list(df.columns)}")
     return df.rename(columns=mapa)
 
-
 def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) -> None:
     """Hard stop explícito de columnas (por concepto, tolerante a variantes/acentos/mayúsculas vía _norm()).
 
@@ -127,30 +87,35 @@ def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) 
                  f"cálculo: {faltantes}")
         st.stop()
 
-def leer_facturas(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFrame, list[str]]:
-    """Facturas emitidas: Activo/Vigente + (Factura o NCR); Fecha sin hora; PUE/PPD; Total numérico (una fila por UUID).
-
-    Se conservan las Notas de Crédito (Tipo Documento = 'NCR') con la bandera `Es_NCR`, para poder calcular el
-    Ingreso Neto sin mezclarlas con la Facturación Total.
-    """
+def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
+    """Facturas emitidas: Activo/Vigente + (Factura o NCR); Fecha sin hora; PUE/PPD; Total numérico (una fila por UUID)."""
     avisos: list[str] = []
     df = resolver_columnas(leer_archivo(nombre, contenido), COLS_FACTURAS)
     n0 = len(df)
 
-    # contains() en vez de igualdad estricta: tolera variantes como "NCR", "01-NCR" o "Nota NCR", además de
-    # espacios o mayúsculas distintas, que con una igualdad exacta habrían descartado la fila en silencio.
     tipo_crudo = df["Tipo Documento"].astype(str)
     es_ncr_crudo = tipo_crudo.str.contains("NCR", case=False, na=False)
     n_ncr_crudo = int(es_ncr_crudo.sum())
     es_factura = tipo_crudo.str.strip().str.upper() == "FACTURA"
     estatus = df["Estatus"].astype(str).str.strip().str.upper()
-    df = df[estatus.isin(["ACTIVO", "VIGENTE"]) & (es_factura | es_ncr_crudo)]
-    df = df.assign(Es_NCR=df["Tipo Documento"].astype(str).str.contains("NCR", case=False, na=False))
+    df = df[estatus.isin(["ACTIVO", "VIGENTE"]) & (es_factura | es_ncr_crudo)].copy()
+    
+    # Asegurar booleanos estrictos
+    df["Es_NCR"] = df["Tipo Documento"].astype(str).str.contains("NCR", case=False, na=False).astype(bool)
+    
     avisos.append(f"Facturas: {n0} filas leídas, {len(df)} con Estatus 'Activo' y Tipo 'Factura' o 'NCR' "
                   f"({n_ncr_crudo} NCR detectadas en el archivo, {int(df['Es_NCR'].sum())} tras el filtro).")
 
-    df = df.assign(Fecha=a_fecha(df["Fecha y Hora"]), Total=a_numero(df["Total"]),
-                   Metodo_Pago=df["Metodo de Pago"].str.upper())
+    # Asignación optimizada con categorías
+    df = df.assign(Fecha=a_fecha(df["Fecha y Hora"]), 
+                   Total=a_numero(df["Total"]),
+                   Metodo_Pago=df["Metodo de Pago"].astype(str).str.upper().astype("category"))
+
+    # Convertir las columnas originales a categorías para ahorrar RAM
+    if "Estatus" in df.columns:
+        df["Estatus"] = df["Estatus"].astype("category")
+    if "Tipo Documento" in df.columns:
+        df["Tipo Documento"] = df["Tipo Documento"].astype("category")
 
     ilegibles = df["Fecha"].isna() | df["Total"].isna()
     if ilegibles.any():
@@ -159,7 +124,7 @@ def leer_facturas(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFram
                       + (f" ({n_ncr_perdidas} de ellas eran NCR)." if n_ncr_perdidas else "."))
         df = df[~ilegibles]
 
-    otro_metodo = ~df["Es_NCR"] & ~df["Metodo_Pago"].isin(["PUE", "PPD"])   # las NCR se conservan sin importar el método
+    otro_metodo = ~df["Es_NCR"] & ~df["Metodo_Pago"].isin(["PUE", "PPD"])
     if otro_metodo.any():
         n_ncr_perdidas = int((otro_metodo & df["Es_NCR"]).sum())
         avisos.append(f"Facturas: {otro_metodo.sum()} filas con método distinto de PUE/PPD descartadas "
@@ -177,7 +142,6 @@ def leer_facturas(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFram
         avisos.append(f"Facturas: {int(df['Es_NCR'].sum())} Notas de Crédito (NCR) válidas para el análisis, "
                       f"por ${df.loc[df['Es_NCR'], 'Total'].abs().sum():,.2f} (magnitud absoluta).")
 
-    # Si un mismo RFC trae varios nombres, la columna no es el nombre del emisor (p. ej. es el del cliente).
     n_nombres = df.groupby("RFC Emisor")["Nombre Emisor"].nunique()
     ambiguos = n_nombres[n_nombres > 1].index
     if len(ambiguos):
@@ -185,36 +149,25 @@ def leer_facturas(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFram
                       "(parece ser el nombre del cliente, no el de la empresa); se identifica solo por RFC.")
         df = df.assign(**{"Nombre Emisor": df["Nombre Emisor"].where(~df["RFC Emisor"].isin(ambiguos), "")})
 
-    # Cliente (receptor): columnas OPCIONALES que solo usa el Índice de Concentración del Dashboard Ejecutivo; el resto de
-    # los consumidores ignora estas columnas extra. No altera filtros ni importes.
     col_rfc_receptor = buscar_columna(df.columns, "RFC Receptor")
     col_nombre_receptor = next((c for c in (buscar_columna(df.columns, n) for n in (
         "Razon Social Receptor", "Nombre Receptor", "Razon Social Cliente", "Razon Social.1")) if c), None)
+    
     columnas = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total", "Es_NCR"]
     renombres = {"RFC Emisor": "RFC_Emisor", "Nombre Emisor": "Nombre_Emisor"}
     for col, nuevo in ((col_rfc_receptor, "RFC_Receptor"), (col_nombre_receptor, "Nombre_Receptor"),
-                       (buscar_columna(df.columns, "Forma de Pago"), "Forma_Pago")):   # Forma de Pago: solo la usa la mezcla por forma de pago
+                       (buscar_columna(df.columns, "Forma de Pago"), "Forma_Pago")):
         if col is not None and col not in columnas:
             columnas.append(col)
             renombres[col] = nuevo
+            
     df = (df[columnas].rename(columns=renombres)
           .sort_values("Fecha", kind="stable").reset_index(drop=True))
     return df, avisos
 
 
-def leer_facturas_egresos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFrame, list[str]]:
-    """Facturación recibida (Egresos): candados exactos confirmados por el usuario, sumatoria bruta (sin restas).
-
-    Único criterio de vigencia: Estatus (limpio, en mayúsculas) igual a 'VIGENTE' o 'ACTIVO'. Único criterio de
-    tipo: Tipo Documento (limpio, en mayúsculas) estrictamente igual a 'FACTURA' o 'NCR' -ya no se aceptan
-    códigos SAT sueltos como 'I': la base real usa texto, y adivinar códigos de más solo arriesgaba excluir
-    filas válidas-. Las NCR se conservan con la bandera `Es_NCR` (para el impacto de Notas de Crédito en
-    Egresos) pero NO se exigen PUE/PPD válidos en esas filas, ya que muchas bases no lo llenan en un crédito.
-    Temporalidad = Fecha y Hora (fecha de emisión del CFDI recibido). Total: se limpian '$' y ',' antes de
-    convertir a numérico; lo no convertible se trata como 0 (no se descarta la fila completa, para no perder
-    del conteo una fila por lo demás válida). Sin restas ni cruces adicionales aquí: es la sumatoria bruta de
-    Total agrupable por Año (la resta de NCR se hace más arriba, en el módulo).
-    """
+def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
+    """Facturación recibida (Egresos): candados exactos confirmados por el usuario, sumatoria bruta."""
     avisos: list[str] = []
     df = resolver_columnas(leer_archivo(nombre, contenido), COLS_FACTURAS)
     n0 = len(df)
@@ -223,8 +176,8 @@ def leer_facturas_egresos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.
     vigente = estatus_limpio.isin(["VIGENTE", "ACTIVO"])
     if (~vigente).any():
         avisos.append(f"Facturación recibida: {int((~vigente).sum())} filas excluidas por Estatus distinto de "
-                      f"'Vigente'/'Activo' {sorted(df.loc[~vigente, 'Estatus'].astype(str).unique().tolist())[:10]}.")
-    df = df[vigente]
+                      f"'Vigente'/'Activo'.")
+    df = df[vigente].copy()
 
     tipo_limpio = df["Tipo Documento"].astype(str).str.strip().str.upper()
     es_factura = tipo_limpio == "FACTURA"
@@ -232,28 +185,34 @@ def leer_facturas_egresos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.
     excluidos_tipo = ~(es_factura | es_ncr)
     if excluidos_tipo.any():
         avisos.append(f"Facturación recibida: {int(excluidos_tipo.sum())} filas excluidas por Tipo Documento "
-                      f"distinto de 'Factura'/'NCR' "
-                      f"{sorted(df.loc[excluidos_tipo, 'Tipo Documento'].astype(str).unique().tolist())[:10]}.")
-    df = df.assign(Es_NCR=es_ncr)[~excluidos_tipo]
+                      f"distinto de 'Factura'/'NCR'.")
+    
+    df["Es_NCR"] = es_ncr.astype(bool)
+    df = df[~excluidos_tipo]
+    
     avisos.append(f"Facturación recibida: {n0} filas leídas, {len(df)} vigentes de Tipo 'Factura'/'NCR' "
                   f"({int(df['Es_NCR'].sum())} NCR).")
 
     total_limpio = df["Total"].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False)
+    
+    # Asignación optimizada con categorías
     df = df.assign(Fecha=a_fecha(df["Fecha y Hora"]),
                    Total=pd.to_numeric(total_limpio, errors="coerce").fillna(0.0),
-                   Metodo_Pago=df["Metodo de Pago"].str.upper())
+                   Metodo_Pago=df["Metodo de Pago"].astype(str).str.upper().astype("category"))
+
+    if "Estatus" in df.columns:
+        df["Estatus"] = df["Estatus"].astype("category")
+    if "Tipo Documento" in df.columns:
+        df["Tipo Documento"] = df["Tipo Documento"].astype("category")
 
     fecha_ilegible = df["Fecha"].isna()
     if fecha_ilegible.any():
-        avisos.append(f"Facturación recibida: {int(fecha_ilegible.sum())} filas con Fecha y Hora ilegible "
-                      "descartadas (no se pueden ubicar en un ejercicio fiscal).")
+        avisos.append(f"Facturación recibida: {int(fecha_ilegible.sum())} filas con Fecha y Hora ilegible descartadas.")
         df = df[~fecha_ilegible]
 
-    # Las NCR no se filtran por Método de Pago: muchas bases no lo llenan en un crédito y no deben perderse.
     otro_metodo = ~df["Es_NCR"] & ~df["Metodo_Pago"].isin(["PUE", "PPD"])
     if otro_metodo.any():
-        avisos.append(f"Facturación recibida: {int(otro_metodo.sum())} filas con método distinto de PUE/PPD "
-                      f"descartadas ({df.loc[otro_metodo, 'Metodo_Pago'].unique().tolist()}).")
+        avisos.append(f"Facturación recibida: {int(otro_metodo.sum())} filas con método distinto de PUE/PPD descartadas.")
         df = df[~otro_metodo]
 
     dup = df["UUID"].duplicated()
@@ -262,13 +221,12 @@ def leer_facturas_egresos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.
         df = df[~dup]
 
     col_forma = buscar_columna(df.columns, "Forma de Pago")
-    # Factor_MXN: 1 si la factura es en MXN (o no trae 'Moneda'); el Tipo de Cambio si es moneda extranjera; NaN si es extranjera sin Tipo de Cambio
-    # válido (no se puede convertir). Solo lo usa `facturas_a_mxn` (Módulo de Egresos): el Total sigue en su moneda original para el resto del tablero.
     col_moneda, col_tc = buscar_columna(df.columns, "Moneda"), buscar_columna(df.columns, "Tipo de Cambio")
     moneda = df[col_moneda].astype(str).str.strip().str.upper() if col_moneda is not None else pd.Series("MXN", index=df.index)
     es_mxn = moneda.isin(["MXN", "PESOS", "PESO MEXICANO", "NAN", ""])
     tipo_cambio = a_numero(df[col_tc]) if col_tc is not None else pd.Series(1.0, index=df.index)
     df = df.assign(Factor_MXN=tipo_cambio.where(~es_mxn, 1.0).where(es_mxn | (tipo_cambio > 0)))
+    
     col_serie = buscar_columna(df.columns, "Serie")
     df["Serie"] = df[col_serie].fillna("").astype(str).str.strip() if col_serie else ""
     col_iva_total = buscar_columna(df.columns, "IVA Trasladado")
@@ -280,43 +238,45 @@ def leer_facturas_egresos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.
         df["IVA_Trasladado"] = df[columnas_iva].apply(
             lambda columna: a_numero(columna).fillna(0.0)
         ).sum(axis=1)
+        
     columnas_salida = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total",
                        "Es_NCR", "Factor_MXN", "Serie"]
     if columnas_iva:
         columnas_salida.append("IVA_Trasladado")
     if col_forma is not None:
         columnas_salida.append(col_forma)
+        
     df = (df[columnas_salida]
           .rename(columns={"RFC Emisor": "RFC_Emisor", "Nombre Emisor": "Nombre_Emisor", **({col_forma: "Forma_Pago"} if col_forma else {})})
           .sort_values("Fecha", kind="stable").reset_index(drop=True))
     return df, avisos
 
-
-def leer_complementos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.DataFrame, list[str]]:
-    """Complementos de pago: Fecha_Cobro (sin hora) y Cobro Efectivo = Saldo Inicial - Saldo Final.
-
-    Fecha_Cobro = 'Fecha de Pago' del complemento.
-    """
+def leer_complementos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
+    """Complementos de pago: Fecha_Cobro (sin hora) y Cobro Efectivo = Saldo Inicial - Saldo Final."""
     avisos: list[str] = []
     etiqueta = f"Complementos de pago ({nombre})"
     df = resolver_columnas(leer_archivo(nombre, contenido), {**COLS_COMPLEMENTOS, **COL_FECHA_REP},
                            COLS_COMPLEMENTOS_OPCIONALES)
     n0 = len(df)
+    
     if "Estatus" in df.columns:
         estatus = df["Estatus"].astype(str).str.strip().str.upper()
-        df = df[estatus.isin(["ACTIVO", "VIGENTE"])]
-        avisos.append(f"{etiqueta}: {n0 - len(df)} filas descartadas por Estatus distinto de "
-                      "'Activo'/'Vigente'.")
+        df = df[estatus.isin(["ACTIVO", "VIGENTE"])].copy()
+        df["Estatus"] = df["Estatus"].astype("category")  # Optimización de RAM
+        avisos.append(f"{etiqueta}: {n0 - len(df)} filas descartadas por Estatus distinto de 'Activo'/'Vigente'.")
+        
     if "RFC Emisor" not in df.columns:
         df = df.assign(**{"RFC Emisor": ""})
         avisos.append(f"{etiqueta}: la base no trae 'RFC Emisor'; los cobros no se pueden filtrar por RFC.")
-    if "UUID DR" not in df.columns:   # factura relacionada (opcional): solo la usa la depuración de complementos ligados a PUE
+        
+    if "UUID DR" not in df.columns:
         df = df.assign(**{"UUID DR": ""})
 
     col_fecha = next(iter(COL_FECHA_REP))
     df = df.assign(Fecha_Cobro=a_fecha(df[col_fecha]),
                    Saldo_Inicial=a_numero(df["Saldo Inicial"]),
                    Saldo_Final=a_numero(df["Saldo Final"]))
+                   
     ilegibles = df["Fecha_Cobro"].isna() | df["Saldo_Inicial"].isna() | df["Saldo_Final"].isna()
     if ilegibles.any():
         avisos.append(f"{etiqueta}: {ilegibles.sum()} filas con '{col_fecha}' o saldos ilegibles descartadas.")
@@ -331,13 +291,15 @@ def leer_complementos(nombre: str, contenido: ContenidoArchivo) -> tuple[pd.Data
                   f"(fecha que rige: {col_fecha}).")
 
     col_forma = buscar_columna(df.columns, "Forma de Pago")
-    df = df.assign(Forma_Pago=df[col_forma] if col_forma is not None else "")   # opcional: solo la usa la mezcla por forma de pago
+    # Convertimos Forma de Pago a categoría porque se repiten mucho los códigos (03, 01, etc.)
+    df = df.assign(Forma_Pago=df[col_forma].astype("category") if col_forma is not None else "")
+    
     df = (df[["UUID", "RFC Emisor", "Fecha_Cobro", "Saldo_Inicial", "Saldo_Final", "Cobro_Efectivo", "UUID DR", "Forma_Pago"]]
           .rename(columns={"RFC Emisor": "RFC_Emisor", "UUID DR": "UUID_DR"})
           .assign(UUID_DR=lambda d: d["UUID_DR"].astype(str).str.strip().str.upper())
           .sort_values("Fecha_Cobro", kind="stable").reset_index(drop=True))
+    
     return df, avisos
-
 
 def preparar_complementos_egresos(df_rep: pd.DataFrame, col_monto: str, col_fecha: str) -> pd.DataFrame:
     """Complementos de Egresos (Base PAGO) con 'Monto_Num' (Monto MXN limpio, ya en MXN), 'Año' y 'Mes'
@@ -631,7 +593,7 @@ def _cargar_bases_economicas(lado: str) -> dict:
     for nombre, contenido in entradas:
         try:
             r = _procesar_archivo_economico(nombre, contenido, CODIGO_VERSION)
-        except (ArrowException, OSError, ValueError) as exc:
+        except (pa.ArrowException, OSError, ValueError) as exc:  # <--- Cambio aquí
             st.error(f"No se pudo leer la base económica «{nombre}»: {exc}")
             continue
         if r["tipo"] is None:
@@ -646,30 +608,27 @@ def _cargar_bases_economicas(lado: str) -> dict:
 
 # =============== FUNCIONES CON @st.cache_data
 
-@st.cache_data(show_spinner="Procesando facturas…")
-def _facturas_cache(nombre: str, contenido: ContenidoArchivo, version: str):
+# =============== FUNCIONES CON @st.cache_data
+
+@st.cache_data(show_spinner="Procesando facturas…", max_entries=2)
+def _facturas_cache(nombre: str, contenido: bytes, version: str):
     return leer_facturas(nombre, contenido)
 
-
-@st.cache_data(show_spinner="Procesando facturación recibida…")
-def _facturas_egresos_cache(nombre: str, contenido: ContenidoArchivo, version: str):
+@st.cache_data(show_spinner="Procesando facturación recibida…", max_entries=2)
+def _facturas_egresos_cache(nombre: str, contenido: bytes, version: str):
     return leer_facturas_egresos(nombre, contenido)
 
-
-@st.cache_data(show_spinner="Procesando complementos de pago…")
-def _complementos_cache(nombre: str, contenido: ContenidoArchivo, version: str):
+@st.cache_data(show_spinner="Procesando complementos de pago…", max_entries=2)
+def _complementos_cache(nombre: str, contenido: bytes, version: str):
     return leer_complementos(nombre, contenido)
 
-
-@st.cache_data(show_spinner=False)
-def _columnas_archivo(nombre: str, contenido: ContenidoArchivo, version: str) -> list[str]:
+@st.cache_data(show_spinner=False, max_entries=5)
+def _columnas_archivo(nombre: str, contenido: bytes, version: str) -> list[str]:
     return list(leer_archivo(nombre, contenido).columns)
 
-
-@st.cache_data(show_spinner="Procesando bases CFDI...")
-def _cargar_base_cache(nombre: str, contenido: ContenidoArchivo, version: str) -> pd.DataFrame:
-    """Lectura cruda (Excel o CSV) de uno o varios archivos subidos, en caché."""
-    return _leer_archivos_cache(nombre, contenido, False, version)
+@st.cache_data(show_spinner="Procesando bases CFDI...", max_entries=2)
+def _cargar_base_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
+    return leer_archivo(nombre, contenido)
 
 
 @st.cache_data(show_spinner=False)
