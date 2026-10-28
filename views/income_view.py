@@ -81,14 +81,8 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
               "Flujo Fiscal: facturas PUE por fecha de emisión más complementos y nómina por fecha de pago; "
               "excluye NCR y operaciones de divisas de los egresos. En ambas, la línea es ingresos menos egresos."),
     )
-    faltan = [nombre for nombre, archivo in (
-        ("Facturación Recibida", f_fac_egr),
-        ("Complementos de Pago Recibidos (Base PAGO de Egresos)", f_pago_egr),
-        ("Base PAGO de Ingresos", f_pago_ing),
-        ("Nómina", f_nomina),
-    ) if archivo is None]
-    if faltan:
-        st.info("Para comparar Ingresos contra Egresos carga también: " + " y ".join(faltan) + ".")
+    if f_fac_egr is None:
+        st.info("Para mostrar la Facturación Neta Mensual falta la Facturación Recibida.")
         return
 
     try:
@@ -97,6 +91,57 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         fac_egr, _ = excluir_años_incompletos(fac_egr, "Fecha", "Facturación recibida", anios_5)
     except KeyError as e:
         st.info(f"Información insuficiente en la Facturación Recibida: {e.args[0]}")
+        return
+
+    fac_egr = fac_egr[fac_egr["Fecha"].dt.year.isin(ejercicios)]
+    rfc_divisas = fac_egr["RFC_Emisor"].fillna("").astype(str).str.strip().str.upper().eq("BMI9704113PA")
+    n_divisas = int(rfc_divisas.sum())
+    if n_divisas:
+        st.info(f"{n_divisas} factura(s) recibida(s) del RFC BMI9704113PA se excluyeron de ambas gráficas.")
+        fac_egr = fac_egr[~rfc_divisas]
+    fac_egr, n_sin_tc = facturas_a_mxn(fac_egr)
+    if n_sin_tc:
+        st.warning(f"{n_sin_tc} factura(s) recibida(s) sin Tipo de Cambio válido se excluyeron de las gráficas.")
+
+    anios = sorted(int(anio) for anio in ejercicios)
+    periodos = pd.PeriodIndex(
+        [pd.Period(f"{anio}-{mes:02d}", freq="M") for anio in anios for mes in range(1, 13)],
+        freq="M",
+    )
+
+    def sumar_por_mes(df: pd.DataFrame, fecha: str, monto: str) -> pd.Series:
+        fechas = df[fecha]
+        periodos_df = fechas if isinstance(fechas.dtype, pd.PeriodDtype) else fechas.dt.to_period("M")
+        serie = df.assign(_Periodo=periodos_df).groupby("_Periodo")[monto].sum()
+        return serie.reindex(periodos, fill_value=0.0).astype(float)
+
+    facturas_ing = fac_ing[~fac_ing["Es_NCR"]]
+    facturas_egr = fac_egr[~fac_egr["Es_NCR"]]
+    ncr_ing = sumar_por_mes(fac_ing[fac_ing["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
+    ncr_egr = sumar_por_mes(fac_egr[fac_egr["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
+    ingresos_devengados = sumar_por_mes(facturas_ing, "Fecha", "Total") - ncr_ing
+    egresos_devengados = sumar_por_mes(facturas_egr, "Fecha", "Total") - ncr_egr
+    fig_neta = _figura_ingresos_egresos(periodos, ingresos_devengados, egresos_devengados)
+    st.markdown("**Facturación Neta Mensual**")
+    render_grafica(fig_neta, key="ing_fig_neta", incluir_notas=False, width="stretch")
+    pdf_elements.append({
+        "type": "image",
+        "section_title": "5. Facturación Neta y Flujo Fiscal",
+        "title": "Facturación Neta Mensual",
+        "fig": fig_neta,
+        "custom_height": 270,
+    })
+
+    faltan_flujo = [nombre for nombre, archivo in (
+        ("Complementos de Pago de Ingresos (Base PAGO)", f_pago_ing),
+        ("Complementos de Pago de Egresos (Base PAGO)", f_pago_egr),
+        ("Nómina", f_nomina),
+    ) if archivo is None]
+    if faltan_flujo:
+        st.warning(
+            "Flujo Fiscal Mensual no disponible: faltan " + ", ".join(faltan_flujo) +
+            ". La gráfica de Facturación Neta sí se muestra; no se estiman los cobros ni pagos PPD."
+        )
         return
 
     base_pago_ing = cargar_base(f_pago_ing)
@@ -109,16 +154,6 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     if not estatus_ing.isin(["ACTIVO", "VIGENTE"]).any():
         st.info("La Base PAGO de Ingresos no contiene complementos Activos o Vigentes.")
         return
-
-    fac_egr = fac_egr[fac_egr["Fecha"].dt.year.isin(ejercicios)]
-    rfc_divisas = fac_egr["RFC_Emisor"].fillna("").astype(str).str.strip().str.upper().eq("BMI9704113PA")
-    n_divisas = int(rfc_divisas.sum())
-    if n_divisas:
-        st.info(f"{n_divisas} factura(s) recibida(s) del RFC BMI9704113PA se excluyeron de ambas gráficas.")
-        fac_egr = fac_egr[~rfc_divisas]
-    fac_egr, n_sin_tc = facturas_a_mxn(fac_egr)
-    if n_sin_tc:
-        st.warning(f"{n_sin_tc} factura(s) recibida(s) sin Tipo de Cambio válido se excluyeron de las gráficas.")
 
     base_pago_egr = cargar_base(f_pago_egr)
     col_estatus = buscar_columna(base_pago_egr.columns, "Estatus")
@@ -145,25 +180,6 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         st.info(f"Información insuficiente en la Base de Nómina: {motivo_nomina}.")
         return
 
-    anios = sorted(int(anio) for anio in ejercicios)
-    periodos = pd.PeriodIndex(
-        [pd.Period(f"{anio}-{mes:02d}", freq="M") for anio in anios for mes in range(1, 13)],
-        freq="M",
-    )
-
-    def sumar_por_mes(df: pd.DataFrame, fecha: str, monto: str) -> pd.Series:
-        fechas = df[fecha]
-        periodos_df = fechas if isinstance(fechas.dtype, pd.PeriodDtype) else fechas.dt.to_period("M")
-        serie = df.assign(_Periodo=periodos_df).groupby("_Periodo")[monto].sum()
-        return serie.reindex(periodos, fill_value=0.0).astype(float)
-
-    facturas_ing = fac_ing[~fac_ing["Es_NCR"]]
-    facturas_egr = fac_egr[~fac_egr["Es_NCR"]]
-    ncr_ing = sumar_por_mes(fac_ing[fac_ing["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
-    ncr_egr = sumar_por_mes(fac_egr[fac_egr["Es_NCR"]].assign(Total=lambda d: d["Total"].abs()), "Fecha", "Total")
-    ingresos_devengados = sumar_por_mes(facturas_ing, "Fecha", "Total") - ncr_ing
-    egresos_devengados = sumar_por_mes(facturas_egr, "Fecha", "Total") - ncr_egr
-
     ingresos_pue = sumar_por_mes(
         facturas_ing[facturas_ing["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
     ingresos_complementos = sumar_por_mes(rep_ing, "Fecha_Cobro", "Cobro_Efectivo")
@@ -173,29 +189,17 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     egresos_nomina = (nomina_mensual.reindex(periodos, fill_value=0.0).astype(float)
                       if nomina_mensual is not None else pd.Series(0.0, index=periodos))
 
-    fig_neta = _figura_ingresos_egresos(periodos, ingresos_devengados, egresos_devengados)
     fig_flujo = _figura_ingresos_egresos(
         periodos, ingresos_pue + ingresos_complementos,
         egresos_pue + egresos_complementos + egresos_nomina)
-    st.markdown("**Facturación Neta Mensual**")
-    render_grafica(fig_neta, key="ing_fig_neta", incluir_notas=False, width="stretch")
     st.markdown("**Flujo Fiscal Mensual**")
     render_grafica(fig_flujo, key="ing_fig_flujo", incluir_notas=False, width="stretch")
-    pdf_elements.extend([
-        {
-            "type": "image",
-            "section_title": "5. Facturación Neta y Flujo Fiscal",
-            "title": "Facturación Neta Mensual",
-            "fig": fig_neta,
-            "custom_height": 270,
-        },
-        {
+    pdf_elements.append({
             "type": "image",
             "title": "Flujo Fiscal Mensual",
             "fig": fig_flujo,
             "custom_height": 270,
-        },
-    ])
+        })
 
 
 def _limpiar_y_formatear(val, prefijo="", sufijo=""):
@@ -261,9 +265,13 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     if not ejercicios:
         st.warning("Selecciona al menos un ejercicio fiscal en la barra de filtros.")
         return
-    if file_ingresos_pago is None:
-        st.info("Falta la base de Complementos de Clientes (PAGO - Flujo Efectivo)")
-        st.stop()
+    complementos_disponibles = file_ingresos_pago is not None
+    if not complementos_disponibles:
+        st.warning(
+            "Análisis parcial: falta la base de Complementos de Clientes (PAGO - Flujo Efectivo). "
+            "La facturación se mostrará, pero no se pueden determinar los cobros PPD, el saldo por cobrar "
+            "ni el flujo de efectivo; esos datos aparecerán como no disponibles, no como cero."
+        )
 
     fac = facturas[facturas["Fecha"].dt.year.isin(ejercicios)]
     rep = rep_total[rep_total["Fecha_Cobro"].dt.year.isin(ejercicios)]
@@ -289,16 +297,19 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     fact_pue = df_facturas.loc[df_facturas["Metodo_Pago"] == "PUE", "Total"].sum()
     fact_ppd = df_facturas.loc[df_facturas["Metodo_Pago"] == "PPD", "Total"].sum()
     cobr_ppd = complementos_vigentes(rep)
-    cobr_total = fact_pue + cobr_ppd
+    cobr_total = fact_pue + cobr_ppd if complementos_disponibles else None
     ncr_total = ncr_anual["NCR_Total"].sum()
-    ingreso_neto = cobr_total - ncr_total
+    ingreso_neto = cobr_total - ncr_total if cobr_total is not None else None
 
-    try:
-        total_ppd_facturado = _total_facturado_ppd_vigente(cargar_base(file_ingresos_facturas))
-        total_cobrado_rep = complementos_vigentes(rep_total)
-        saldo_ppd_macro = dinero(diferencia_ppd(total_ppd_facturado, total_cobrado_rep))
-    except KeyError:
-        saldo_ppd_macro = "n/a"
+    if complementos_disponibles:
+        try:
+            total_ppd_facturado = _total_facturado_ppd_vigente(cargar_base(file_ingresos_facturas))
+            total_cobrado_rep = complementos_vigentes(rep_total)
+            saldo_ppd_macro = dinero(diferencia_ppd(total_ppd_facturado, total_cobrado_rep))
+        except KeyError:
+            saldo_ppd_macro = "n/a"
+    else:
+        saldo_ppd_macro = "n/d"
 
     pdf_elements = []
 
@@ -315,17 +326,21 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         # Fila 2 - Cobranza y saldos
         with st.container(key="ing_kpis_cobranza_pdf"):
             k = st.columns(4)
-            k[0].metric("Cobrado Total (PUE + Complementos)", dinero(cobr_total), f"{cobr_total / fact_total:.1%} de lo facturado",
+            k[0].metric("Cobrado Total (PUE + Complementos)", dinero(cobr_total) if cobr_total is not None else "n/d",
+                        f"{cobr_total / fact_total:.1%} de lo facturado" if cobr_total is not None and fact_total else "PUE conocido; PPD no disponible",
                         delta_color="off", delta_arrow="off",
                         help="PUE (cobrado al facturar) más el Cobro Efectivo de los Complementos de Pago Emitidos (por su fecha de pago).")
-            k[1].metric("Complementos de Pago Emitidos", dinero(cobr_ppd), f"{n_reps} complementos de pago",
+            k[1].metric("Complementos de Pago Emitidos", dinero(cobr_ppd) if complementos_disponibles else "n/d",
+                        f"{n_reps} complementos de pago" if complementos_disponibles else "Base PAGO no disponible",
                         delta_color="off", delta_arrow="off",
                         help=f"Cobro Efectivo (Saldo Inicial - Saldo Final) de los Complementos de Pago Emitidos cuya {NOMBRE_FECHA} "
                              f"cae en los ejercicios seleccionados. Se cuentan complementos únicos (UUID): un complemento puede pagar "
                              f"varias facturas.")
             k[2].metric("Saldo PPD por Cobrar", saldo_ppd_macro,
                         help="Macro-cálculo: Total Facturado menos el Total Cobrado vía Complementos de Pago Emitidos.")
-            k[3].metric("% Cobranza PPD", f"{cobr_ppd / fact_ppd:.1%}" if fact_ppd else "n/a",
+            k[3].metric("% Cobranza PPD",
+                        f"{cobr_ppd / fact_ppd:.1%}" if complementos_disponibles and fact_ppd
+                        else "n/a" if complementos_disponibles else "n/d",
                         help="Complementos de Pago Emitidos entre Facturación PPD.")
 
         # Fila 3 - Cierre
@@ -334,7 +349,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             k[0].metric("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito",
                         delta_color="off", delta_arrow="off",
                         help="Suma del Total de las Notas de Crédito emitidas.")
-            k[1].metric("Ingreso Neto", dinero(ingreso_neto), delta_color="off", delta_arrow="off",
+            k[1].metric("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d", delta_color="off", delta_arrow="off",
                         help="Ingreso Neto = Cobrado Total (PUE + Complementos) - Notas de Crédito.")
 
         # Métricas para el PDF Financiero
@@ -342,12 +357,18 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             ("Facturación Emitida Total", dinero(fact_total), f"{n_facturas} facturas"),
             ("Facturacion PUE", dinero(fact_pue), f"{fact_pue / fact_total:.1%} del total" if fact_total else "0%"),
             ("Facturación PPD", dinero(fact_ppd), f"{fact_ppd / fact_total:.1%} del total" if fact_total else "0%"),
-            ("Cobrado Total", dinero(cobr_total), f"{cobr_total / fact_total:.1%} lo facturado" if fact_total else "0%"),
-            ("Complementos de Pago Emitidos", dinero(cobr_ppd), f"{n_reps} complementos"),
-            ("Saldo PPD por Cobrar", saldo_ppd_macro, "Total Facturado menos Total Cobrado"),
-            ("% Cobranza PPD", f"{cobr_ppd / fact_ppd:.1%}" if fact_ppd else "n/a", "Complementos de Pago Emitidos entre Facturación PPD"),
+            ("Cobrado Total", dinero(cobr_total) if cobr_total is not None else "n/d",
+             f"{cobr_total / fact_total:.1%} lo facturado" if cobr_total is not None and fact_total else "PUE conocido; PPD no disponible"),
+            ("Complementos de Pago Emitidos", dinero(cobr_ppd) if complementos_disponibles else "n/d",
+             f"{n_reps} complementos" if complementos_disponibles else "Base PAGO no disponible"),
+            ("Saldo PPD por Cobrar", saldo_ppd_macro, "Total Facturado menos Total Cobrado" if complementos_disponibles else "No disponible sin la base PAGO"),
+            ("% Cobranza PPD",
+             f"{cobr_ppd / fact_ppd:.1%}" if complementos_disponibles and fact_ppd
+             else "n/a" if complementos_disponibles else "n/d",
+             "Complementos de Pago Emitidos entre Facturación PPD"),
             ("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito"),
-            ("Ingreso Neto", dinero(ingreso_neto), "Cobrado menos Notas de Crédito")
+            ("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d",
+             "Cobrado menos Notas de Crédito" if ingreso_neto is not None else "No disponible sin la base PAGO")
         ]
         # 2. Las dividimos automáticamente en bloques de 3 en 3 para que salgan filas perfectas
         for i in range(0, len(metrics_kpis), 3):
@@ -361,6 +382,12 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             })
 
     matriz = matriz_anual(res, ncr_anual)
+    if not complementos_disponibles:
+        columnas_sin_pagos = [
+            "Complementos de Pago Emitidos", "Cobrado Total (PUE + Complementos)",
+            "Ingreso Neto", "Ingreso por Cobrar", "% Cobranza PPD",
+        ]
+        matriz[columnas_sin_pagos] = np.nan
     texto = matriz.apply(lambda col: col.map(
         lambda v: "n/a" if pd.isna(v) else (f"{v / 100:.1%}" if col.name.startswith("%") else f"${v:,.2f}")))
     try:
@@ -393,8 +420,11 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     _bloque_concentracion(
         _preparar_concentracion(df_facturas, "Nombre_Receptor" if "Nombre_Receptor" in df_facturas.columns else None,
                                 "RFC_Receptor" if "RFC_Receptor" in df_facturas.columns else None),
-        etiqueta="Clientes", pagos_agrupados=_pagos_por_factura(cargar_base(file_ingresos_pago)),
-        complementos_periodo=cobr_ppd, desglose=_mostrar_desglose, tabla_pdf=tabla_pdf, pdf_elements=pdf_elements
+        etiqueta="Clientes",
+        pagos_agrupados=(_pagos_por_factura(cargar_base(file_ingresos_pago))
+                         if complementos_disponibles else None),
+        complementos_periodo=cobr_ppd if complementos_disponibles else None,
+        desglose=_mostrar_desglose, tabla_pdf=tabla_pdf, pdf_elements=pdf_elements
     )
     _bloque_neta_y_flujo_ingresos(
         fac, rep, file_egresos_facturas, file_egresos_pago, file_ingresos_pago,
@@ -754,6 +784,100 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 })
             except Exception as e:
                 pass
+
+        st.divider()
+    else:
+        d = df.copy()
+        es_pue, es_ppd = d["Metodo_Pago"].eq("PUE"), d["Metodo_Pago"].eq("PPD")
+        d["Monto_PUE"] = d[col_monto].where(es_pue, 0.0)
+        d["Monto_PPD_Cobrado"] = 0.0
+        d["Monto_PPD_Pendiente"] = d[col_monto].where(es_ppd, 0.0)
+
+        if complementos_periodo is None:
+            st.info(
+                "Sin la base PAGO solo se muestran importes facturados por método de pago. "
+                "No se determina cuánto PPD se cobró ni cuánto sigue pendiente."
+            )
+        else:
+            st.info(
+                "La base PAGO no permite relacionar los complementos con cada factura. Se muestra la facturación "
+                "por método y mes; el cobro PPD y su saldo se presentan solo de forma global."
+            )
+        st.divider()
+        st.markdown("**Facturación emitida por método y mes**")
+        fig_tiempo = _fig_facturacion_tiempo(d, col_monto)
+        render_grafica(fig_tiempo, key="ing_facturacion_tiempo")
+        if pdf_elements is not None:
+            pdf_elements.append({
+                "type": "image",
+                "title": "Facturación Emitida por Método y Mes (sin datos de cobro PPD)",
+                "fig": fig_tiempo,
+                "custom_height": 250,
+            })
+
+        st.divider()
+        st.markdown("**Ingresos facturados**")
+        fig_ing_fact = _fig_ingresos_facturados(d, col_monto)
+        render_grafica(fig_ing_fact, key="ingresos_facturados")
+        if pdf_elements is not None:
+            pdf_elements.append({
+                "type": "image",
+                "title": "Ingresos Facturados por Mes",
+                "fig": fig_ing_fact,
+                "custom_height": 270,
+            })
+
+        st.divider()
+        st.markdown("**Método de pago facturado**")
+        monto_pue = float(d.loc[es_pue, col_monto].sum())
+        monto_ppd = float(d.loc[es_ppd, col_monto].sum())
+        if complementos_periodo is None:
+            fig_pie = go.Figure(go.Pie(
+                labels=["Facturado PUE", "Facturado PPD"],
+                values=[monto_pue, monto_ppd],
+                hole=0.5,
+                sort=False,
+                textinfo="percent",
+                textposition="inside",
+                marker=dict(colors=["#2563EB", "#60A5FA"]),
+                hovertemplate="<b>%{label}</b><br>Importe facturado: $%{value:,.2f}<br>Participación: %{percent}<extra></extra>",
+            ))
+            fig_pie.update_layout(
+                height=320,
+                showlegend=False,
+                margin=dict(l=90, r=10, t=30, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+        else:
+            resumen = _resumen_metodo_cobro_global(d, complementos_periodo)
+            fig_pie = _fig_pie_metodo_cobro(resumen)
+        c_pie, c_tabla = st.columns([1, 1], gap="medium")
+        with c_pie:
+            render_grafica(fig_pie, key="ing_metodo_cobro", incluir_notas=False)
+        with c_tabla:
+            if complementos_periodo is None:
+                st.dataframe(
+                    pd.DataFrame({
+                        "Método facturado": ["PUE", "PPD"],
+                        "Importe": [dinero(monto_pue), dinero(monto_ppd)],
+                    }),
+                    hide_index=True,
+                )
+            else:
+                st.markdown(_html_resumen_metodo_cobro(resumen, col_monto, rotular_base=False),
+                            unsafe_allow_html=True)
+                st.caption("El cobro PPD global no está distribuido entre facturas.")
+        if pdf_elements is not None:
+            pdf_elements.append({
+                "type": "image",
+                "section_title": "3. Estructura de la Facturación",
+                "title": ("Facturación por Método (sin datos de cobro PPD)"
+                          if complementos_periodo is None
+                          else "Método de Cobro (complementos no relacionados por factura)"),
+                "fig": fig_pie,
+                "preserve_textfont_size": True,
+            })
 
         st.divider()
 

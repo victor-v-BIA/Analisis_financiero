@@ -93,9 +93,13 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         st.warning("Selecciona al menos un ejercicio fiscal en la barra de filtros.")
         st.stop()
 
-    if file_egresos_pago is None:
-        st.info("Falta la base de PAGOS (Flujo)")
-        st.stop()
+    complementos_disponibles = file_egresos_pago is not None
+    if not complementos_disponibles:
+        st.warning(
+            "Análisis parcial: falta la base de PAGOS (Flujo). Se mostrarán la facturación PUE y la nómina "
+            "identificadas, pero no se pueden determinar los pagos PPD ni el egreso total; los componentes "
+            "dependientes de PAGO aparecerán como no disponibles, no como cero."
+        )
     if file_nomina is None:
         st.info("Sube la base de Nómina para calcular el egreso total")
         st.stop()
@@ -110,34 +114,39 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         st.info("Los CFDI coincidentes con compras de divisas cubren toda la facturación de los ejercicios seleccionados.")
 
     # -- Complementos de Pago (Base PAGO, Flujo de Efectivo) --
-    archivo_rep, etiqueta_base = file_egresos_pago, "Base de PAGO"
+    etiqueta_base = "Base de PAGO"
     nombre_monto, nombre_fecha = "Monto MXN", "Fecha Pago"
+    if complementos_disponibles:
+        df_rep = cargar_base(file_egresos_pago)
+        col_monto = buscar_columna(df_rep.columns, nombre_monto)
+        col_fecha = buscar_columna(df_rep.columns, nombre_fecha)
+        faltantes = [c for c, col in ((nombre_monto, col_monto), (nombre_fecha, col_fecha)) if col is None]
+        if faltantes:
+            st.error(f"🚨 Faltan columnas en la {etiqueta_base}: {faltantes}")
+            st.stop()
 
-    df_rep = cargar_base(archivo_rep)
-    col_monto = buscar_columna(df_rep.columns, nombre_monto)
-    col_fecha = buscar_columna(df_rep.columns, nombre_fecha)
-    faltantes = [c for c, col in ((nombre_monto, col_monto), (nombre_fecha, col_fecha)) if col is None]
-    if faltantes:
-        st.error(f"🚨 Faltan columnas en la {etiqueta_base}: {faltantes}")
-        st.stop()
+        col_est_rep = buscar_columna(df_rep.columns, "Estatus")
+        if col_est_rep is not None:
+            df_rep = df_rep[df_rep[col_est_rep].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])]
+        df_rep = preparar_complementos_egresos(df_rep, col_monto, col_fecha)
+        if uuids_divisas:
+            df_rep, complementos_excluidos = excluir_complementos_de_cfdis(df_rep, uuids_divisas)
+            if complementos_excluidos is None:
+                st.warning("No se pudieron excluir complementos de las facturas de divisas: la Base de PAGO no "
+                           "incluye UUID DR o Documento Relacionado.")
+            elif complementos_excluidos:
+                st.info(f"Se excluyeron {complementos_excluidos} complemento(s) relacionado(s) con los CFDI de divisas.")
 
-    col_est_rep = buscar_columna(df_rep.columns, "Estatus")        # complementos vigentes únicamente (suma global, sin cruce por UUID)
-    if col_est_rep is not None:
-        df_rep = df_rep[df_rep[col_est_rep].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])]
-    df_rep = preparar_complementos_egresos(df_rep, col_monto, col_fecha)
-    if uuids_divisas:
-        df_rep, complementos_excluidos = excluir_complementos_de_cfdis(df_rep, uuids_divisas)
-        if complementos_excluidos is None:
-            st.warning("No se pudieron excluir complementos de las facturas de divisas: la Base de PAGO no "
-                       "incluye UUID DR o Documento Relacionado.")
-        elif complementos_excluidos:
-            st.info(f"Se excluyeron {complementos_excluidos} complemento(s) relacionado(s) con los CFDI de divisas.")
-
-    df_rep_f = df_rep[df_rep["Año"].isin(ejercicios)]
-    total_rep = float(df_rep_f["Monto_Num"].sum())
-    rep_por_año = df_rep_f.groupby("Año")["Monto_Num"].sum()
-    col_uuid = buscar_columna(df_rep_f.columns, "UUID")
-    n_rep = int(df_rep_f[col_uuid].nunique()) if col_uuid else len(df_rep_f)
+        df_rep_f = df_rep[df_rep["Año"].isin(ejercicios)]
+        total_rep = float(df_rep_f["Monto_Num"].sum())
+        rep_por_año = df_rep_f.groupby("Año")["Monto_Num"].sum()
+        col_uuid = buscar_columna(df_rep_f.columns, "UUID")
+        n_rep = int(df_rep_f[col_uuid].nunique()) if col_uuid else len(df_rep_f)
+    else:
+        df_rep_f = None
+        total_rep = None
+        rep_por_año = pd.Series(dtype=float)
+        n_rep = None
 
     # -- Nómina: Estatus Vigente/Activo, Total limpio ($/,), Año por 'Fecha de Pago' / 'Fecha Pago' --
     df_nomina = cargar_base(file_nomina)
@@ -168,9 +177,9 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     fact_pue = fac_factura.loc[fac_factura["Metodo_Pago"] == "PUE", "Total"].sum()
     fact_ppd = fac_factura.loc[fac_factura["Metodo_Pago"] == "PPD", "Total"].sum()
     pagado_ppd = total_rep
-    cifras = resumen_egresos(fact_pue, fact_ppd, pagado_ppd, nomina_total)      # única función: tarjetas, desglose anual y gráficas
+    cifras = resumen_egresos(fact_pue, fact_ppd, pagado_ppd or 0.0, nomina_total)
     fact_total, pagado_total, saldo_ppd, egreso_total = cifras["facturacion"], cifras["pagado_total"], cifras["diferencia"], cifras["egreso_total"]
-    pct_saldo_ppd = (saldo_ppd / fact_ppd * 100) if fact_ppd else 0.0
+    pct_saldo_ppd = ((saldo_ppd / fact_ppd * 100) if fact_ppd else 0.0) if complementos_disponibles else None
 
     ncr_anual_egr = ncr_por_año_egresos(fac)
     ncr_total = ncr_anual_egr["NCR_Total"].reindex(ejercicios, fill_value=0.0).sum()    # NCR vigentes: se presentan aparte, no se descuentan del Egreso Total
@@ -178,8 +187,11 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     # Saldo global (ventana de 5 años, sin filtrar por Ejercicios fiscales): Facturación PPD vigente (Total en MXN) − Complementos vigentes, con la MISMA
     # fórmula `diferencia_ppd`; sin cruce por UUID.
     total_ppd_facturado = float(facturas.loc[~facturas["Es_NCR"] & (facturas["Metodo_Pago"] == "PPD"), "Total"].sum())
-    total_pagado_rep = float(df_rep.loc[df_rep["Año"].isin([int(a_) for a_ in anios_5]), "Monto_Num"].sum())
-    saldo_ppd_macro = dinero(diferencia_ppd(total_ppd_facturado, total_pagado_rep))
+    if complementos_disponibles:
+        total_pagado_rep = float(df_rep.loc[df_rep["Año"].isin([int(a_) for a_ in anios_5]), "Monto_Num"].sum())
+        saldo_ppd_macro = dinero(diferencia_ppd(total_ppd_facturado, total_pagado_rep))
+    else:
+        saldo_ppd_macro = "n/d"
 
     # Inicialización del acumulador para PDF
     pdf_elements = []
@@ -199,19 +211,23 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
 
         with st.container(key="egr_kpis_cobranza_pdf"):
             k = st.columns(4)
-            k[0].metric("Pagado Total (PUE + Complementos)", dinero(pagado_total),
-                       f"{pagado_total / fact_total:.1%} de lo facturado" if fact_total else "n/a",
+            k[0].metric("Pagado Total (PUE + Complementos)",
+                       dinero(pagado_total) if complementos_disponibles else "n/d",
+                       f"{pagado_total / fact_total:.1%} de lo facturado" if complementos_disponibles and fact_total
+                       else "PUE conocido; PPD no disponible",
                        delta_color="off", delta_arrow="off",
                        help="PUE (pagado al recibir la factura) más el Pago Efectivo de los Complementos de Pago Recibidos "
                             "(por su fecha de pago).")
-            k[1].metric("Complementos de Pago Recibidos", dinero(pagado_ppd),
-                       f"{n_rep} complementos de pago", delta_color="off", delta_arrow="off",
+            k[1].metric("Complementos de Pago Recibidos",
+                       dinero(pagado_ppd) if complementos_disponibles else "n/d",
+                       f"{n_rep} complementos de pago" if complementos_disponibles else "Base PAGO no disponible",
+                       delta_color="off", delta_arrow="off",
                        help=f"Monto MXN de la {etiqueta_base} cuya {nombre_fecha} cae en los ejercicios seleccionados.")
             k[2].metric("Saldo PPD por Pagar", saldo_ppd_macro,
                        help="Diferencia PPD global: Facturación Recibida PPD vigente (Total en MXN) menos el Total de los "
                             "Complementos de Pago Recibidos vigentes (por su fecha de pago, Flujo de Efectivo), sin cruce por UUID. "
                             "No se filtra por los Ejercicios fiscales seleccionados arriba; puede ser negativa.")
-            k[3].metric("% Saldo PPD por Pagar", f"{pct_saldo_ppd:.1f}%",
+            k[3].metric("% Saldo PPD por Pagar", f"{pct_saldo_ppd:.1f}%" if pct_saldo_ppd is not None else "n/d",
                        help="Saldo PPD por Pagar entre Facturación Recibida PPD, de los ejercicios seleccionados.")
 
         with st.container(key="egr_kpis_cierre_pdf"):
@@ -219,9 +235,13 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
             k[0].metric("Pagos a Nómina", dinero(nomina_total),
                        help="Suma del Total (limpio) de la Base de Nómina cuya Fecha de Pago cae en los ejercicios "
                             "seleccionados (Estatus 'Vigente'/'Activo').")
-            k[1].metric("**Egreso Total (Operación + Nómina)**", dinero(egreso_total),
-                       help="PUE + Complementos de Pago Recibidos + Pagos a Nómina, de los ejercicios seleccionados. Las Notas de "
-                            "Crédito se presentan aparte y no se descuentan de este indicador.")
+            k[1].metric("**Egreso Total (Operación + Nómina)**" if complementos_disponibles
+                       else "**Egreso Identificado (PUE + Nómina)**",
+                       dinero(egreso_total),
+                       help=("PUE + Complementos de Pago Recibidos + Pagos a Nómina, de los ejercicios seleccionados. Las Notas de "
+                             "Crédito se presentan aparte y no se descuentan de este indicador."
+                             if complementos_disponibles else
+                             "Subtotal identificado de PUE + Nómina. No incluye pagos PPD porque falta la base PAGO."))
             k[2].metric("Total Notas de Crédito", dinero(ncr_total),
                         help="Suma de las Notas de Crédito (Tipo Documento = 'NCR') de Facturas Recibidas en los "
                              "ejercicios seleccionados. Se muestra solo el total.")
@@ -232,13 +252,16 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
             ("Facturación Recibida PUE", dinero(fact_pue), f"{fact_pue / fact_total:.1%} del total" if fact_total else "n/a"),
             ("Facturación Recibida PPD", dinero(fact_ppd), f"{fact_ppd / fact_total:.1%} del total" if fact_total else "n/a"),
             
-            ("Pagado Total (PUE + Complementos)", dinero(pagado_total),  f"{pagado_total / fact_total:.1%} de lo facturado" if fact_total else "n/a"),
-            ("Complementos Recibidos", dinero(pagado_ppd), f"{n_rep} complementos de pago"),
+            ("Pagado Total (PUE + Complementos)", dinero(pagado_total) if complementos_disponibles else "n/d",
+             f"{pagado_total / fact_total:.1%} de lo facturado" if complementos_disponibles and fact_total else "PUE conocido; PPD no disponible"),
+            ("Complementos Recibidos", dinero(pagado_ppd) if complementos_disponibles else "n/d",
+             f"{n_rep} complementos de pago" if complementos_disponibles else "Base PAGO no disponible"),
             ("Saldo PPD por Pagar", saldo_ppd_macro, ""),
-            ("% Saldo PPD por Pagar", f"{pct_saldo_ppd:.1f}%", ""),
+            ("% Saldo PPD por Pagar", f"{pct_saldo_ppd:.1f}%" if pct_saldo_ppd is not None else "n/d", ""),
 
             ("Pagos a Nómina", dinero(nomina_total), ""),
-            ("Egreso Total", dinero(egreso_total), ""),
+            ("Egreso Total" if complementos_disponibles else "Egreso Identificado (PUE + Nómina)",
+             dinero(egreso_total), "Incluye PUE, PPD y nómina" if complementos_disponibles else "Subtotal; no incluye pagos PPD"),
             ("Total Notas de Crédito", dinero(ncr_total), "")
         ]
         
@@ -254,6 +277,13 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
 
 
     matriz = matriz_anual_egresos(fac, rep_por_año, ncr_anual_egr, nomina_por_año, ejercicios)
+    if not complementos_disponibles:
+        columnas_sin_pagos = [
+            "Pagado Total (PUE + Complementos)", "Complementos de Pago Recibidos",
+            "Egreso Operativo Neto", "Egreso Total (Operación + Nómina)",
+            "Saldo PPD por Pagar", "% Saldo PPD por Pagar",
+        ]
+        matriz[columnas_sin_pagos] = np.nan
 
     texto = matriz.apply(lambda col: col.map(
         lambda v: "n/a" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
@@ -287,7 +317,8 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                          egresos_facturas=facturas if file_egresos_productos is not None else None)
         return
 
-    _bloque_egresos(_preparar_concentracion(fac_factura, "Nombre_Emisor", "RFC_Emisor"), cargar_base(file_nomina), df_rep_f, ejercicios,
+    _bloque_egresos(_preparar_concentracion(fac_factura, "Nombre_Emisor", "RFC_Emisor"),
+                    cargar_base(file_nomina), df_rep_f, ejercicios,
                     desglose=_mostrar_desglose, tabla_pdf=tabla, pdf_elements=pdf_elements)
 
     st.divider()
@@ -313,14 +344,14 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                 )
 
 
-def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd.DataFrame, ejercicios, desglose=None, tabla_pdf=None, pdf_elements=None) -> None:
+def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd.DataFrame | None, ejercicios, desglose=None, tabla_pdf=None, pdf_elements=None) -> None:
     """Cuerpo de la Vista Financiera de Egresos con la lógica global (sin cruce por UUID), SIEMPRE sobre Total. `df_prov` = `_preparar_concentracion` de
     facturas recibidas vigentes sin NCR, con el Total ya en MXN y filtradas por ejercicios; `nomina_raw` = base de nómina cruda (Total de comprobantes
     activos por Fecha Pago); `comp_df` = complementos vigentes de los ejercicios (`Monto_Num` = Monto MXN, no se reconvierte; `Mes`). Todo sale de
     `resumen_egresos` (la misma función de tarjetas y desglose anual): Egreso Total = PUE + Complementos + Nómina. Orden: (2) Evolución de los egresos año
     con año: la tabla «Desglose año con año» (`desglose`) junto a «Egresos en el tiempo» y «Egresos facturados por mes»; (3) Método de pago y composición
     de gastos frente a nómina (los dos pies con sus tablas, en dos columnas); (4) Análisis de proveedores: Bump Chart Top 10 normalizado por RFC. (El
-    bloque 1, resumen y tarjetas, lo dibuja `modulo_egresos` antes.) Verifica al centavo que todo cuadra."""
+    bloque 1, resumen y tarjetas, lo dibuja `modulo_egresos` antes. Sin PAGO, presenta únicamente los componentes identificados."""
     col_monto = "Total"
     if desglose is not None:
         desglose()
@@ -340,23 +371,42 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     nom = nom[nom["Año"].isin([int(e) for e in ejercicios])]
     es_pue, es_ppd = df_prov["Metodo_Pago"].eq("PUE"), df_prov["Metodo_Pago"].eq("PPD")
     pue_t, ppd_t = float(df_prov.loc[es_pue, col_monto].sum()), float(df_prov.loc[es_ppd, col_monto].sum())
-    comp_mes = comp_df.assign(Periodo=comp_df["Mes"].dt.strftime("%Y-%m")).groupby("Periodo")["Monto_Num"].sum()
-    res = resumen_egresos(pue_t, ppd_t, float(comp_df["Monto_Num"].sum()), float(nom["Monto"].sum()))
-    mensual = pd.DataFrame({NOMBRE_EGR_PUE: df_prov[es_pue].groupby("Periodo")[col_monto].sum(), NOMBRE_EGR_PPD: comp_mes,
-                            NOMBRE_NOMINA: nom.groupby("Periodo")["Monto"].sum()}).fillna(0.0)
+    if comp_df is not None:
+        comp_mes = comp_df.assign(Periodo=comp_df["Mes"].dt.strftime("%Y-%m")).groupby("Periodo")["Monto_Num"].sum()
+        total_complementos = float(comp_df["Monto_Num"].sum())
+    else:
+        comp_mes = pd.Series(dtype=float)
+        total_complementos = 0.0
+        st.info(
+            "Los pagos PPD no están disponibles sin la base PAGO. Las gráficas de egresos muestran solo "
+            "los importes identificados de PUE y nómina; no representan el egreso total."
+        )
+    res = resumen_egresos(pue_t, ppd_t, total_complementos, float(nom["Monto"].sum()))
+    mensual = pd.DataFrame({
+        NOMBRE_EGR_PUE: df_prov[es_pue].groupby("Periodo")[col_monto].sum(),
+        NOMBRE_NOMINA: nom.groupby("Periodo")["Monto"].sum(),
+    }).fillna(0.0)
+    if comp_df is not None:
+        mensual[NOMBRE_EGR_PPD] = comp_mes
+        mensual = mensual.fillna(0.0)
+    else:
+        mensual[NOMBRE_EGR_PPD] = np.nan
     total_mes = mensual.sum(axis=1).rename_axis("Periodo").reset_index(name="Monto")
     total_mes["Año"], total_mes["Mes"] = total_mes["Periodo"].str[:4].astype(int), total_mes["Periodo"].str[5:7].astype(int)
     tabla_mes = total_mes.pivot_table(index="Mes", columns="Año", values="Monto", aggfunc="sum").reindex(range(1, 13)).sort_index(axis=1)
     res_nom = _resumen_nomina_gastos(res)
 
-    for nombre, diferencia in (("Las barras de egresos en el tiempo", float(mensual.to_numpy().sum() - res["egreso_total"])),
+    columnas_conocidas = ([NOMBRE_EGR_PUE, NOMBRE_NOMINA] if comp_df is None else list(mensual.columns))
+    for nombre, diferencia in (("Las barras de egresos en el tiempo",
+                                float(mensual[columnas_conocidas].to_numpy().sum() - res["egreso_total"])),
                                ("Los egresos por mes", float(np.nansum(tabla_mes.to_numpy()) - res["egreso_total"])),
                                ("Nómina vs. Gastos", float(res_nom["gastos"] + res_nom["nomina"] - res["egreso_total"]))):
         if abs(diferencia) > 0.005:
             st.error(f"{nombre} no cuadra con el Egreso Total; diferencia {diferencia:,.2f}. Revisa los datos.")
 
     st.divider()
-    st.markdown("**Egresos en el tiempo**")
+    st.markdown("**Egresos en el tiempo**" if comp_df is not None
+                else "**Egresos identificados en el tiempo (PUE + Nómina)**")
     fig_tiempo = _fig_egresos_tiempo(mensual)
     with st.container(key="egr_tiempo_pdf", width="stretch"):
         render_grafica(fig_tiempo, key="egr_tiempo")
@@ -366,13 +416,16 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         pdf_elements.append({
             "type": "image",
             # "section_title": "2. Evolución de los Egresos",
-            "title": "Egresos en el Tiempo",
+            "title": ("Egresos en el Tiempo" if comp_df is not None
+                      else "Egresos Identificados en el Tiempo (PUE + Nómina; pagos PPD no disponibles)"),
             "fig": fig_tiempo,
             "custom_height": 240
         })
     st.divider()
-    st.markdown("**Egresos facturados por mes**")
-    fig_fact_mes = _fig_lineas_por_anio(tabla_mes, "Egreso total")
+    st.markdown("**Egresos facturados por mes**" if comp_df is not None
+                else "**Egresos identificados por mes (PUE + Nómina)**")
+    fig_fact_mes = _fig_lineas_por_anio(
+        tabla_mes, "Egreso total" if comp_df is not None else "Egreso identificado")
     with st.container(key="egr_facturado_por_mes_pdf", width="stretch"):
         render_grafica(fig_fact_mes, key="egr_facturado_por_mes")
     # nota_fact_mes = st.text_area("Conclusión - Egresos Facturados por Mes", max_chars=600, key="note_egr_fact_mes")
@@ -380,7 +433,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
-            "title": "Egresos Facturados por Mes",
+            "title": ("Egresos Facturados por Mes" if comp_df is not None
+                      else "Egresos Identificados por Mes (PUE + Nómina; pagos PPD no disponibles)"),
             "fig": fig_fact_mes,
             "custom_height": 270
         })
@@ -389,29 +443,82 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     c1, c2 = st.columns([1, 1])
 
     # Secciones cuadradas: Nómina vs. Gastos
-    fig_nom_gastos = _fig_pie_nomina_gastos(res_nom)
+    if comp_df is not None:
+        fig_nom_gastos = _fig_pie_nomina_gastos(res_nom)
+    else:
+        fig_nom_gastos = go.Figure(go.Pie(
+            labels=["Facturación recibida PUE", NOMBRE_NOMINA],
+            values=[pue_t, float(nom["Monto"].sum())],
+            hole=0.5,
+            sort=False,
+            textinfo="percent",
+            textposition="inside",
+            marker=dict(colors=["#7DD3FC", "#F59E0B"]),
+            hovertemplate="<b>%{label}</b><br>Importe identificado: MXN %{value:,.2f}<br>"
+                          "Participación: %{percent}<extra></extra>",
+        ))
+        fig_nom_gastos.update_layout(
+            height=320, showlegend=False, margin=dict(l=90, r=10, t=30, b=10),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        )
     with c1:
-        st.markdown("**Nómina vs. Gastos**")
+        st.markdown("**Nómina vs. Gastos**" if comp_df is not None
+                    else "**Nómina vs. Gastos PUE identificados**")
         with st.container(key="egr_nomina_vs_gastos_layout"):
             p1, t1 = st.columns([1, 1])
             with p1:
                 with st.container(key="egr_nomina_vs_gastos_pdf", width="stretch"):
                     render_grafica(fig_nom_gastos, key="egr_nomina_vs_gastos", incluir_notas=False)
             with t1:
-                st.markdown(_html_resumen_nomina_gastos(res_nom), unsafe_allow_html=True)
+                if comp_df is not None:
+                    st.markdown(_html_resumen_nomina_gastos(res_nom), unsafe_allow_html=True)
+                else:
+                    st.metric("Facturación recibida PUE identificada", dinero(pue_t))
+                    st.metric("Pagos a Nómina", dinero(float(nom["Monto"].sum())))
+                    st.caption("Composición parcial; no incluye pagos PPD.")
         # nota_nom_gastos = st.text_area("Conclusión - Nómina vs. Gastos", max_chars=600, key="note_egr_nom_gastos")
 
     # Secciones cuadradas: Método de Pago de Gastos
-    fig_metodo_pago = _fig_pie_metodo_pago(res)
+    if comp_df is not None:
+        fig_metodo_pago = _fig_pie_metodo_pago(res)
     with c2:
-        st.markdown("**Método de pago de gastos**")
+        st.markdown("**Método de pago de gastos**" if comp_df is not None
+                    else "**Facturación recibida por método de pago**")
         with st.container(key="egr_metodo_pago_layout"):
             p2, t2 = st.columns([1, 1])
             with p2:
                 with st.container(key="egr_metodo_pago_pdf", width="stretch"):
-                    render_grafica(fig_metodo_pago, key="egr_metodo_pago", incluir_notas=False)
+                    if comp_df is not None:
+                        render_grafica(fig_metodo_pago, key="egr_metodo_pago", incluir_notas=False)
+                    else:
+                        fig_metodo_pago = go.Figure(go.Pie(
+                            labels=[NOMBRE_EGR_PUE, NOMBRE_EGR_PPD],
+                            values=[pue_t, ppd_t],
+                            hole=0.5,
+                            sort=False,
+                            textinfo="percent",
+                            textposition="inside",
+                            marker=dict(colors=["#3B82F6", "#7DD3FC"]),
+                            hovertemplate="<b>%{label} facturado</b><br>Importe: MXN %{value:,.2f}<br>"
+                                          "Participación: %{percent}<extra></extra>",
+                        ))
+                        fig_metodo_pago.update_layout(
+                            height=320, showlegend=False, margin=dict(l=90, r=10, t=30, b=10),
+                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        )
+                        render_grafica(fig_metodo_pago, key="egr_metodo_pago", incluir_notas=False)
             with t2:
-                st.markdown(_html_resumen_metodo_pago(res), unsafe_allow_html=True)
+                if comp_df is not None:
+                    st.markdown(_html_resumen_metodo_pago(res), unsafe_allow_html=True)
+                else:
+                    st.dataframe(
+                        pd.DataFrame({
+                            "Método facturado": [NOMBRE_EGR_PUE, NOMBRE_EGR_PPD],
+                            "Importe": [dinero(pue_t), dinero(ppd_t)],
+                        }),
+                        hide_index=True,
+                    )
+                    st.info("Los pagos y el saldo pendiente PPD no se pueden conocer sin la base PAGO.")
         # nota_metodo_pago = st.text_area("Conclusión - Método de Pago", max_chars=600, key="note_egr_metodo_pago")
 
     # Registro en PDF para Nómina vs. Gastos y Método de Pago
@@ -420,7 +527,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         pdf_elements.append({
             "type": "image",
             "section_title": "3. Composición y Métodos de Pago",
-            "title": "Nómina vs. Gastos",
+            "title": ("Nómina vs. Gastos" if comp_df is not None
+                      else "Nómina vs. Facturación PUE Identificada (PPD no disponible)"),
             "fig": fig_nom_gastos,
             "preserve_textfont_size": True,
             # "note": nota_nom_gastos
@@ -433,8 +541,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             pct_nomina = (nomina_val / total_egr_nom * 100) if total_egr_nom > 0 else 0
 
             df_nom_pdf = pd.DataFrame([
-                {"Concepto": f"<font size=8 color='#6B7280'>Monto Total</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
-                {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>Gastos (Proveedores)</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
+                {"Concepto": f"<font size=8 color='#6B7280'>{'Monto Total' if comp_df is not None else 'Monto identificado (PUE + Nómina)'}</font><br/><b><font size=13 color='#1F2937'>MXN {total_egr_nom:,.2f}</font></b>"},
+                {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>{'Gastos (Proveedores)' if comp_df is not None else 'Facturación recibida PUE identificada'}</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
                 {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Pagos a Nómina</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
             ])[["Concepto"]]
 
@@ -450,7 +558,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         # 2. Método de Pago de Gastos
         pdf_elements.append({
             "type": "image",
-            "title": "Método de Pago de Gastos",
+            "title": ("Método de Pago de Gastos" if comp_df is not None
+                      else "Facturación por Método PUE/PPD (pagos PPD no disponibles)"),
             "fig": fig_metodo_pago,
             "preserve_textfont_size": True,
             # "note": nota_metodo_pago
