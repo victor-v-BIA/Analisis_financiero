@@ -599,13 +599,23 @@ def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:
 
 
 # correcta
-def _fig_facturacion_tiempo(d: pd.DataFrame, col_monto: str) -> go.Figure:
+def _fig_facturacion_tiempo(
+    d: pd.DataFrame,
+    col_monto: str,
+    nomina_mensual: pd.Series | None = None,
+) -> go.Figure:
     """Facturación emitida en el tiempo: barras apiladas por mes (`px.bar`, barmode='stack'), PUE (`Monto_PUE`) y PPD (`Monto_PPD_Cobrado +
-    Monto_PPD_Pendiente`); sin bordes, sin grid vertical, morado/azul para PUE y verde lima para PPD."""
+    Monto_PPD_Pendiente`); optionally includes payroll income as a separate monthly series."""
     g = d.assign(PPD=d["Monto_PPD_Cobrado"] + d["Monto_PPD_Pendiente"]).groupby("Periodo", as_index=False)[["Monto_PUE", "PPD"]].sum().sort_values("Periodo")
     g = g.rename(columns={"Monto_PUE": "PUE"}).melt(id_vars="Periodo", value_vars=["PUE", "PPD"], var_name="Método", value_name="Monto")
+    if nomina_mensual is not None:
+        nomina = nomina_mensual.rename_axis("Periodo").rename("Monto").reset_index()
+        nomina["Periodo"] = nomina["Periodo"].astype(str)
+        nomina["Método"] = "Nómina"
+        g = pd.concat([g, nomina], ignore_index=True)
     fig = px.bar(g, x="Periodo", y="Monto", color="Método", barmode="stack", color_discrete_map={"PUE": PALETA_ING["pue"], "PPD": PALETA_ING["ppd"]},
-                 category_orders={"Periodo": sorted(g["Periodo"].unique()), "Método": ["PUE", "PPD"]})
+                 category_orders={"Periodo": sorted(g["Periodo"].unique()), "Método": ["PUE", "PPD", "Nómina"]})
+    fig.update_traces(marker_color="#F59E0B", selector={"name": "Nómina"})
     fig.update_traces(marker_line_width=0, hovertemplate="<b>%{x}</b><br>%{fullData.name}: MXN %{y:,.2f}<extra></extra>")
     fig.update_xaxes(type="category", showgrid=False, zeroline=False, tickangle=-90, title_text=None, automargin=True)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=",.0f", title_text=f"{col_monto} (MXN)")

@@ -31,32 +31,40 @@ from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vige
                                 _insight_ingresos_gastos, _anio_base, _rebase, _insight_itaee,
                                 _insight_inpp, _insight_tiie, _desglose_cobros, _serie_mensual_por_anio,
                                 _resumen_metodo_cobro_global, _resumen_metodo_cobro, facturas_a_mxn,
-                                _nomina_mensual_mxn)
+                                _nomina_ingresos_mensual_mxn)
 
 from components.pdf_generator import generate_modular_pdf
 
 
 def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
-                             egresos: pd.Series) -> go.Figure:
+                             egresos: pd.Series, ingresos_nomina: pd.Series | None = None,
+                             mostrar_diferencia: bool = True) -> go.Figure:
     """Crea una serie mensual con ingresos y egresos alrededor de cero y su diferencia."""
     x = [str(periodo) for periodo in periodos]
     egresos_negativos = -egresos
-    diferencia = ingresos - egresos
+    ingresos_totales = ingresos + ingresos_nomina if ingresos_nomina is not None else ingresos
+    diferencia = ingresos_totales - egresos
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=x, y=ingresos, name="Ingresos", marker_color="#2563EB",
         hovertemplate="<b>%{x}</b><br>Ingresos: $%{y:,.2f}<extra></extra>",
     ))
+    if ingresos_nomina is not None:
+        fig.add_trace(go.Bar(
+            x=x, y=ingresos_nomina, name="Ingresos por Nómina", marker_color="#F59E0B",
+            hovertemplate="<b>%{x}</b><br>Ingresos por Nómina: $%{y:,.2f}<extra></extra>",
+        ))
     fig.add_trace(go.Bar(
         x=x, y=egresos_negativos, name="Egresos", marker_color="#60A5FA",
         customdata=egresos,
         hovertemplate="<b>%{x}</b><br>Egresos: $%{customdata:,.2f}<extra></extra>",
     ))
-    fig.add_trace(go.Scatter(
-        x=x, y=diferencia, name="Diferencia mensual", mode="lines+markers",
-        line=dict(color="#F97316", width=3), marker=dict(size=6),
-        hovertemplate="<b>%{x}</b><br>Diferencia: $%{y:,.2f}<extra></extra>",
-    ))
+    if mostrar_diferencia:
+        fig.add_trace(go.Scatter(
+            x=x, y=diferencia, name="Diferencia mensual", mode="lines+markers",
+            line=dict(color="#F97316", width=3), marker=dict(size=6),
+            hovertemplate="<b>%{x}</b><br>Diferencia: $%{y:,.2f}<extra></extra>",
+        ))
     fig.add_hline(y=0, line_width=1, line_color="#9CA3AF")
     fig.update_layout(
         barmode="relative", height=380,
@@ -132,74 +140,70 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         "custom_height": 270,
     })
 
-    faltan_flujo = [nombre for nombre, archivo in (
-        ("Complementos de Pago de Ingresos (Base PAGO)", f_pago_ing),
-        ("Complementos de Pago de Egresos (Base PAGO)", f_pago_egr),
-        ("Nómina", f_nomina),
-    ) if archivo is None]
-    if faltan_flujo:
-        st.warning(
-            "Flujo Fiscal Mensual no disponible: faltan " + ", ".join(faltan_flujo) +
-            ". La gráfica de Facturación Neta sí se muestra; no se estiman los cobros ni pagos PPD."
-        )
-        return
-
-    base_pago_ing = cargar_base(f_pago_ing)
-    col_estatus_ing = buscar_columna(base_pago_ing.columns, "Estatus")
-    if col_estatus_ing is None:
-        st.info("Información insuficiente en la Base PAGO de Ingresos: falta la columna Estatus para "
-                "conservar únicamente complementos Activos o Vigentes.")
-        return
-    estatus_ing = base_pago_ing[col_estatus_ing].astype(str).str.strip().str.upper()
-    if not estatus_ing.isin(["ACTIVO", "VIGENTE"]).any():
-        st.info("La Base PAGO de Ingresos no contiene complementos Activos o Vigentes.")
-        return
-
-    base_pago_egr = cargar_base(f_pago_egr)
-    col_estatus = buscar_columna(base_pago_egr.columns, "Estatus")
-    if col_estatus is None:
-        st.info("Información insuficiente en la Base PAGO de Egresos: falta la columna Estatus para "
-                "conservar únicamente complementos Activos o Vigentes.")
-        return
-    base_pago_egr = base_pago_egr[
-        base_pago_egr[col_estatus].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])
-    ]
-    col_monto = buscar_columna(base_pago_egr.columns, "Monto MXN")
-    col_fecha = buscar_columna(base_pago_egr.columns, "Fecha Pago")
-    faltan_columnas = [nombre for nombre, columna in (
-        ("Monto MXN", col_monto), ("Fecha Pago", col_fecha),
-    ) if columna is None]
-    if faltan_columnas:
-        st.info(f"Información insuficiente en la Base PAGO de Egresos: faltan las columnas {faltan_columnas}.")
-        return
-    pagos_egr = preparar_complementos_egresos(base_pago_egr, col_monto, col_fecha)
-    pagos_egr = pagos_egr[pagos_egr["Año"].isin(ejercicios)]
-
-    nomina_mensual, motivo_nomina = _nomina_mensual_mxn(cargar_base(f_nomina))
-    if motivo_nomina:
-        st.info(f"Información insuficiente en la Base de Nómina: {motivo_nomina}.")
-        return
-
     ingresos_pue = sumar_por_mes(
         facturas_ing[facturas_ing["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
-    ingresos_complementos = sumar_por_mes(rep_ing, "Fecha_Cobro", "Cobro_Efectivo")
     egresos_pue = sumar_por_mes(
         facturas_egr[facturas_egr["Metodo_Pago"].eq("PUE")], "Fecha", "Total")
-    egresos_complementos = sumar_por_mes(pagos_egr, "Mes", "Monto_Num")
-    egresos_nomina = (nomina_mensual.reindex(periodos, fill_value=0.0).astype(float)
-                      if nomina_mensual is not None else pd.Series(0.0, index=periodos))
+    ingresos_complementos = (sumar_por_mes(rep_ing, "Fecha_Cobro", "Cobro_Efectivo")
+                             if f_pago_ing is not None else None)
 
+    pagos_egr = None
+    if f_pago_egr is not None:
+        base_pago_egr = cargar_base(f_pago_egr)
+        col_monto = buscar_columna(base_pago_egr.columns, "Monto MXN")
+        col_fecha = buscar_columna(base_pago_egr.columns, "Fecha Pago")
+        if col_monto is None or col_fecha is None:
+            st.info("Los pagos de Egresos requieren las columnas 'Monto MXN' y 'Fecha Pago'; se excluyen del flujo parcial.")
+        else:
+            col_estatus = buscar_columna(base_pago_egr.columns, "Estatus")
+            if col_estatus is not None:
+                base_pago_egr = base_pago_egr[
+                    base_pago_egr[col_estatus].astype(str).str.strip().str.upper().isin(["ACTIVO", "VIGENTE"])
+                ]
+            pagos_egr = preparar_complementos_egresos(base_pago_egr, col_monto, col_fecha)
+            pagos_egr = pagos_egr[pagos_egr["Año"].isin(ejercicios)]
+    ingresos_complementos_egr = (sumar_por_mes(pagos_egr, "Mes", "Monto_Num")
+                                 if pagos_egr is not None else None)
+
+    ingresos_nomina = None
+    if f_nomina is not None:
+        ingresos_nomina, _ = _nomina_ingresos_mensual_mxn(cargar_base(f_nomina))
+    if ingresos_nomina is not None:
+        ingresos_nomina = ingresos_nomina.reindex(periodos, fill_value=0.0).astype(float)
+
+    flujo_completo = (
+        ingresos_complementos is not None
+        and ingresos_complementos_egr is not None
+        and ingresos_nomina is not None
+    )
+    ingresos_flujo = ingresos_pue + (ingresos_complementos if ingresos_complementos is not None else 0.0)
+    egresos_flujo = egresos_pue + (
+        ingresos_complementos_egr if ingresos_complementos_egr is not None else 0.0)
+    faltan_flujo = []
+    if ingresos_complementos is None:
+        faltan_flujo.append("Complementos de Pago de Ingresos")
+    if ingresos_complementos_egr is None:
+        faltan_flujo.append("Complementos de Pago de Egresos")
+    if ingresos_nomina is None:
+        faltan_flujo.append("nómina de ingresos con Fecha de Certificación")
+    if not flujo_completo:
+        st.warning(
+            "Flujo parcial: la gráfica muestra PUE y los componentes disponibles. "
+            "No incluye " + " y ".join(faltan_flujo) +
+            "; no se muestra una diferencia neta que pudiera inducir a error."
+        )
+    st.markdown("**Flujo Fiscal Mensual**" if flujo_completo else "**Flujo Identificado Mensual (parcial)**")
     fig_flujo = _figura_ingresos_egresos(
-        periodos, ingresos_pue + ingresos_complementos,
-        egresos_pue + egresos_complementos + egresos_nomina)
-    st.markdown("**Flujo Fiscal Mensual**")
+        periodos, ingresos_flujo, egresos_flujo, ingresos_nomina=ingresos_nomina,
+        mostrar_diferencia=flujo_completo)
     render_grafica(fig_flujo, key="ing_fig_flujo", incluir_notas=False, width="stretch")
     pdf_elements.append({
-            "type": "image",
-            "title": "Flujo Fiscal Mensual",
-            "fig": fig_flujo,
-            "custom_height": 270,
-        })
+        "type": "image",
+        "title": ("Flujo Fiscal Mensual" if flujo_completo
+                  else "Flujo Identificado Mensual; componentes faltantes no disponibles"),
+        "fig": fig_flujo,
+        "custom_height": 270,
+    })
 
 
 def _limpiar_y_formatear(val, prefijo="", sufijo=""):
@@ -284,6 +288,18 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         st.warning("No hay facturas para los ejercicios seleccionados.")
         return
 
+    nomina_ingresos_total = None
+    nomina_ingresos_por_anio = None
+    nomina_ingresos = None
+    if file_nomina is not None:
+        nomina_ingresos, motivo_nomina = _nomina_ingresos_mensual_mxn(cargar_base(file_nomina))
+        if motivo_nomina or nomina_ingresos is None:
+            st.info(f"La nómina no se sumó como ingreso: {motivo_nomina or 'no se generó una serie mensual válida'}.")
+        else:
+            nomina_ingresos = nomina_ingresos[nomina_ingresos.index.year.isin(ejercicios)]
+            nomina_ingresos_total = float(nomina_ingresos.sum())
+            nomina_ingresos_por_anio = nomina_ingresos.groupby(nomina_ingresos.index.year).sum()
+
     res = resumen_mensual(fac, rep, ejercicios)
     if abs(res["Cobrado_PPD"].sum() - rep["Cobro_Efectivo"].sum()) > 0.01:
         st.error("El resumen mensual no cuadra con el total de cobros filtrado; revisa el registro de limpieza.")
@@ -351,7 +367,6 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                         help="Suma del Total de las Notas de Crédito emitidas.")
             k[1].metric("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d", delta_color="off", delta_arrow="off",
                         help="Ingreso Neto = Cobrado Total (PUE + Complementos) - Notas de Crédito.")
-
         # Métricas para el PDF Financiero
         metrics_kpis = [
             ("Facturación Emitida Total", dinero(fact_total), f"{n_facturas} facturas"),
@@ -368,7 +383,10 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
              "Complementos de Pago Emitidos entre Facturación PPD"),
             ("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito"),
             ("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d",
-             "Cobrado menos Notas de Crédito" if ingreso_neto is not None else "No disponible sin la base PAGO")
+             "Cobrado menos Notas de Crédito" if ingreso_neto is not None else "No disponible sin la base PAGO"),
+            ("Ingresos por Nómina",
+             dinero(nomina_ingresos_total) if nomina_ingresos_total is not None else "n/d",
+             "Total vigente por Fecha de Certificación; separado de la facturación")
         ]
         # 2. Las dividimos automáticamente en bloques de 3 en 3 para que salgan filas perfectas
         for i in range(0, len(metrics_kpis), 3):
@@ -381,7 +399,21 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                 "data": bloque_tres
             })
 
+    with st.container(key="ing_kpis_nomina_pdf"):
+        st.metric(
+            "Ingresos por Nómina",
+            dinero(nomina_ingresos_total) if nomina_ingresos_total is not None else "n/d",
+            help=("Suma del Total de comprobantes de nómina Vigente/Activo por Fecha de Certificación, "
+                  "en los ejercicios seleccionados; se presenta separado de la facturación.")
+        )
+
     matriz = matriz_anual(res, ncr_anual)
+    if nomina_ingresos_por_anio is None:
+        matriz["Ingresos por Nómina"] = np.nan
+    else:
+        matriz["Ingresos por Nómina"] = [
+            nomina_ingresos_por_anio.get(int(anio), 0.0) for anio in matriz.index
+        ]
     if not complementos_disponibles:
         columnas_sin_pagos = [
             "Complementos de Pago Emitidos", "Cobrado Total (PUE + Complementos)",
@@ -424,7 +456,8 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         pagos_agrupados=(_pagos_por_factura(cargar_base(file_ingresos_pago))
                          if complementos_disponibles else None),
         complementos_periodo=cobr_ppd if complementos_disponibles else None,
-        desglose=_mostrar_desglose, tabla_pdf=tabla_pdf, pdf_elements=pdf_elements
+        desglose=_mostrar_desglose, tabla_pdf=tabla_pdf, pdf_elements=pdf_elements,
+        nomina_mensual=nomina_ingresos
     )
     _bloque_neta_y_flujo_ingresos(
         fac, rep, file_egresos_facturas, file_egresos_pago, file_ingresos_pago,
@@ -656,7 +689,8 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
 
 
 def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_agrupados: pd.DataFrame | None = None,
-                          complementos_periodo: float | None = None, desglose=None, tabla_pdf=None, pdf_elements=None) -> None:
+                          complementos_periodo: float | None = None, desglose=None, tabla_pdf=None,
+                          pdf_elements=None, nomina_mensual: pd.Series | None = None) -> None:
     col_monto = "Total"
     if desglose is not None:
         
@@ -805,12 +839,14 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             )
         st.divider()
         st.markdown("**Facturación emitida por método y mes**")
-        fig_tiempo = _fig_facturacion_tiempo(d, col_monto)
+        fig_tiempo = _fig_facturacion_tiempo(d, col_monto, nomina_mensual=nomina_mensual)
         render_grafica(fig_tiempo, key="ing_facturacion_tiempo")
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
-                "title": "Facturación Emitida por Método y Mes (sin datos de cobro PPD)",
+                "title": ("Facturación Emitida por Método y Mes (incluye nómina de ingresos)"
+                          if nomina_mensual is not None
+                          else "Facturación Emitida por Método y Mes (sin datos de cobro PPD)"),
                 "fig": fig_tiempo,
                 "custom_height": 250,
             })
@@ -832,22 +868,9 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         monto_pue = float(d.loc[es_pue, col_monto].sum())
         monto_ppd = float(d.loc[es_ppd, col_monto].sum())
         if complementos_periodo is None:
-            fig_pie = go.Figure(go.Pie(
-                labels=["Facturado PUE", "Facturado PPD"],
-                values=[monto_pue, monto_ppd],
-                hole=0.5,
-                sort=False,
-                textinfo="percent",
-                textposition="inside",
-                marker=dict(colors=["#2563EB", "#60A5FA"]),
-                hovertemplate="<b>%{label}</b><br>Importe facturado: $%{value:,.2f}<br>Participación: %{percent}<extra></extra>",
-            ))
-            fig_pie.update_layout(
-                height=320,
-                showlegend=False,
-                margin=dict(l=90, r=10, t=30, b=10),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
+            fig_pie = _fig_pie_metodo_cobro(
+                {"pue": monto_pue, "cobrado": monto_ppd, "pendiente": 0.0},
+                realizado="facturado",
             )
         else:
             resumen = _resumen_metodo_cobro_global(d, complementos_periodo)
@@ -859,7 +882,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             if complementos_periodo is None:
                 st.dataframe(
                     pd.DataFrame({
-                        "Método facturado": ["PUE", "PPD"],
+                        "Método facturado": ["Facturado PUE", "Facturado PPD"],
                         "Importe": [dinero(monto_pue), dinero(monto_ppd)],
                     }),
                     hide_index=True,
@@ -872,7 +895,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "image",
                 "section_title": "3. Estructura de la Facturación",
-                "title": ("Facturación por Método (sin datos de cobro PPD)"
+                "title": ("Método de pago facturado (cobros PPD no disponibles)"
                           if complementos_periodo is None
                           else "Método de Cobro (complementos no relacionados por factura)"),
                 "fig": fig_pie,
