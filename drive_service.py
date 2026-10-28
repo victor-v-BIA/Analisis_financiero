@@ -1,12 +1,26 @@
 import io
+import json
+import os
+import streamlit as st
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 def obtener_servicio_drive():
     SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-    creds = service_account.Credentials.from_service_account_file(
-        'google_credentials.json', scopes=SCOPES)
+    
+    # 1. Intentar leer desde los secretos de Streamlit Cloud
+    if "gcp_credentials" in st.secrets:
+        creds_dict = json.loads(st.secrets["gcp_credentials"])
+        creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        
+    # 2. Alternativa: intentar leer el archivo físico (PC local)
+    elif os.path.exists('google_credentials.json'):
+        creds = service_account.Credentials.from_service_account_file('google_credentials.json', scopes=SCOPES)
+        
+    else:
+        raise FileNotFoundError("No se encontraron las credenciales de Google Drive (ni en st.secrets ni local).")
+        
     return build('drive', 'v3', credentials=creds)
 
 def descargar_archivo_drive(file_id: str) -> bytes:
@@ -31,7 +45,7 @@ def listar_archivos_carpeta(folder_id: str) -> list:
     page_token = None
     
     while True:
-        # Filtra para buscar solo en la carpeta indicada y evitar que traiga carpetas anidadas
+        # Filtra para buscar solo en la carpeta indicada y evitar carpetas anidadas
         query = f"'{folder_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
         response = servicio.files().list(q=query,
                                          spaces='drive',
