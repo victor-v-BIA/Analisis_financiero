@@ -12,7 +12,7 @@ from components.styles import CSS_IMPRESION_GLOBAL
 from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
 from views.expense_view import (modulo_egresos)
-from utils import _ArchivoGrupo
+
 from drive_service import descargar_archivo_drive
 
 # 1. Inyectar estilos globales
@@ -37,6 +37,16 @@ class ArchivoDrive:
             self._bytes = descargar_archivo_drive(self.id_drive)
         return self._bytes
 
+class ArchivoGrupoSeguro:
+    def __init__(self, archivos):
+        self.archivos = archivos
+        self.name = archivos[-1].name if archivos else "grupo_archivos"
+
+    def getvalue(self):
+        # Garantiza que extraemos los bytes de cada archivo, no los nombres
+        return [a.getvalue() for a in self.archivos]
+
+    
 def main() -> None:
     st.set_page_config(page_title="Facturación Emitida e Ingresos Corporativos", page_icon=":material/bar_chart:", layout="wide")
     st.markdown(CSS_TARJETAS_KPI, unsafe_allow_html=True)
@@ -134,7 +144,9 @@ def main() -> None:
             def archivo_tipo(clave):
                 arch_tipo = tipos_archivo[clave]
                 if not arch_tipo: return None
-                if len(arch_tipo) > 1: return _ArchivoGrupo(arch_tipo)
+                
+                # Usamos la nueva clase segura
+                if len(arch_tipo) > 1: return ArchivoGrupoSeguro(arch_tipo)
                 return arch_tipo[-1]
 
             file_ingresos_facturas = archivo_tipo("ingresos_facturas")
