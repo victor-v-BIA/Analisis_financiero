@@ -8,3 +8,4 @@ reportlab
 kaleido>=1.0.0
 pillow
 pyarrow>=7.0,<25
+google-api-python-client
