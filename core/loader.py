@@ -21,37 +21,74 @@ def cargar_base(uploaded_file) -> pd.DataFrame:
     """Lector universal que delega a la función con caché."""
     return _cargar_base_cache(uploaded_file.name, uploaded_file.getvalue(), CODIGO_VERSION)
 
-def leer_archivo(nombre: str, contenido: bytes) -> pd.DataFrame:
+def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     """
     Lee archivos infiriendo tipos nativos para ahorrar memoria.
     Soporta .parquet, .xlsb, .xlsx y .csv.
+    Soporta múltiples archivos agrupados (tuplas/listas de bytes).
+    FASE 3 (Silver Bullet): Filtra columnas desde la lectura (usecols).
     """
+    # 0. MANEJO DE MÚLTIPLES ARCHIVOS (_ArchivoGrupo)
+    # Si recibimos una tupla o lista, leemos cada uno y los unimos
+    if isinstance(contenido, (tuple, list)):
+        dfs = [leer_archivo(nombre, cont) for cont in contenido]
+        return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
     nombre_lower = nombre.lower()
     
-    # 1. Lectura optimizada por tipo de archivo
+    # 1. EL PORTERO DE COLUMNAS (Diccionario maestro normalizado)
+    COLUMNAS_UTILES = {
+        "uuid", "fechayhora", "fecha", "rfcemisor", "nombreemisor", "razonsocialemisor",
+        "nombredelemisor", "razonsocial", "estatus", "tipodocumento", "tipodedocumento",
+        "tipodecomprobante", "metododepago", "total", "saldoinicial", "saldofinal",
+        "fechadepago", "fechapago", "documentorelacionado", "uuidrelacionado",
+        "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
+        "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
+        "ivatrasladado", "uuiddr", "subtotal"
+    }
+    
+    def es_columna_util(col_name):
+        n = _norm(str(col_name))
+        return (n in COLUMNAS_UTILES) or ("iva" in n and "reten" not in n)
+
+    # 2. Lectura optimizada por tipo de archivo aplicando el filtro
     if nombre_lower.endswith((".parquet", ".pqt")):
-        df = pd.read_parquet(io.BytesIO(contenido))
+        import pyarrow.parquet as pq
+        esquema = pq.read_schema(io.BytesIO(contenido))
+        cols_a_leer = [c for c in esquema.names if es_columna_util(c)]
+        df = pd.read_parquet(io.BytesIO(contenido), columns=cols_a_leer)
+        
     elif nombre_lower.endswith(".xlsb"):
-        df = pd.read_excel(io.BytesIO(contenido), engine="pyxlsb")
+        df = pd.read_excel(io.BytesIO(contenido), engine="pyxlsb", usecols=es_columna_util)
+        
     elif nombre_lower.endswith((".xlsx", ".xls")):
-        df = pd.read_excel(io.BytesIO(contenido), engine="calamine")
+        df = pd.read_excel(io.BytesIO(contenido), engine="calamine", usecols=es_columna_util)
+        
     else:
         for codificacion in ("utf-8-sig", "latin-1"):
             try:
-                df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", encoding=codificacion)
+                df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", 
+                                 encoding=codificacion, usecols=es_columna_util)
                 break
             except UnicodeDecodeError:
                 continue
+            except ValueError:
+                df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", encoding=codificacion)
+                cols_ok = [c for c in df.columns if es_columna_util(c)]
+                df = df[cols_ok]
+                break
 
-    # 2. Limpiar espacios solo en los nombres de las columnas
+    # 3. Limpiar espacios solo en los nombres de las columnas
     df.columns = [str(c).strip() for c in df.columns]
     
-    # 3. Limpiar espacios SOLO en las columnas que realmente contienen texto (Ahorro masivo de RAM)
+    # 4. Limpiar espacios SOLO en las columnas que realmente contienen texto
     cols_texto = df.select_dtypes(include=['object', 'string']).columns
     for col in cols_texto:
         df[col] = df[col].astype(str).str.strip()
         
     return df
+
+
 
 def resolver_columnas(df: pd.DataFrame, requeridas: dict[str, list[str]],
                       opcionales: dict[str, list[str]] | None = None) -> pd.DataFrame:
