@@ -61,7 +61,7 @@ def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
     ))
     if mostrar_diferencia:
         fig.add_trace(go.Scatter(
-            x=x, y=diferencia, name="Diferencia mensual", mode="lines+markers",
+            x=x, y=diferencia, name="diferencia", mode="lines+markers",
             line=dict(color="#F97316", width=3), marker=dict(size=6),
             hovertemplate="<b>%{x}</b><br>Diferencia: $%{y:,.2f}<extra></extra>",
         ))
@@ -190,12 +190,12 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         st.warning(
             "Flujo parcial: la gráfica muestra PUE y los componentes disponibles. "
             "No incluye " + " y ".join(faltan_flujo) +
-            "; no se muestra una diferencia neta que pudiera inducir a error."
+            "; la diferencia representa solo los componentes disponibles."
         )
     st.markdown("**Flujo Fiscal Mensual**" if flujo_completo else "**Flujo Fiscal**")
     fig_flujo = _figura_ingresos_egresos(
         periodos, ingresos_flujo, egresos_flujo,
-        mostrar_diferencia=flujo_completo)
+        mostrar_diferencia=True)
     render_grafica(fig_flujo, key="ing_fig_flujo", incluir_notas=False, width="stretch")
     pdf_elements.append({
         "type": "image",
