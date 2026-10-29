@@ -675,30 +675,29 @@ def _cargar_bases_economicas(lado: str) -> dict:
 # =============== FUNCIONES CON @st.cache_data
 
 # =============== FUNCIONES CON @st.cache_data
-
 @st.cache_data(show_spinner="Procesando facturas…", max_entries=2)
-def _facturas_cache(nombre: str, contenido: bytes, version: str):
-    return leer_facturas(nombre, contenido)
+def _facturas_cache(nombre: str, _contenido: bytes, version: str):
+    return leer_facturas(nombre, _contenido)
 
 @st.cache_data(show_spinner="Procesando facturación recibida…", max_entries=2)
-def _facturas_egresos_cache(nombre: str, contenido: bytes, version: str):
-    return leer_facturas_egresos(nombre, contenido)
+def _facturas_egresos_cache(nombre: str, _contenido: bytes, version: str):
+    return leer_facturas_egresos(nombre, _contenido)
 
 @st.cache_data(show_spinner="Procesando complementos de pago…", max_entries=2)
-def _complementos_cache(nombre: str, contenido: bytes, version: str):
-    return leer_complementos(nombre, contenido)
+def _complementos_cache(nombre: str, _contenido: bytes, version: str):
+    return leer_complementos(nombre, _contenido)
 
 @st.cache_data(show_spinner=False, max_entries=5)
-def _columnas_archivo(nombre: str, contenido: bytes, version: str) -> list[str]:
-    return list(leer_archivo(nombre, contenido).columns)
+def _columnas_archivo(nombre: str, _contenido: bytes, version: str) -> list[str]:
+    return list(leer_archivo(nombre, _contenido).columns)
 
 @st.cache_data(show_spinner="Procesando bases CFDI...", max_entries=2)
-def _cargar_base_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
-    return leer_archivo(nombre, contenido)
+def _cargar_base_cache(nombre: str, _contenido: bytes, version: str) -> pd.DataFrame:
+    return leer_archivo(nombre, _contenido)
 
 
 @st.cache_data(show_spinner=False)
-def _anios_analisis_cache(fac_ing, fac_egr, version: str) -> tuple:
+def _anios_analisis_cache(_fac_ing, _fac_egr, version: str) -> tuple:
     """`obtener_anios_analisis` sobre las facturas de Emitidos (Ingresos) y Recibidos (Egresos), en caché."""
     def leer(lector, archivo):
         if archivo is None:
@@ -707,46 +706,46 @@ def _anios_analisis_cache(fac_ing, fac_egr, version: str) -> tuple:
             return lector(archivo[0], archivo[1], version)[0]
         except KeyError:
             return None
-    return tuple(obtener_anios_analisis(leer(_facturas_cache, fac_ing), leer(_facturas_egresos_cache, fac_egr)))
+    return tuple(obtener_anios_analisis(leer(_facturas_cache, _fac_ing), leer(_facturas_egresos_cache, _fac_egr)))
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _anual_ppd_cache(lado: str, fac: tuple, rep: tuple, anios: tuple, version: str):
+def _anual_ppd_cache(lado: str, _fac: tuple, _rep: tuple, anios: tuple, version: str):
     """Sección 1: `anual_ppd_clientes` / `anual_ppd_proveedores` en caché -> (DataFrame | None, motivo | None)."""
     from core.finance_logic import anual_ppd_clientes, anual_ppd_proveedores
 
     calculo = anual_ppd_clientes if lado == "clientes" else anual_ppd_proveedores
     try:
-        return calculo(_ArchivoMem(*fac), _ArchivoMem(*rep), anios), None
+        return calculo(_ArchivoMem(*_fac), _ArchivoMem(*_rep), anios), None
     except KeyError as e:
         return None, e.args[0]
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _balance_cache(fac_ing: tuple, pago_ing: tuple, fac_egr: tuple, pago_egr: tuple, nomina: tuple,
+def _balance_cache(_fac_ing: tuple, _pago_ing: tuple, _fac_egr: tuple, _pago_egr: tuple, _nomina: tuple,
                    anios: tuple, version: str) -> dict:
     """Sección 2: carga de las 5 bases, complementos mensuales (`rep_mensual_*`) y `_balance_documental_mensual`, todo
     en caché (el cambio de radio/selector no recalcula nada)."""
     from core.finance_logic import (rep_mensual_clientes, rep_mensual_proveedores,
                                     _balance_documental_mensual)
 
-    f_fi, f_pi, f_fe, f_pe = (_ArchivoMem(*a) for a in (fac_ing, pago_ing, fac_egr, pago_egr))
+    f_fi, f_pi, f_fe, f_pe = (_ArchivoMem(*a) for a in (_fac_ing, _pago_ing, _fac_egr, _pago_egr))
     df_fac_ing, df_pago_ing = cargar_base(f_fi), cargar_base(f_pi)
     df_fac_egr = cargar_base(f_fe).rename(columns={"Fecha": "Fecha y Hora"})
     df_pago_egr = cargar_base(f_pe).rename(columns={"Documento Relacionado": "UUID DR"})
     rep_ing = rep_mensual_clientes(f_fi, f_pi, anios)
     rep_egr = rep_mensual_proveedores(f_fe, f_pe, anios)
-    return _balance_documental_mensual(df_fac_ing, df_pago_ing, df_fac_egr, df_pago_egr, cargar_base(_ArchivoMem(*nomina)),
+    return _balance_documental_mensual(df_fac_ing, df_pago_ing, df_fac_egr, df_pago_egr, cargar_base(_ArchivoMem(*_nomina)),
                                        rep_ing=rep_ing, rep_egr=rep_egr, anios=anios)
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _tiempos_cache(lado: str, fac: tuple, pagos: tuple, anios: tuple, freq: str, version: str) -> pd.DataFrame:
+def _tiempos_cache(lado: str, _fac: tuple, _pagos: tuple, anios: tuple, freq: str, version: str) -> pd.DataFrame:
     """Sección 4: `_tiempos_por_periodo` en caché (Egresos con los nombres canónicos de columna, como antes), por Año (`freq='Y'`) o
     por Año-Mes (`freq='M'`), limitado a los años de la ventana `anios` y con la línea de tiempo CONTINUA (del primer al último
     periodo con datos; los intermedios sin aplicaciones quedan con NaN, nunca con 0)."""
     from core.finance_logic import _tiempos_por_periodo
 
-    df_fac, df_pagos = cargar_base(_ArchivoMem(*fac)), cargar_base(_ArchivoMem(*pagos))
+    df_fac, df_pagos = cargar_base(_ArchivoMem(*_fac)), cargar_base(_ArchivoMem(*_pagos))
     if lado == "proveedores":
         df_fac = df_fac.rename(columns={"Fecha": "Fecha y Hora"})
         df_pagos = df_pagos.rename(columns={"Documento Relacionado": "UUID DR"})
@@ -760,12 +759,12 @@ def _tiempos_cache(lado: str, fac: tuple, pagos: tuple, anios: tuple, freq: str,
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _concentracion_cache(fac: tuple, anios: tuple, version: str) -> dict:
+def _concentracion_cache(_fac: tuple, anios: tuple, version: str) -> dict:
     """Sección 5: importes por cliente (RFC Receptor) de la Facturación Emitida Total, en caché. Devuelve un dict con
     `motivo` (str | None), `sin_cliente` (bool) y, si hay datos, `agrupa_por_rfc`, `por_cliente` (Serie descendente),
     `total_general`, `fact_emitida_total` y `nombre_por_id`."""
     try:
-        facturas, _ = _facturas_cache(fac[0], fac[1], version)
+        facturas, _ = _facturas_cache(_fac[0], _fac[1], version)
         facturas, _ = excluir_años_incompletos(facturas, "Fecha", "Facturas", anios)
     except KeyError as e:
         return {"motivo": e.args[0], "sin_cliente": False}
@@ -793,12 +792,12 @@ def _concentracion_cache(fac: tuple, anios: tuple, version: str) -> dict:
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _resumen_sf_cache(fac: tuple, anios: tuple, version: str) -> dict:
+def _resumen_sf_cache(_fac: tuple, anios: tuple, version: str) -> dict:
     """Sección 6: base de facturación emitida y años analizables, en caché. `motivo` (str | None; no se pudo leer la
     base), `vacia`, `anios` (descendente) y `defecto` (último año con periodo anterior comparable)."""
     from core.finance_logic import _base_facturacion_emitida, _clientes_sin_facturacion
 
-    base, motivo = _base_facturacion_emitida(_ArchivoMem(*fac), anios)
+    base, motivo = _base_facturacion_emitida(_ArchivoMem(*_fac), anios)
     if base is None:
         return {"motivo": motivo, "vacia": False, "anios": [], "defecto": None}
     if base.empty:
@@ -809,22 +808,22 @@ def _resumen_sf_cache(fac: tuple, anios: tuple, version: str) -> dict:
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _res_sf_cache(fac: tuple, anio: int, anios: tuple, version: str) -> dict:
+def _res_sf_cache(_fac: tuple, anio: int, anios: tuple, version: str) -> dict:
     """Sección 6: `_clientes_sin_facturacion` del año elegido, en caché."""
     from core.finance_logic import _base_facturacion_emitida, _clientes_sin_facturacion
 
-    base, _ = _base_facturacion_emitida(_ArchivoMem(*fac), anios)
+    base, _ = _base_facturacion_emitida(_ArchivoMem(*_fac), anios)
     return _clientes_sin_facturacion(base, anio)
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _trazabilidad_cache(fac_ing: tuple, pago_ing: tuple, anios: tuple, version: str) -> dict:
+def _trazabilidad_cache(_fac_ing: tuple, _pago_ing: tuple, anios: tuple, version: str) -> dict:
     """Insumos de facturación a crédito, complementos y notas de crédito de CLIENTES para el Índice (ventana `anios`): facturación anual (PUE + PPD, sin NCR);
     PPD con su importe aplicado por REP hasta la fecha de corte (= último REP de la ventana; pagos parciales sumados y con tope en el total de cada factura) solo para facturas
     emitidas con más de `DIAS_GRACIA_PPD` días de antigüedad; PPD sin ningún REP; REP cuyo UUID relacionado no está en la base de facturas; facturas PUE con REP asociado;
     y notas de crédito (total y emitidas con método PPD)."""
     try:
-        fi_all, _ = _facturas_cache(fac_ing[0], fac_ing[1], version)
-        rep_all, _ = _complementos_cache(pago_ing[0], pago_ing[1], version)
+        fi_all, _ = _facturas_cache(_fac_ing[0], _fac_ing[1], version)
+        rep_all, _ = _complementos_cache(_pago_ing[0], _pago_ing[1], version)
     except KeyError as e:
         return {"motivo": e.args[0]}
     norm = lambda s: s.fillna("").astype(str).str.strip().str.upper()
@@ -857,11 +856,11 @@ def _trazabilidad_cache(fac_ing: tuple, pago_ing: tuple, anios: tuple, version: 
 
 
 @st.cache_data(show_spinner=False)
-def _facturacion_anual_cache(fac: tuple, lado: str, anios: tuple, version: str) -> dict:
+def _facturacion_anual_cache(_fac: tuple, lado: str, anios: tuple, version: str) -> dict:
     """Facturación Total (Tipo Factura, PUE + PPD, columna Total, sin NCR) por año de emisión sobre `anios`: {año: MXN} | {'motivo': str}."""
     lector, etiqueta = (_facturas_cache, "Facturas") if lado == "ingresos" else (_facturas_egresos_cache, "Facturación recibida")
     try:
-        f, _ = lector(fac[0], fac[1], version)
+        f, _ = lector(_fac[0], _fac[1], version)
         f, _ = excluir_años_incompletos(f, "Fecha", etiqueta, anios)
     except KeyError as e:
         return {"motivo": e.args[0]}
