@@ -38,8 +38,8 @@ class ArchivoDrive:
         
     def descargar(self):
         # ✅ DESCARGA REAL: Solo se ejecutará cuando Pandas esté listo para filtrarlo.
-        from drive_service import descargar_archivo
-        return descargar_archivo(self.id) 
+        from drive_service import obtener_servicio_drive
+        return obtener_servicio_drive(self.id) 
         # (Nota: si en tu versión anterior tenías io.BytesIO(descargar_archivo...), 
         # déjalo como lo tenías, solo muévelo a este método).
 
