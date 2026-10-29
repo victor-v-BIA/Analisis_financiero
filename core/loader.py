@@ -21,6 +21,8 @@ def cargar_base(uploaded_file) -> pd.DataFrame:
     """Lector universal que delega a la función con caché."""
     return _cargar_base_cache(uploaded_file.name, uploaded_file.getvalue(), CODIGO_VERSION)
 
+import re # Asegúrate de que esto esté arriba o se importe en la función
+
 def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     """
     Lee archivos infiriendo tipos nativos para ahorrar memoria.
@@ -35,20 +37,26 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
 
     nombre_lower = nombre.lower()
     
-    # 1. EL PORTERO DE COLUMNAS (Diccionario maestro normalizado)
+    # 1. EL PORTERO DE COLUMNAS (Diccionario maestro EXPANDIDO)
     COLUMNAS_UTILES = {
-        "uuid", "fechayhora", "fecha", "rfcemisor", "nombreemisor", "razonsocialemisor",
-        "nombredelemisor", "razonsocial", "estatus", "tipodocumento", "tipodedocumento",
-        "tipodecomprobante", "metododepago", "total", "saldoinicial", "saldofinal",
+        "uuid", "fechayhora", "fecha", "fechadeemision", "fechaemision",
+        "rfcemisor", "nombreemisor", "razonsocialemisor", "nombredelemisor", "razonsocial", 
+        "estatus", "tipodocumento", "tipodedocumento", "tipodecomprobante", 
+        "metododepago", "total", "saldoinicial", "saldofinal",
         "fechadepago", "fechapago", "documentorelacionado", "uuidrelacionado",
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
-        "ivatrasladado", "uuiddr", "subtotal"
+        "ivatrasladado", "uuiddr", "subtotal", 
+        "montomxn"  # <--- Agregado para solucionar el error de la Base de PAGO
     }
     
     def es_columna_util(col_name):
-        n = _norm(str(col_name))
-        return (n in COLUMNAS_UTILES) or ("iva" in n and "reten" not in n)
+        n_original = _norm(str(col_name))
+        # Magia absoluta: Quita TODO lo que no sea una letra o un número
+        # "RFC_Emisor", "RFC Emisor", "RFC-Emisor" -> "rfcemisor"
+        n_limpio = re.sub(r'[^a-z0-9]', '', n_original)
+        
+        return (n_limpio in COLUMNAS_UTILES) or ("iva" in n_original and "reten" not in n_original)
 
     # 2. Lectura optimizada por tipo de archivo aplicando el filtro
     if nombre_lower.endswith((".parquet", ".pqt")):
@@ -58,14 +66,12 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         df = pd.read_parquet(io.BytesIO(contenido), columns=cols_a_leer)
         
     elif nombre_lower.endswith(".xlsb"):
-        # Extraemos encabezados primero para evitar el bug de callables en pyxlsb
         with pd.ExcelFile(io.BytesIO(contenido), engine="pyxlsb") as xls:
             df_dummy = pd.read_excel(xls, nrows=0)
             cols_a_leer = [c for c in df_dummy.columns if es_columna_util(c)]
             df = pd.read_excel(xls, usecols=cols_a_leer)
             
     elif nombre_lower.endswith((".xlsx", ".xls")):
-        # Extraemos encabezados primero para evitar el bug de callables en calamine
         with pd.ExcelFile(io.BytesIO(contenido), engine="calamine") as xls:
             df_dummy = pd.read_excel(xls, nrows=0)
             cols_a_leer = [c for c in df_dummy.columns if es_columna_util(c)]
@@ -74,7 +80,6 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     else:
         for codificacion in ("utf-8-sig", "latin-1"):
             try:
-                # read_csv sí soporta callables nativamente sin problemas
                 df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", 
                                  encoding=codificacion, usecols=es_columna_util)
                 break

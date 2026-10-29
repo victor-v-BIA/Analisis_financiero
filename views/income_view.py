@@ -400,14 +400,15 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                 "title": titulo_bloque, 
                 "data": bloque_tres
             })
-
-    with st.container(key="ing_kpis_nomina_pdf"):
-        st.metric(
-            "Ingresos por Nómina",
-            dinero(nomina_ingresos_total) if nomina_ingresos_total is not None else "n/d",
-            help=("Suma del Total de comprobantes de nómina Vigente/Activo por Fecha de Certificación, "
-                  "en los ejercicios seleccionados; se presenta separado de la facturación.")
-        )
+    if nomina_ingresos_total is not None:
+        
+        with st.container(key="ing_kpis_nomina_pdf"):
+            st.metric(
+                "Ingresos por Nómina",
+                dinero(nomina_ingresos_total) if nomina_ingresos_total is not None else "n/d",
+                help=("Suma del Total de comprobantes de nómina Vigente/Activo por Fecha de Certificación, "
+                    "en los ejercicios seleccionados; se presenta separado de la facturación.")
+            )
 
     matriz = matriz_anual(res, ncr_anual)
     if nomina_ingresos_por_anio is None:

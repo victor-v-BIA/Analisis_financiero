@@ -58,6 +58,10 @@ def main() -> None:
             "Empresa con múltiples archivos (Usar Google Drive)",
             help="Marca esta opción si tienes bases divididas en múltiples archivos dentro de una carpeta de Drive."
         )
+        st.markdown("---")
+        if st.button(" Limpiar Caché y Reiniciar"):
+            st.cache_data.clear()
+            st.rerun()
         
         tipos_archivo = {
             "ingresos_facturas": [], "ingresos_pago": [], "egresos_facturas": [],
