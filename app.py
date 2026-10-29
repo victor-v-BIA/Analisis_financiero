@@ -73,7 +73,7 @@ def main() -> None:
         <style>
             [data-testid="stSidebar"] { display: none !important; }
             [data-testid="collapsedControl"] { display: none !important; }
-            .container-bienvenida { text-align: center; margin: 0 auto; max-width: 900px; padding-top: 1rem; }
+            .container-bienvenida { text-align: center; margin: 0 auto; max-width: 900px; padding-top: 0.5rem; }
             .sub-bienvenida { color: #64748B; font-size: 1.1rem; margin-bottom: 2.5rem; }
             .card-role {
                 background: white; border: 1px solid #1D4ED8; border-radius: 8px;
@@ -102,7 +102,7 @@ def main() -> None:
                         alt='Persona Física' style='width: 180px; height: auto;'>
                     </div>
                     <h2 style='color: #1E3A8A; font-weight: 700; margin: 0;'>Persona Física</h2>
-                    <p style='color: #64748B; font-size: 0.9rem; margin-bottom: 20px;'>Análisis simplificado (3 archivos requeridos)</p>
+                    <p style='color: #64748B; font-size: 0.9rem; margin-bottom: 20px;'>Análisis simplificado</p>
                     <hr style='border: 0; border-top: 1px solid #E2E8F0; margin: 20px 0;'>
                     <div class='bullet'>1. Facturas Emitidas<br>
                     2. Facturas Recibidas<br>
@@ -110,7 +110,7 @@ def main() -> None:
                 </div>
                 <br>
                 """, unsafe_allow_html=True)
-                if st.button("Elegir Persona Física (PF)", use_container_width=True, key="btn_pf"):
+                if st.button("Elegir Persona Física", use_container_width=True, key="btn_pf"):
                     st.session_state['regimen'] = "Persona Física"
                     st.rerun()
 
@@ -123,7 +123,7 @@ def main() -> None:
                                 alt='Persona Moral' style='width: 189px; height: auto;'>
                     </div>
                     <h2 style='color: #1E3A8A; font-weight: 700; margin: 0;'>Persona Moral</h2>
-                    <p style='color: #64748B; font-size: 0.9rem; margin-bottom: 20px;'>Análisis integral (5+ archivos requeridos)</p>
+                    <p style='color: #64748B; font-size: 0.9rem; margin-bottom: 20px;'>Análisis integral</p>
                     <hr style='border: 0; border-top: 1px solid #E2E8F0; margin: 20px 0;'>
                     <div class='bullet'>
                     1. Emitidos y Recibidos <br>
@@ -134,7 +134,7 @@ def main() -> None:
                 </div>
                 <br>
                 """, unsafe_allow_html=True)
-                if st.button("Elegir Persona Moral (PM)", use_container_width=True, key="btn_pm"):
+                if st.button("Elegir Persona Moral", use_container_width=True, key="btn_pm"):
                     st.session_state['regimen'] = "Persona Moral"
                     st.rerun()
             
