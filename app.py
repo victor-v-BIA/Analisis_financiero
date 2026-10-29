@@ -37,11 +37,11 @@ class ArchivoDrive:
         return self
         
     def descargar(self):
-        # ✅ DESCARGA REAL: Solo se ejecutará cuando Pandas esté listo para filtrarlo.
-        from drive_service import obtener_servicio_drive
-        return obtener_servicio_drive(self.id) 
-        # (Nota: si en tu versión anterior tenías io.BytesIO(descargar_archivo...), 
-        # déjalo como lo tenías, solo muévelo a este método).
+        # Asegúrate de importar y llamar a 'descargar_archivo_drive'
+        from drive_service import descargar_archivo_drive 
+        
+        # AQUÍ SUELE ESTAR EL ERROR: Si dice obtener_servicio_drive(self.id), cámbialo a:
+        return descargar_archivo_drive(self.id)
 
 class ArchivoGrupoSeguro:
     def __init__(self, archivos):
