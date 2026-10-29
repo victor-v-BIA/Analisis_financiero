@@ -870,60 +870,43 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         st.markdown("**Método de pago facturado**")
         monto_pue = float(d.loc[es_pue, col_monto].sum())
         monto_ppd = float(d.loc[es_ppd, col_monto].sum())
-        if complementos_periodo is None:
-            fig_pie = _fig_pie_metodo_cobro(
-                {"pue": monto_pue, "cobrado": monto_ppd, "pendiente": 0.0},
-                realizado="facturado",
-            )
-        else:
-            resumen = _resumen_metodo_cobro_global(d, complementos_periodo)
-            fig_pie = _fig_pie_metodo_cobro(resumen)
+        resumen = {
+            "total": monto_pue + monto_ppd,
+            "pue": monto_pue,
+            "ppd": monto_ppd,
+            "pendiente": 0.0,
+            "cobrado": monto_ppd,
+        }
+        fig_pie = _fig_pie_metodo_cobro(resumen, realizado="facturado")
         c_pie, c_tabla = st.columns([1, 1], gap="medium")
         with c_pie:
             render_grafica(fig_pie, key="ing_metodo_cobro", incluir_notas=False)
         with c_tabla:
-            if complementos_periodo is None:
-                st.dataframe(
-                    pd.DataFrame({
-                        "Método facturado": ["Facturado PUE", "Facturado PPD"],
-                        "Importe": [dinero(monto_pue), dinero(monto_ppd)],
-                    }),
-                    hide_index=True,
-                )
-            else:
-                st.markdown(_html_resumen_metodo_cobro(resumen, col_monto, rotular_base=False),
-                            unsafe_allow_html=True)
+            st.markdown(
+                _html_resumen_metodo_cobro(
+                    resumen, col_monto, rotular_base=False, incluir_detalle_ppd=False),
+                unsafe_allow_html=True,
+            )
+            if complementos_periodo is not None:
                 st.caption("El cobro PPD global no está distribuido entre facturas.")
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
                 "section_title": "3. Estructura de la Facturación",
-                "title": ("Método de pago facturado (cobros PPD no disponibles)"
-                          if complementos_periodo is None
-                          else "Método de Cobro (complementos no relacionados por factura)"),
+                "title": "Método de pago facturado (PUE y PPD)",
                 "fig": fig_pie,
                 "preserve_textfont_size": True,
             })
-            resumen_pdf = (
-                resumen if complementos_periodo is not None
-                else {
-                    "total": monto_pue + monto_ppd,
-                    "pue": monto_pue,
-                    "ppd": monto_ppd,
-                    "pendiente": 0.0,
-                    "cobrado": 0.0,
-                }
-            )
             pdf_elements.append({
                 "type": "table",
                 "title": "Resumen — Método de pago facturado",
                 "df": pd.DataFrame({
                     "Concepto": [
                         _html_resumen_metodo_cobro(
-                            resumen_pdf,
+                            resumen,
                             col_monto,
                             rotular_base=False,
-                            incluir_detalle_ppd=complementos_periodo is not None,
+                            incluir_detalle_ppd=False,
                             formato_pdf=True,
                         )
                     ],

@@ -418,8 +418,10 @@ def anios_5_archivos(f_emitidos, f_recibidos) -> tuple:
 
 def _preparar_nomina(df_nomina: pd.DataFrame) -> pd.DataFrame | None:
     """Nómina de egresos: comprobantes activos/vigentes; fecha de pago; monto = 'Total'.
-    Devuelve Año, Mes (1-12), Periodo ('AAAA-MM') y Monto, o `None` si faltan la fecha o la columna Total."""
+    Devuelve Año, Mes (1-12), Periodo ('AAAA-MM') y Monto; el formato con Fecha de Certificación se reserva a Ingresos."""
     c_est = buscar_columna(df_nomina.columns, "Estatus")
+    if buscar_columna(df_nomina.columns, "Fecha de Certificación") is not None:
+        return None
     c_fecha = (buscar_columna(df_nomina.columns, "Fecha Pago")
                or buscar_columna(df_nomina.columns, "Fecha de Pago"))
     c_monto = buscar_columna(df_nomina.columns, "Total")

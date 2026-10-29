@@ -610,11 +610,13 @@ def _nomina_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]
 
 
 def _columnas_nomina_ingresos(df: pd.DataFrame) -> tuple[str, str, str] | None:
-    col_fecha = buscar_columna(df.columns, "Fecha de Certificación")
+    col_fecha_certificacion = buscar_columna(df.columns, "Fecha de Certificación")
+    col_fecha_pago = buscar_columna(df.columns, "Fecha de Pago") or buscar_columna(df.columns, "Fecha Pago")
+    col_fecha = col_fecha_certificacion or buscar_columna(df.columns, "Fecha de Emisión")
     col_total = buscar_columna(df.columns, "Total")
     col_estatus = buscar_columna(df.columns, "Estatus")
-    col_fecha_pago = buscar_columna(df.columns, "Fecha de Pago") or buscar_columna(df.columns, "Fecha Pago")
-    if col_fecha is None or col_total is None or col_estatus is None or col_fecha_pago is not None:
+    if (col_fecha is None or col_total is None or col_estatus is None
+            or (col_fecha_certificacion is None and col_fecha_pago is not None)):
         return None
     return col_fecha, col_total, col_estatus
 
@@ -624,10 +626,10 @@ def _es_nomina_ingresos(df: pd.DataFrame) -> bool:
 
 
 def _nomina_ingresos_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
-    """Nómina del formato de ingresos, que usa Fecha de Certificación y Total."""
+    """Nómina de ingresos por Fecha de Certificación (o Fecha de Emisión en ese formato), Total y Estatus."""
     columnas = _columnas_nomina_ingresos(df)
     if columnas is None:
-        return None, "se requiere el formato de nómina con Fecha de Certificación, Total y Estatus"
+        return None, "se requiere Fecha de Certificación (o Fecha de Emisión), Total y Estatus; el formato con Fecha Pago es de Egresos"
 
     col_fecha, col_total, col_estatus = columnas
     col_tipo = buscar_columna(df.columns, "Tipo de Factura")
@@ -643,7 +645,7 @@ def _nomina_ingresos_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, st
     if total.isna().any():
         return None, f"{int(total.isna().sum())} registro(s) de nómina tienen un Total no válido"
     if fechas.isna().any():
-        return None, f"{int(fechas.isna().sum())} registro(s) de nómina tienen Fecha de Certificación no válida"
+        return None, f"{int(fechas.isna().sum())} registro(s) de nómina tienen una fecha de ingreso no válida"
     mensual = pd.DataFrame({"Mes": fechas.dt.to_period("M"), "Valor": total}).dropna(subset=["Mes"])
     return mensual.groupby("Mes")["Valor"].sum(), None
 

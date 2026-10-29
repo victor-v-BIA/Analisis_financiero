@@ -422,8 +422,10 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
     if pendiente < 0:                                       # complementos > facturación PPD: el sector cobrado llega solo hasta el PPD facturado
         cobrado, pendiente = r["ppd"], 0.0
         
-    sectores = [(n, v, c) for n, v, c in ((  "PUE", r["pue"], paleta["pue"]), (f"PPD {realizado}", cobrado, paleta["ppd"]),
-                                         ("PPD pendiente", pendiente, paleta["pendiente"])) if v > 0.005]
+    filas = [("PUE", r["pue"], paleta["pue"]),
+             (f"PPD {realizado}", cobrado, paleta["ppd"]),
+             ("PPD pendiente", pendiente, paleta["pendiente"])]
+    sectores = [(n, v, c) for n, v, c in filas if v > 0.005]
     nombres, valores, colores = ([s[i] for s in sectores] for i in range(3))
     
     # Determinamos dinámicamente el índice del valor más alto para ponerle texto blanco y a los demás negro

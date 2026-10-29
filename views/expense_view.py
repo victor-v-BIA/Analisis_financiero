@@ -156,7 +156,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         nomina_por_año = pd.Series(dtype=float)
         st.warning(
             "Falta un archivo válido de nómina para Egresos. Este módulo solo acepta el formato con Fecha Pago; "
-            "la nómina con Fecha de Certificación se considera exclusivamente en Ingresos."
+            "la nómina con Fecha de Certificación o Fecha de Emisión se considera exclusivamente en Ingresos."
         )
 
     # Facturación/Pagado se calculan SOLO con Factura -las NCR se excluyen aquí y se manejan aparte-.
