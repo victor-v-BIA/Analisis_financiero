@@ -8,21 +8,29 @@ from googleapiclient.http import MediaIoBaseDownload
 
 def obtener_servicio_drive():
     SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+    creds = None
     
-    # 1. Intentar leer desde los secretos de Streamlit Cloud
-    if "gcp_credentials" in st.secrets:
-        creds_dict = json.loads(st.secrets["gcp_credentials"])
-        creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-        
-    # 2. Alternativa: intentar leer el archivo físico (PC local)
-    elif os.path.exists('google_credentials.json'):
+    # 1. Prioridad Local: Buscar el archivo físico primero
+    # (Asegúrate de que 'google_credentials.json' esté en la misma carpeta que app.py)
+    if os.path.exists('google_credentials.json'):
         creds = service_account.Credentials.from_service_account_file('google_credentials.json', scopes=SCOPES)
         
+    # 2. Prioridad Nube: Solo si NO hay archivo local
     else:
-        raise FileNotFoundError("No se encontraron las credenciales de Google Drive (ni en st.secrets ni local).")
+        try:
+            # 🛑 TODO el bloque de secrets debe estar indentado dentro del "try"
+            if "gcp_credentials" in st.secrets:
+                creds_dict = dict(st.secrets["gcp_credentials"])
+                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        except Exception:
+            # Si estamos en local y no hay secrets, fallará silenciosamente aquí
+            pass
+            
+    # 3. Validación final
+    if creds is None:
+        raise FileNotFoundError("No se encontró 'google_credentials.json' en tu carpeta local, y tampoco hay secretos en la nube.")
         
     return build('drive', 'v3', credentials=creds)
-
 def descargar_archivo_drive(file_id: str) -> bytes:
     """Descarga un archivo de Google Drive directamente a la memoria RAM"""
     servicio = obtener_servicio_drive()

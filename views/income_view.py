@@ -411,9 +411,8 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             )
 
     matriz = matriz_anual(res, ncr_anual)
-    if nomina_ingresos_por_anio is None:
-        matriz["Ingresos por Nómina"] = np.nan
-    else:
+
+    if nomina_ingresos_por_anio:
         matriz["Ingresos por Nómina"] = [
             nomina_ingresos_por_anio.get(int(anio), 0.0) for anio in matriz.index
         ]
@@ -535,6 +534,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         # _insight_html(_insight_ingresos_gastos(anios, ing, gas))
         
         nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
+        pdf_elements.append({"type": "heading", "text": "2. Evolución de Ingresos"})
         pdf_elements.append({
             "type": "image",
             "title": "Ingresos vs Gastos Anuales (Millones MXN)",
@@ -579,8 +579,8 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
                         
                         # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
-                        textposition="bottom center",
-                        textfont=dict(size=11),
+                        textposition="bottom right",
+                        textfont=dict(size=11, color="white"),
                         cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
                         
                         hovertemplate="<b>%{x}</b><br>ITAEE (Base 100): %{y:.1f}<extra></extra>"
@@ -599,8 +599,8 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
                                                 
                         # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
-                        textposition="bottom center",
-                        textfont=dict(size=11),
+                        textposition="top right",
+                        textfont=dict(size=11,color="#cacfd9"),
                         cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
                                                           
                         hovertemplate="<b>%{x}</b><br>INPP (Base 100): %{y:.1f}<extra></extra>"))

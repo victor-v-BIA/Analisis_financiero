@@ -214,8 +214,9 @@ def main() -> None:
 
         # --- MODO CARGA LOCAL TRADICIONAL ---
         else:
-            archivos_subidos = st.file_uploader("Sube tus reportes aquí (Excel/CSV/XLSB)", 
-                                                type=['csv', 'xlsx', 'xls', 'xlsb'], accept_multiple_files=True)
+            archivos_subidos = st.file_uploader("Sube tus reportes aquí (Excel/CSV/XLSB/Parquet)",
+                                                type=['csv', 'xlsx', 'xls', 'xlsb', 'parquet', 'pqt'],
+                                                accept_multiple_files=True)
             if archivos_subidos:
                 for f in archivos_subidos:
                     nombre = f.name.lower()
