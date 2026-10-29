@@ -43,8 +43,9 @@ class ArchivoGrupoSeguro:
         self.name = archivos[-1].name if archivos else "grupo_archivos"
 
     def getvalue(self):
-        # Garantiza que extraemos los bytes de cada archivo, no los nombres
-        return [a.getvalue() for a in self.archivos]
+        # ANTES: return [a.getvalue() for a in self.archivos] (Esto colapsaba la RAM)
+        # AHORA: Devolvemos la lista de objetos intacta para procesarla uno por uno
+        return self.archivos
 
     
 def main() -> None:

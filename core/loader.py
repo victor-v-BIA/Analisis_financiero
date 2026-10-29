@@ -8,6 +8,7 @@ import pyarrow as pa
 import streamlit as st
 import io
 import re
+import gc
 import numpy as np
 from pathlib import Path
 from config import (CODIGO_VERSION, COLS_FACTURAS,
@@ -21,7 +22,7 @@ def cargar_base(uploaded_file) -> pd.DataFrame:
     """Lector universal que delega a la función con caché."""
     return _cargar_base_cache(uploaded_file.name, uploaded_file.getvalue(), CODIGO_VERSION)
 
-import re # Asegúrate de que esto esté arriba o se importe en la función
+
 
 def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     """
@@ -32,7 +33,20 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     """
     # 0. MANEJO DE MÚLTIPLES ARCHIVOS (_ArchivoGrupo)
     if isinstance(contenido, (tuple, list)):
-        dfs = [leer_archivo(nombre, cont) for cont in contenido]
+        dfs = []
+        for cont in contenido:
+            # 1. Si es un archivo de Drive, lo descargamos (getvalue), si es local, usamos los bytes
+            bytes_data = cont.getvalue() if hasattr(cont, 'getvalue') else cont
+            nombre_archivo = cont.name if hasattr(cont, 'name') else nombre
+            
+            # 2. Leemos y filtramos solo este archivo
+            df_temp = leer_archivo(nombre_archivo, bytes_data)
+            dfs.append(df_temp)
+            
+            # 3. ¡LA MAGIA!: Destruimos los 100MB+ de bytes crudos de este archivo inmediatamente
+            del bytes_data
+            gc.collect() 
+            
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
     nombre_lower = nombre.lower()
