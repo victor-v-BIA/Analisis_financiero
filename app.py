@@ -27,15 +27,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 class ArchivoDrive:
-    def __init__(self, name, id_drive):
+    def __init__(self, name, id):
         self.name = name
-        self.id_drive = id_drive
-        self._bytes = None
-
+        self.id = id
+        
     def getvalue(self):
-        if self._bytes is None:
-            self._bytes = descargar_archivo_drive(self.id_drive)
-        return self._bytes
+        # 🛑 MAGIA PEREZOSA: Si una vista intenta leerlo antes de tiempo,
+        # simplemente nos devolvemos a nosotros mismos. ¡No descargamos nada!
+        return self
+        
+    def descargar(self):
+        # ✅ DESCARGA REAL: Solo se ejecutará cuando Pandas esté listo para filtrarlo.
+        from drive_service import descargar_archivo
+        return descargar_archivo(self.id) 
+        # (Nota: si en tu versión anterior tenías io.BytesIO(descargar_archivo...), 
+        # déjalo como lo tenías, solo muévelo a este método).
 
 class ArchivoGrupoSeguro:
     def __init__(self, archivos):

@@ -27,31 +27,43 @@ def cargar_base(uploaded_file) -> pd.DataFrame:
 def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     """
     Lee archivos infiriendo tipos nativos para ahorrar memoria.
-    Soporta .parquet, .xlsb, .xlsx y .csv.
-    Soporta múltiples archivos agrupados (tuplas/listas de bytes).
     FASE 3 (Silver Bullet): Filtra columnas desde la lectura (usecols).
+    DESCARGA PEREZOSA EXTREMA: Destruye los bytes tras la lectura.
     """
-    # 0. MANEJO DE MÚLTIPLES ARCHIVOS (_ArchivoGrupo)
-    if isinstance(contenido, (tuple, list)):
+    # 0. MANEJO DE MÚLTIPLES ARCHIVOS (Grupos)
+    if isinstance(contenido, list):
         dfs = []
         for cont in contenido:
-            # 1. Si es un archivo de Drive, lo descargamos (getvalue), si es local, usamos los bytes
-            bytes_data = cont.getvalue() if hasattr(cont, 'getvalue') else cont
+            # Extraemos los bytes de forma segura y perezosa
+            if hasattr(cont, 'descargar'):
+                bytes_data = cont.descargar()
+            elif hasattr(cont, 'getvalue'):
+                bytes_data = cont.getvalue()
+            else:
+                bytes_data = cont
+                
             nombre_archivo = cont.name if hasattr(cont, 'name') else nombre
-            
-            # 2. Leemos y filtramos solo este archivo
             df_temp = leer_archivo(nombre_archivo, bytes_data)
             dfs.append(df_temp)
             
-            # 3. ¡LA MAGIA!: Destruimos los 100MB+ de bytes crudos de este archivo inmediatamente
+            # Liberamos RAM de esta fracción antes de descargar la siguiente
             del bytes_data
-            gc.collect() 
+            gc.collect()
             
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
+    # 0.5 ARCHIVO INDIVIDUAL PEREZOSO (Cuando no vienen en grupo)
+    if hasattr(contenido, 'descargar'):
+        contenido = contenido.descargar()
+    elif hasattr(contenido, 'getvalue') and not isinstance(contenido, bytes):
+        try:
+            contenido = contenido.getvalue()
+        except Exception:
+            pass
+
     nombre_lower = nombre.lower()
     
-    # 1. EL PORTERO DE COLUMNAS (Diccionario maestro EXPANDIDO)
+    # 1. EL PORTERO DE COLUMNAS
     COLUMNAS_UTILES = {
         "uuid", "fechayhora", "fecha", "fechadeemision", "fechaemision",
         "rfcemisor", "nombreemisor", "razonsocialemisor", "nombredelemisor", "razonsocial", 
@@ -60,19 +72,15 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "fechadepago", "fechapago", "documentorelacionado", "uuidrelacionado",
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
-        "ivatrasladado", "uuiddr", "subtotal", 
-        "montomxn"  # <--- Agregado para solucionar el error de la Base de PAGO
+        "ivatrasladado", "uuiddr", "subtotal", "montomxn"
     }
     
     def es_columna_util(col_name):
         n_original = _norm(str(col_name))
-        # Magia absoluta: Quita TODO lo que no sea una letra o un número
-        # "RFC_Emisor", "RFC Emisor", "RFC-Emisor" -> "rfcemisor"
         n_limpio = re.sub(r'[^a-z0-9]', '', n_original)
-        
         return (n_limpio in COLUMNAS_UTILES) or ("iva" in n_original and "reten" not in n_original)
 
-    # 2. Lectura optimizada por tipo de archivo aplicando el filtro
+    # 2. LECTURA QUIRÚRGICA
     if nombre_lower.endswith((".parquet", ".pqt")):
         import pyarrow.parquet as pq
         esquema = pq.read_schema(io.BytesIO(contenido))
@@ -105,10 +113,14 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
                 df = df[cols_ok]
                 break
 
-    # 3. Limpiar espacios solo en los nombres de las columnas
+    # 2.5 ¡EL GOLPE FINAL AL OOM KILLER! 💥
+    # Destruimos los megabytes crudos en cuanto Pandas crea la pequeña tabla útil
+    if isinstance(contenido, bytes):
+        del contenido
+    gc.collect()
+
+    # 3. Formateo final
     df.columns = [str(c).strip() for c in df.columns]
-    
-    # 4. Limpiar espacios SOLO en las columnas que realmente contienen texto
     cols_texto = df.select_dtypes(include=['object', 'string']).columns
     for col in cols_texto:
         df[col] = df[col].astype(str).str.strip()
