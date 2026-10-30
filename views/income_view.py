@@ -451,9 +451,19 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         _vista_economica("ingresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5, pdf_elements)
         return
 
+    facturas_concentracion = df_facturas.copy()
+    for columna in ("Nombre_Receptor", "RFC_Receptor"):
+        if columna in facturas_concentracion.columns:
+            valores = facturas_concentracion[columna].fillna("").astype(str).str.strip()
+            faltantes = valores.str.casefold().isin({"", "nan", "none", "null", "<na>"})
+            facturas_concentracion[columna] = valores.mask(faltantes, "")
+
     _bloque_concentracion(
-        _preparar_concentracion(df_facturas, "Nombre_Receptor" if "Nombre_Receptor" in df_facturas.columns else None,
-                                "RFC_Receptor" if "RFC_Receptor" in df_facturas.columns else None),
+        _preparar_concentracion(
+            facturas_concentracion,
+            "Nombre_Receptor" if "Nombre_Receptor" in facturas_concentracion.columns else None,
+            "RFC_Receptor" if "RFC_Receptor" in facturas_concentracion.columns else None,
+        ),
         etiqueta="Clientes",
         pagos_agrupados=(_pagos_por_factura(cargar_base(file_ingresos_pago))
                          if complementos_disponibles else None),

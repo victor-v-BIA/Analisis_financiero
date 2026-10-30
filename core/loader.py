@@ -9,6 +9,7 @@ import streamlit as st
 import io
 import re
 import gc
+import hashlib
 import numpy as np
 from pathlib import Path
 from config import (CODIGO_VERSION, COLS_FACTURAS,
@@ -164,9 +165,26 @@ def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) 
         st.stop()
 
 def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
-    """Facturas emitidas: Activo/Vigente + (Factura o NCR); Fecha sin hora; PUE/PPD; Total numérico (una fila por UUID)."""
+    """Facturas emitidas: activas, con fecha, método y total válidos; conserva Razón Social como receptor si falta ese campo."""
     avisos: list[str] = []
-    df = resolver_columnas(leer_archivo(nombre, contenido), COLS_FACTURAS)
+    base = leer_archivo(nombre, contenido)
+    columnas_nombre_receptor = (
+        "Razon Social Receptor", "Nombre Receptor", "Razon Social Cliente", "Razon Social.1",
+        "Razon Social",
+    )
+    columnas_disponibles = []
+    for nombre_columna in columnas_nombre_receptor:
+        columna = buscar_columna(base.columns, nombre_columna)
+        if columna is not None and columna not in columnas_disponibles:
+            columnas_disponibles.append(columna)
+    if columnas_disponibles:
+        nombre_receptor = pd.Series("", index=base.index, dtype="object")
+        for columna in columnas_disponibles:
+            valores = base[columna].fillna("").astype(str).str.strip()
+            presentes = ~valores.str.casefold().isin({"", "nan", "none", "null", "<na>"})
+            nombre_receptor = nombre_receptor.mask(nombre_receptor.eq("") & presentes, valores)
+        base["_Nombre_Receptor_Archivo"] = nombre_receptor
+    df = resolver_columnas(base, COLS_FACTURAS)
     n0 = len(df)
 
     tipo_crudo = df["Tipo Documento"].astype(str)
@@ -226,8 +244,11 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
         df = df.assign(**{"Nombre Emisor": df["Nombre Emisor"].where(~df["RFC Emisor"].isin(ambiguos), "")})
 
     col_rfc_receptor = buscar_columna(df.columns, "RFC Receptor")
-    col_nombre_receptor = next((c for c in (buscar_columna(df.columns, n) for n in (
-        "Razon Social Receptor", "Nombre Receptor", "Razon Social Cliente", "Razon Social.1")) if c), None)
+    col_nombre_receptor = ("_Nombre_Receptor_Archivo"
+                           if "_Nombre_Receptor_Archivo" in df.columns else
+                           next((c for c in (buscar_columna(df.columns, n) for n in (
+                               "Razon Social Receptor", "Nombre Receptor", "Razon Social Cliente",
+                               "Razon Social.1")) if c), None))
     
     columnas = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total", "Es_NCR"]
     renombres = {"RFC Emisor": "RFC_Emisor", "Nombre Emisor": "Nombre_Emisor"}
@@ -688,8 +709,31 @@ def _cargar_bases_economicas(lado: str) -> dict:
 
 # =============== FUNCIONES CON @st.cache_data
 @st.cache_data(show_spinner="Procesando facturas…", max_entries=2)
-def _facturas_cache(nombre: str, _contenido: bytes, version: str):
+def _facturas_cache_procesar(nombre: str, _contenido, version: str, huella_contenido: str):
     return leer_facturas(nombre, _contenido)
+
+
+def _facturas_cache(nombre: str, contenido, version: str):
+    if isinstance(contenido, list):
+        partes = []
+        huella = hashlib.sha256()
+        for archivo in contenido:
+            if hasattr(archivo, "descargar"):
+                bytes_archivo = archivo.descargar()
+            elif hasattr(archivo, "getvalue"):
+                bytes_archivo = archivo.getvalue()
+            else:
+                bytes_archivo = archivo
+            nombre_archivo = archivo.name if hasattr(archivo, "name") else nombre
+            huella.update(nombre_archivo.encode("utf-8"))
+            huella.update(hashlib.sha256(bytes_archivo).digest())
+            partes.append(_ArchivoMem(nombre_archivo, bytes_archivo))
+        contenido = partes
+        huella_contenido = huella.hexdigest()
+    else:
+        huella_contenido = hashlib.sha256(contenido).hexdigest()
+
+    return _facturas_cache_procesar(nombre, contenido, version, huella_contenido)
 
 @st.cache_data(show_spinner="Procesando facturación recibida…", max_entries=2)
 def _facturas_egresos_cache(nombre: str, _contenido: bytes, version: str):
