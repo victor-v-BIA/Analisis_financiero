@@ -565,10 +565,8 @@ def _fig_pie_nomina_gastos(r: dict, gastos_label: str = "Gastos") -> go.Figure:
     
     # Determinamos de forma dinámica cuál valor es el mayor para ponerle texto blanco y al menor negro
     # Si el gasto es mayor o igual a la nómina, el primer color es blanco y el segundo negro, y viceversa.
-    if valores[0] >= valores[1]:
-        colores_texto = ['white', 'black']
-    else:
-        colores_texto = ['black', 'white']
+    
+    colores_texto = ['black', 'white']
 
     fig = go.Figure(go.Pie(
         labels=labels, 
