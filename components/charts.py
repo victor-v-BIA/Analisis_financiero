@@ -783,7 +783,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", 
         mode="lines+markers+text",  # <-- Añadido "+text" para mostrar etiquetas fijas
         text=texto_inpc,            # <-- Lista con el texto de cada punto
-        textposition="top center",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
+        textposition="top left",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
         textfont=dict(color="#FA4A15", size=11), # Opcional: color a juego con la línea
         line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,
@@ -796,7 +796,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         x=anios_str, y=idx_emp, name="Ingresos (Base 100)", 
         mode="lines+markers+text",  # <-- Añadido "+text"
         text=texto_ingresos,        # <-- Lista con el texto de cada punto
-        textposition="bottom center", # <-- Posición para evitar que se encimen con los del INPC
+        textposition="bottom right", # <-- Posición para evitar que se encimen con los del INPC
         textfont=dict(color="#2563EB", size=11), # Opcional: color a juego
         line=dict(color="#2563EB", width=3), marker=dict(size=9, color="#2563EB"),
         customdata=datos_hover_ingresos,
