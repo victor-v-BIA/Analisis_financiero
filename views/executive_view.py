@@ -577,11 +577,12 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             pdf_elements.append({"type": "table", "title": "Detalle de Concentración por Cliente", "df": tabla_conc_pdf, 
                 "note": nota_conc})
             col_tabla.dataframe(
-                tabla_conc.head(10),
+                tabla_conc.head(10).style.format({
+                    "Facturación Total": lambda val: _formatear_mxn(val) if pd.notnull(val) else val
+                }),
                 hide_index=True,
                 width='stretch',
                 height=ALTURA_CONC,
-                column_config={"Facturación Total": st.column_config.NumberColumn(format="$%.2f")}
             )
     elif conc["motivo"] is not None:
         st.info(f"No se muestra esta sección: {conc['motivo']}.")
