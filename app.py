@@ -6,17 +6,18 @@ aplica los estilos globales, enruta los módulos y maneja las funciones de contr
 '''
 
 import streamlit as st
-from python_calamine import CalamineError
-from config import CSS_TARJETAS_KPI
 from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
 from views.expense_view import (modulo_egresos)
 from drive_service import descargar_archivo_drive
 
 # 1. Importar estilos globales de tu archivo modular
-from components.styles import  CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
+# 1. Importar estilos globales de tu archivo modular
+from components.styles import CSS_IMPRESION_GLOBAL, CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
+from config import CSS_TARJETAS_KPI
 
-# 2. Inyectar estilos globales
+# 2. Inyectar estilos globales (Asegúrate de tener unsafe_allow_html=True en TODOS)
+st.markdown(CSS_IMPRESION_GLOBAL, unsafe_allow_html=True)
 st.markdown(CSS_FUENTE_GLOBAL, unsafe_allow_html=True)
 
 class ArchivoDrive:
