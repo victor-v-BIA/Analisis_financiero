@@ -116,7 +116,7 @@ def main() -> None:
         else:
             st.info("**Modo actual:** Persona Moral (PM)")
             
-        if st.button("Cambiar régimen", key="btn_regresar"):
+        if st.button("Cambiar Tipo de Contribuyente", key="btn_regresar"):
             st.session_state['regimen'] = None
             st.cache_data.clear()
             st.rerun()
