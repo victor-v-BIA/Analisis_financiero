@@ -199,7 +199,6 @@ def main() -> None:
                 archivos_listos = True
                 st.session_state['paso_completado'] = True
 
-        st.markdown("---")
         if st.button("Limpiar Diagnóstico y Reiniciar"):
             _reiniciar_diagnostico()
 
