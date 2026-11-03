@@ -329,7 +329,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                     elements=pdf_elements
                 )
                 st.download_button(
-                    label="📄 Descargar Reporte PDF (Vista Financiera)",
+                    label="Descargar Reporte PDF (Vista Financiera)",
                     data=pdf_data,
                     file_name="Reporte_Egresos_Vista_Financiera.pdf",
                     mime="application/pdf",
