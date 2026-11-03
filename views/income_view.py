@@ -296,6 +296,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     if file_nomina is not None:
         nomina_ingresos, motivo_nomina = _nomina_ingresos_mensual_mxn(cargar_base(file_nomina))
         if motivo_nomina or nomina_ingresos is None:
+            print(st.session_state, "*********")
             st.info(f"La nómina no se sumó como ingreso: {motivo_nomina or 'no se generó una serie mensual válida'}.")
         else:
             nomina_ingresos = nomina_ingresos[nomina_ingresos.index.year.isin(ejercicios)]
@@ -412,7 +413,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
 
     matriz = matriz_anual(res, ncr_anual)
 
-    if nomina_ingresos_por_anio:
+    if nomina_ingresos_por_anio is not None:
         matriz["Ingresos por Nómina"] = [
             nomina_ingresos_por_anio.get(int(anio), 0.0) for anio in matriz.index
         ]
