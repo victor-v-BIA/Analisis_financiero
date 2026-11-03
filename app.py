@@ -118,9 +118,9 @@ def main() -> None:
         st.header("Carga de Datos")
         
         if st.session_state['regimen'] == "Persona Física":
-            st.info("**Modo actual:** Persona Física (PF)")
+            st.info("**Modo actual:** Persona Física")
         else:
-            st.info("**Modo actual:** Persona Moral (PM)")
+            st.info("**Modo actual:** Persona Moral")
             
         if st.button("Cambiar Tipo de Contribuyente", key="btn_regresar"):
             _reiniciar_diagnostico()
