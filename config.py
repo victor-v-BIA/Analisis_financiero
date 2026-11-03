@@ -196,7 +196,7 @@ SEPARADOR_PIE = "rgba(14,17,23,0.9)"
 #  **************** EGRESOS *************
 #  ============================================
 # Categorías de Egresos, con el mismo nombre y color en barras, sectores, leyendas, tooltips e indicadores
-NOMBRE_EGR_PUE, NOMBRE_EGR_PPD, NOMBRE_NOMINA = "Egresos PUE", "Egresos PPD", "Nómina"
+NOMBRE_EGR_PUE, NOMBRE_EGR_PPD, NOMBRE_NOMINA = "PUE", "PPD", "Nómina"
 COLOR_EGR_PUE, COLOR_EGR_PPD, COLOR_NOMINA = "#3B82F6", "#7DD3FC", "#F59E0B" # azul medio · azul claro · naranja (la nómina se distingue de los proveedores)
 COLOR_GASTOS = "#7DD3FC" # «Gastos (Proveedores)» en Nómina vs. Gastos: azul claro
 
