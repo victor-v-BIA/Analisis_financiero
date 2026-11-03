@@ -515,7 +515,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 "#1D4ED8",  # Azul rey profundo
                 "#2563EB",  # Azul vivo principal
                 "#3B82F6",  # Azul claro brillante pero sólido
-                "#60A5FA"   # Azul cielo (último tono, pero aún legible)
+                "#60A5FA"   # Azul cielo
             ]
             
             # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
@@ -527,7 +527,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 hole=0.5, 
                 custom_data=[nombres_completos],
                 template="plotly_white",
-                color_discrete_sequence=colores_azules  # <-- Aplicamos la paleta de azules aquí
+                color_discrete_sequence=colores_azules  # <-- paleta de azules
             )
             
             # 2. Configuramos el textinfo, posición y el tamaño de fuente (size=18)
@@ -578,7 +578,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 "note": nota_conc})
             col_tabla.dataframe(
                 tabla_conc.head(10).style.format({
-                    "Facturación Total": lambda val: _formatear_mxn(val) if pd.notnull(val) else val
+                    "Facturación Total": lambda val: _formatear_mxn(val) if pd.notnull(val) else val,
+                    "%": lambda val: f"{val:,.2f}%" if pd.notnull(val) else val,
                 }),
                 hide_index=True,
                 width='stretch',
