@@ -13,11 +13,10 @@ from drive_service import descargar_archivo_drive
 
 # 1. Importar estilos globales de tu archivo modular
 # 1. Importar estilos globales de tu archivo modular
-from components.styles import CSS_IMPRESION_GLOBAL, CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
+from components.styles import  CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
 from config import CSS_TARJETAS_KPI
 
 # 2. Inyectar estilos globales (Asegúrate de tener unsafe_allow_html=True en TODOS)
-st.markdown(CSS_IMPRESION_GLOBAL, unsafe_allow_html=True)
 st.markdown(CSS_FUENTE_GLOBAL, unsafe_allow_html=True)
 
 class ArchivoDrive:
