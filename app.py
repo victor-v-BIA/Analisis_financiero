@@ -59,8 +59,8 @@ def main() -> None:
         
         st.markdown("""
             <div class='container-bienvenida'>
-                <h1 style='color: #0F172A; font-weight: 800; font-size: 2.5rem;'>Selecciona el régimen de la empresa</h1>
-                <p class='sub-bienvenida'>Para comenzar el diagnóstico, necesitamos personalizar tus preferencias.</p>
+                <h1 style='color: #0F172A; font-weight: 800; font-size: 2.5rem;'>Selecciona el tipo de contribuyente </h1>
+                <p class='sub-bienvenida'>Para comenzar, necesitamos personalizar tus preferencias.</p>
             </div>
         """, unsafe_allow_html=True)
         
