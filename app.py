@@ -38,6 +38,12 @@ class ArchivoGrupoSeguro:
 
     def getvalue(self):
         return self.archivos
+
+def _reiniciar_diagnostico() -> None:
+    st.cache_data.clear()
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
+    st.rerun()
     
 def main() -> None:
     st.set_page_config(page_title="Facturación Emitida e Ingresos Corporativos", page_icon=":material/bar_chart:", layout="wide")
@@ -117,9 +123,7 @@ def main() -> None:
             st.info("**Modo actual:** Persona Moral (PM)")
             
         if st.button("Cambiar Tipo de Contribuyente", key="btn_regresar"):
-            st.session_state['regimen'] = None
-            st.cache_data.clear()
-            st.rerun()
+            _reiniciar_diagnostico()
 
         st.markdown("---")
         
@@ -197,10 +201,7 @@ def main() -> None:
 
         st.markdown("---")
         if st.button("Limpiar Diagnóstico y Reiniciar"):
-            st.cache_data.clear()
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
-            st.rerun()
+            _reiniciar_diagnostico()
 
         if timbrado_omitido:
             st.warning("Archivos de Timbrado omitidos.")
