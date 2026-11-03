@@ -8,23 +8,16 @@ aplica los estilos globales, enruta los módulos y maneja las funciones de contr
 import streamlit as st
 from python_calamine import CalamineError
 from config import CSS_TARJETAS_KPI
-from components.styles import CSS_IMPRESION_GLOBAL
 from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
 from views.expense_view import (modulo_egresos)
-
 from drive_service import descargar_archivo_drive
 
-# 1. Inyectar estilos globales
-st.markdown(CSS_IMPRESION_GLOBAL, unsafe_allow_html=True)
-st.markdown("""
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap');
-        html, body, [class*="css"] {
-            font-family: 'Open Sans', sans-serif !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# 1. Importar estilos globales de tu archivo modular
+from components.styles import  CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
+
+# 2. Inyectar estilos globales
+st.markdown(CSS_FUENTE_GLOBAL, unsafe_allow_html=True)
 
 class ArchivoDrive:
     def __init__(self, name, id):
@@ -32,15 +25,10 @@ class ArchivoDrive:
         self.id = id
         
     def getvalue(self):
-        # 🛑 MAGIA PEREZOSA: Si una vista intenta leerlo antes de tiempo,
-        # simplemente nos devolvemos a nosotros mismos. ¡No descargamos nada!
         return self
         
     def descargar(self):
-        # Asegúrate de importar y llamar a 'descargar_archivo_drive'
         from drive_service import descargar_archivo_drive 
-        
-        # AQUÍ SUELE ESTAR EL ERROR: Si dice obtener_servicio_drive(self.id), cámbialo a:
         return descargar_archivo_drive(self.id)
 
 class ArchivoGrupoSeguro:
@@ -49,16 +37,13 @@ class ArchivoGrupoSeguro:
         self.name = archivos[-1].name if archivos else "grupo_archivos"
 
     def getvalue(self):
-        # ANTES: return [a.getvalue() for a in self.archivos] (Esto colapsaba la RAM)
-        # AHORA: Devolvemos la lista de objetos intacta para procesarla uno por uno
         return self.archivos
-
     
 def main() -> None:
     st.set_page_config(page_title="Facturación Emitida e Ingresos Corporativos", page_icon=":material/bar_chart:", layout="wide")
     st.markdown(CSS_TARJETAS_KPI, unsafe_allow_html=True)
 
-    # 1. INICIALIZACIÓN DE ESTADOS
+    # INICIALIZACIÓN DE ESTADOS
     if 'regimen' not in st.session_state:
         st.session_state['regimen'] = None
     if 'paso_completado' not in st.session_state:
@@ -68,20 +53,9 @@ def main() -> None:
     # PANTALLA 1: SELECCIÓN DE RÉGIMEN (Pantalla Completa)
     # ==================================================
     if st.session_state['regimen'] is None:
-        # Inyectamos CSS para ocultar el sidebar por completo y centrar las tarjetas
-        st.markdown("""
-        <style>
-            [data-testid="stSidebar"] { display: none !important; }
-            [data-testid="collapsedControl"] { display: none !important; }
-            .container-bienvenida { text-align: center; margin: 0 auto; max-width: 900px; padding-top: 0.5rem; }
-            .sub-bienvenida { color: #64748B; font-size: 1.1rem; margin-bottom: 2.5rem; }
-            .card-role {
-                background: white; border: 1px solid #1D4ED8; border-radius: 8px;
-                padding: 32px 24px; text-align: center; height: 100%;
-            }
-            .bullet { text-align: left; font-size: 0.95rem; color: #475569; margin: 12px 0; }
-        </style>
-        """, unsafe_allow_html=True)
+        
+        # Inyectamos el CSS modular de la pantalla inicial
+        st.markdown(CSS_PANTALLA_SELECCION, unsafe_allow_html=True)
         
         st.markdown("""
             <div class='container-bienvenida'>
@@ -95,18 +69,14 @@ def main() -> None:
         with col1:
             with st.container(border=True):
                 st.markdown("""
-               <div style='text-align: center;'>
-                    <!-- Reemplaza 'URL_DE_TU_IMAGEN' por el enlace real de tu ilustración -->
+                <div style='text-align: center;'>
                     <div style='margin-bottom: 5px;'>
-                        <img src='https://i.postimg.cc/rmKvZkg6/undraw-business-pitch-h9yw.png'
-                        alt='Persona Física' style='width: 180px; height: auto;'>
+                        <img src='https://i.postimg.cc/rmKvZkg6/undraw-business-pitch-h9yw.png' alt='Persona Física' style='width: 180px; height: auto;'>
                     </div>
                     <h2 style='color: #1E3A8A; font-weight: 700; margin: 0;'>Persona Física</h2>
                     <p style='color: #64748B; font-size: 0.9rem; margin-bottom: 20px;'>Análisis simplificado</p>
                     <hr style='border: 0; border-top: 1px solid #E2E8F0; margin: 20px 0;'>
-                    <div class='bullet'>1. Facturas Emitidas<br>
-                    2. Facturas Recibidas<br>
-                    3. Nómina de ingreso</div>
+                    <div class='bullet'>1. Facturas Emitidas<br>2. Facturas Recibidas<br>3. Nómina de ingreso</div>
                 </div>
                 <br>
                 """, unsafe_allow_html=True)
@@ -119,18 +89,12 @@ def main() -> None:
                 st.markdown("""
                 <div style='text-align: center;'>
                     <div style='margin-bottom: 5px;'>
-                            <img src='https://i.postimg.cc/xT5qSGnN/undraw-charts-31si.png'
-                                alt='Persona Moral' style='width: 189px; height: auto;'>
+                        <img src='https://i.postimg.cc/xT5qSGnN/undraw-charts-31si.png' alt='Persona Moral' style='width: 189px; height: auto;'>
                     </div>
                     <h2 style='color: #1E3A8A; font-weight: 700; margin: 0;'>Persona Moral</h2>
                     <p style='color: #64748B; font-size: 0.9rem; margin-bottom: 20px;'>Análisis integral</p>
                     <hr style='border: 0; border-top: 1px solid #E2E8F0; margin: 20px 0;'>
-                    <div class='bullet'>
-                    1. Emitidos y Recibidos <br>
-                    2. Complementos de Pago <br>
-                    3. Nómina <br>
-                    4. Pagos Clientes (Operaciones con divisas, etc.)  <br>
-                    </div>
+                    <div class='bullet'>1. Emitidos y Recibidos <br>2. Complementos de Pago <br>3. Nómina <br>4. Pagos Clientes (Operaciones con divisas, etc.) <br></div>
                 </div>
                 <br>
                 """, unsafe_allow_html=True)
@@ -138,33 +102,27 @@ def main() -> None:
                     st.session_state['regimen'] = "Persona Moral"
                     st.rerun()
             
-        # Detenemos la ejecución aquí para que no intente cargar el resto de la app
         st.stop()
 
 
     # ==================================================
     # PANTALLA 2: BARRA LATERAL Y CARGA DE ARCHIVOS
     # ==================================================
-    
-    # Esta parte del código solo se ejecuta si el usuario ya eligió el régimen
     with st.sidebar:
         st.header("Carga de Datos")
         
-        # Etiqueta visual indicando qué persona seleccionó
         if st.session_state['regimen'] == "Persona Física":
             st.info("**Modo actual:** Persona Física (PF)")
         else:
             st.info("**Modo actual:** Persona Moral (PM)")
             
         if st.button("Cambiar régimen", key="btn_regresar"):
-            # Si quiere regresar, limpiamos el estado y la caché
             st.session_state['regimen'] = None
             st.cache_data.clear()
             st.rerun()
 
         st.markdown("---")
         
-        # Selector de Método de Carga
         metodo_carga = st.toggle("Empresa con múltiples archivos (Usar Google Drive)", value=False)
         
         tipos_archivo = {
@@ -175,7 +133,6 @@ def main() -> None:
         no_clasificados = []
         archivos_listos = False
 
-        # --- MODO GOOGLE DRIVE ---
         if metodo_carga:
             st.write("Conecta tu carpeta para tus reportes.")
             folder_id = st.text_input("ID de la carpeta de Drive:", placeholder="Ej. 1A2B3C4D5E...", key="drive_f_id")
@@ -212,7 +169,6 @@ def main() -> None:
                 tipos_archivo = st.session_state['cache_archivos_drive']
                 archivos_listos = True
 
-        # --- MODO CARGA LOCAL TRADICIONAL ---
         else:
             archivos_subidos = st.file_uploader("Sube tus reportes aquí (Excel/CSV/XLSB/Parquet)",
                                                 type=['csv', 'xlsx', 'xls', 'xlsb', 'parquet', 'pqt'],
@@ -273,7 +229,6 @@ def main() -> None:
             file_ingresos_facturas = file_ingresos_pago = file_egresos_facturas = file_egresos_productos = file_egresos_pago = file_nomina = None
 
         if hay_archivos_ruteados:
-            
             modulo = st.radio("Módulo a Analizar:",
                               ["Dashboard Ejecutivo (Riesgo y Viabilidad)", "Ingresos (Auditoría Operativa)",
                                "Egresos (Auditoría Operativa)"])

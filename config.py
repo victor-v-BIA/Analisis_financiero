@@ -304,3 +304,7 @@ PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES = 36, 12, 60
 MARGEN_COMERCIAL_DEFECTO = 5.0  # puntos porcentuales que el banco suma a la TIIE (editable)
 VENTANA_DICTAMEN_MESES = 24     # el dictamen evalúa estrictamente los últimos 24 meses históricos disponibles
 TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de Banxico (corte al 25/09/2026); el analista la actualiza a mano según el mercado del momento
+
+
+# Variable para finance_logic.py, usadas para el escenario de credito
+PCT_CAPACIDAD = 0.30

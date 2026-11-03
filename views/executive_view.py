@@ -31,7 +31,7 @@ from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa
                                  _flujo_bruto_mensual, _ohlc_mensual,
                                  _promedios_mensuales_historicos,
                                  _series_anuales_por_mes,_tabla_clientes_sin_facturacion,
-                                 _trazabilidad_indicadores,_indice_desempeno,_periodo_evaluacion,_excedente_homologado,_dictamen_credito)
+                                 _trazabilidad_indicadores,_indice_desempeno,_periodo_evaluacion,_excedente_homologado,_dictamen_credito,_escenarios_credito)
 
 from components.pdf_generator import generate_modular_pdf
 
@@ -807,43 +807,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 )
 
 
+# ___________________________
 
-
-def evaluar_escenario(flujo_mes: float, flujo_max: float, tasa_mensual: float, plazo: int) -> dict:
-    """Evalúa UN escenario de forma independiente. `proporcion = flujo_mes / flujo_max` (0 si flujo_max <= 0). NO viable (porcentaje, cuota y crédito = 0) si `flujo_mes <= 0`,
-    `proporcion < PROPORCION_MINIMA` (5 %: flujo marginal) o el crédito calculado al 30 % es menor a `CREDITO_MINIMO` (MXN 50,000). Todo escenario viable compromete el mismo
-    `PCT_CAPACIDAD` (30 % del flujo libre): `cuota = flujo_mes × 0.30` y `credito` = valor presente de la anualidad ordinaria (`_monto_por_cuota`, que también cubre tasa 0)."""
-    proporcion = flujo_mes / flujo_max if flujo_max > 0 else 0.0
-    credito = _monto_por_cuota(max(0.0, flujo_mes) * PCT_CAPACIDAD, tasa_mensual, plazo)
-    if flujo_mes <= 0 or proporcion < PROPORCION_MINIMA or credito < CREDITO_MINIMO:
-        return {"es_viable": False, "estatus_texto": "No viable para financiamiento", "motivo_badge": "Flujo libre insuficiente / marginal",
-                "porcentaje": 0.0, "cuota": 0.0, "credito": 0.0, "proporcion": proporcion}
-    return {"es_viable": True, "estatus_texto": "Viable para financiamiento", "motivo_badge": None, "porcentaje": PCT_CAPACIDAD, "cuota": flujo_mes * PCT_CAPACIDAD,
-            "credito": credito, "proporcion": proporcion}
-
-
-
-
-
-def _escenarios_credito(flujo: pd.Series, plazo: int, tasa_anual: float) -> dict:
-    """Motor de la Sección 7 sobre el Flujo Neto mensual de la Sección 2: filtra estrictamente los últimos `VENTANA_DICTAMEN_MESES` (24) meses y ubica TRES MESES REALES: el más bajo
-    (`flujo_min`), el más alto (`flujo_max`) y el intermedio = el mes (sin contar los dos extremos) cuyo flujo queda más cerca de `punto_medio_ref = (flujo_min + flujo_max) / 2`
-    (sin promedios; `medio` es None si no hay un tercer mes). Cada escenario se evalúa con `evaluar_escenario` (viabilidad y porcentaje propios), tomando el mejor mes como techo."""
-    ventana = flujo.sort_index().tail(VENTANA_DICTAMEN_MESES)
-    flujo_min, flujo_max = float(ventana.min()), float(ventana.max())
-    tasa_mensual = tasa_anual / 12 / 100
-    idx_min, idx_max = ventana.idxmin(), ventana.idxmax()
-    punto_medio_ref = (flujo_min + flujo_max) / 2
-    candidatos = ventana.drop(index=list({idx_min, idx_max}))                       # el mes intermedio no puede ser ninguno de los dos extremos
-    idx_intermedio = (candidatos - punto_medio_ref).abs().idxmin() if len(candidatos) else None
-
-    def escenario(flujo_mes, mes):
-        return {"flujo": flujo_mes, "mes": mes, **evaluar_escenario(flujo_mes, flujo_max, tasa_mensual, plazo)}
-
-    return {"ventana": ventana, "meses": len(ventana), "tasa_anual": tasa_anual, "plazo": plazo, "flujo_min": flujo_min, "flujo_max": flujo_max, "punto_medio_ref": punto_medio_ref,
-            "conservador": escenario(flujo_min, idx_min),
-            "medio": escenario(float(ventana.loc[idx_intermedio]), idx_intermedio) if idx_intermedio is not None else None,
-            "optimista": escenario(flujo_max, idx_max)}
 
 
 
