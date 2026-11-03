@@ -546,8 +546,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             with col_dona:
                 render_grafica(fig_dona, key="exec_concentracion_clientes")
-                nota_conc = st.text_area("Insight - Concentración de Ingresos", max_chars=600, key="note_graf_conc")
-
+            nota_conc = st.text_area("Insight - Concentración de Ingresos", max_chars=600, key="note_graf_conc")
+            
             tabla_conc = por_cliente.rename("Facturación Total").reset_index().rename(
                 columns={"Cliente": "RFC" if conc["agrupa_por_rfc"] else "Razón Social"})
             if conc["agrupa_por_rfc"]:

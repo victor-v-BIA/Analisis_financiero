@@ -294,7 +294,7 @@ RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
 RUTA_INPC_DEFAULT = "data/INPC_base.csv"
 
 # ____________________________________________________
-# VARIABLE PARA EL MODUL 7 DEL DASHBOARD EJECUTIVO
+# VARIABLES PARA EL MODULO 7 DEL DASHBOARD EJECUTIVO
 
 # Evaluación INDEPENDIENTE de cada escenario: proporción del flujo del mes frente al mejor mes de la ventana -> viabilidad y porcentaje del flujo libre.
 PROPORCION_MINIMA = 0.05        # flujo del mes < 5 % del mejor mes: flujo marginal, no viable
@@ -306,5 +306,5 @@ VENTANA_DICTAMEN_MESES = 24     # el dictamen evalúa estrictamente los últimos
 TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de Banxico (corte al 25/09/2026); el analista la actualiza a mano según el mercado del momento
 
 
-# Variable para finance_logic.py, usadas para el escenario de credito
+# Variable para finance_logic.py (escenario de credito)
 PCT_CAPACIDAD = 0.30
