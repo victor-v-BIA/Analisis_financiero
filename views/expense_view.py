@@ -77,9 +77,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
             st.stop()
         st.info(
             f"Filtro de divisas: {estadisticas_divisas['coincidencias']} concepto(s) de 841216 "
-            f"coincidieron de forma exacta con CFDI por RFC, fecha e importe. "
-            f"{estadisticas_divisas['sin_coincidencia']} sin coincidencia y "
-            f"{estadisticas_divisas['ambiguos']} ambiguo(s) no se excluyeron."
+            f"se localizaron de forma exacta con CFDI por RFC, fecha e importe. "
         )
     if n_sin_tc:
         st.warning(f"{n_sin_tc} factura(s) recibida(s) en moneda extranjera sin Tipo de Cambio válido se excluyeron: no se pueden convertir a MXN.")
