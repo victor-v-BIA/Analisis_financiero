@@ -188,12 +188,13 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         faltan_flujo.append("Complementos de Pago de Egresos")
     if ingresos_nomina is None:
         faltan_flujo.append("nómina de ingresos con Fecha de Certificación")
-    if not flujo_completo:
+        #  Linea comentada: Es para describir que la nómina no es de Persona fisica.
+    '''if not flujo_completo:
         st.warning(
             "Flujo parcial: la gráfica muestra PUE y los componentes disponibles. "
             "No incluye " + " y ".join(faltan_flujo) +
             "; la diferencia representa solo los componentes disponibles."
-        )
+        )'''
     st.markdown("**Flujo Fiscal Mensual**" if flujo_completo else "**Flujo Fiscal**")
     fig_flujo = _figura_ingresos_egresos(
         periodos, ingresos_flujo, egresos_flujo,
@@ -590,7 +591,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         
                         # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
                         textposition="bottom right",
-                        textfont=dict(size=11, color="white"),
+                        textfont=dict(size=11, color="gray"),
                         cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
                         
                         hovertemplate="<b>%{x}</b><br>ITAEE (Base 100): %{y:.1f}<extra></extra>"

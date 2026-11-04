@@ -812,9 +812,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 # ___________________________
 
 
-
-
-
 def _simulador_financiamiento(balance: dict):
     """Sección 7: capacidad de pago y límite de endeudamiento alimentados EXACTAMENTE con el resumen mensual de la Sección 2 (`balance`)."""
     if not balance["disponible"]:
@@ -902,7 +899,7 @@ def _simulador_financiamiento(balance: dict):
                 st.metric(linea_lbl, "No viable", "No se recomienda endeudamiento en este nivel de flujo", delta_color="off", delta_arrow="off", help=linea_help)
 
     # Explicaciones metodológicas en la interfaz
-    st.markdown(
+    st.caption(
         '''
             ⚠️ **Nota:** La capacidad de pago mostrada es una **estimación** basada en la información fiscal histórica de la empresa y 
             no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
