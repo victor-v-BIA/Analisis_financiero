@@ -69,7 +69,7 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "uuid", "fechayhora", "fecha", "fechadeemision", "fechaemision",
         "rfcemisor", "nombreemisor", "razonsocialemisor", "nombredelemisor", "razonsocial", 
         "estatus", "tipodocumento", "tipodedocumento", "tipodecomprobante", 
-        "metododepago", "total", "saldoinicial", "saldofinal",
+        "metododepago", "total", "importe", "clave", "saldoinicial", "saldofinal",
         "fechadepago", "fechapago", "documentorelacionado", "uuidrelacionado",
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
