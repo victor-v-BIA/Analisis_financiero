@@ -842,8 +842,8 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
 
         if complementos_periodo is None:
             st.info(
-                "Sin la base PAGO solo se muestran importes facturados por método de pago. "
-                "No se determina cuánto PPD se cobró ni cuánto sigue pendiente."
+                '''Sin la base PAGO solo se muestran importes facturados por método de pago.
+                No se determina cuánto PPD se cobró ni cuánto sigue pendiente.'''
             )
         else:
             st.info(

@@ -69,7 +69,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 ("Complementos de Pago de Ingresos", a_pago_ing),
             ) if archivo is None
         ]
-        anual_ing, motivo_ing = None, "Falta: " + ", ".join(faltantes_ing)
+        anual_ing, motivo_ing = None, "**Archivos faltantes:** " + ", ".join(faltantes_ing)
     if a_fac_egr is not None and a_pago_egr is not None:
         anual_egr, motivo_egr = _anual_ppd_cache("proveedores", a_fac_egr, a_pago_egr, anios_5, CODIGO_VERSION)
     else:
@@ -79,14 +79,14 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 ("Complementos de Pago de Egresos", a_pago_egr),
             ) if archivo is None
         ]
-        anual_egr, motivo_egr = None, "Falta: " + ", ".join(faltantes_egr)
+        anual_egr, motivo_egr = None, "**Archivos faltantes:** " + ", ".join(faltantes_egr)
 
     def _bloque_anual(columna, titulo, anual, motivo, nombre_serie, lado, ayuda):
         with columna:
             st.markdown(f"**{titulo}**", help=ayuda)
             if anual is None or anual.empty:
                 if anual is None:
-                    st.warning(f"Información insuficiente: {motivo}.")
+                    st.info(f"{motivo}.")
                 else:
                     st.info("No hay facturas PPD vigentes en los años disponibles.")
                 return
@@ -160,7 +160,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         ) if archivo is None
     ]
     if faltantes_balance:
-        balance = {"disponible": False, "motivos": {"Archivos faltantes": ", ".join(faltantes_balance)}}
+        balance = {"disponible": False, "motivos": {"**Archivos faltantes**": ", ".join(faltantes_balance)}}
     else:
         balance = _balance_cache(a_fac_ing, a_pago_ing, a_fac_egr, a_pago_egr, a_nomina,
                                  anios_5, CODIGO_VERSION)
@@ -168,7 +168,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 
     if not balance["disponible"]:
         detalle = "; ".join(f"{k}: {v}" for k, v in balance["motivos"].items())
-        st.warning(f"No se pudo calcular por falta de información indispensable ({detalle}).")
+        st.info(f"{detalle}.")
     else:
         mensual = balance["mensual"]
         cobertura = balance["cobertura"]

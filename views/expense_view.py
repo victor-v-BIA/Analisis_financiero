@@ -155,8 +155,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         nomina_total = 0.0
         nomina_por_año = pd.Series(dtype=float)
         st.warning(
-            "Falta un archivo válido de nómina para Egresos. Este módulo solo acepta el formato con Fecha Pago; "
-            "la nómina con Fecha de Certificación o Fecha de Emisión se considera exclusivamente en Ingresos."
+            '''El archivo de nómina detectado contiene **Fecha de Certificación**,  se considera exclusivamente para Persona Física.'''
         )
 
     # Facturación/Pagado se calculan SOLO con Factura -las NCR se excluyen aquí y se manejan aparte-.
@@ -458,7 +457,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             with t1:
                 st.markdown(_html_resumen_nomina_gastos(res_nom, gastos_label), unsafe_allow_html=True)
             if not nomina_disponible:
-                st.caption("Nómina no disponible; se muestra $0 como referencia y no como gasto confirmado.")
+                st.info('''Archivo de nómina de Persona Física; se muestra $0 como referencia y no como gasto confirmado.''')
             if nomina_formato_ingresos:
                 st.caption("Gastos incluye PUE + PPD facturados; el importe PPD no representa pagos efectivos.")
             elif comp_df is None:
