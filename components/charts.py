@@ -611,6 +611,17 @@ def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:
     """Egresos en el tiempo: barras apiladas mensuales (`px.bar`, barmode='stack') con Egresos PUE (por mes de emisión), Egresos PPD (= Complementos, por
     mes de su Fecha Pago) y Pagos a Nómina (por Fecha Pago); su suma es el Egreso Total. `mensual` = esas 3 columnas indexadas por Periodo ('AAAA-MM')."""
     rubros = [NOMBRE_EGR_PUE, NOMBRE_EGR_PPD, NOMBRE_NOMINA]
+    meses_2021 = [f"2021-{mes:02d}" for mes in range(1, 11)]
+    meses_faltantes = [mes for mes in meses_2021 if mes not in mensual.index]
+    if meses_faltantes:
+        ceros = {
+            rubro: 0.0 if mensual[rubro].notna().any() else float("nan")
+            for rubro in rubros
+        }
+        meses_vacios = pd.DataFrame(
+            [ceros.copy() for _ in meses_faltantes], index=meses_faltantes
+        )
+        mensual = pd.concat([mensual, meses_vacios]).sort_index()
     g = mensual.sort_index().reset_index(names="Periodo").melt(id_vars="Periodo", value_vars=rubros, var_name="Rubro", value_name="Monto")
     fig = px.bar(g, x="Periodo", y="Monto", color="Rubro", barmode="stack",
                  color_discrete_map={NOMBRE_EGR_PUE: COLOR_EGR_PUE, NOMBRE_EGR_PPD: COLOR_EGR_PPD, NOMBRE_NOMINA: COLOR_NOMINA},
@@ -653,6 +664,18 @@ def _fig_facturacion_tiempo(
         nomina["Periodo"] = nomina["Periodo"].astype(str)
         nomina["Método"] = "Nómina"
         g = pd.concat([g, nomina], ignore_index=True)
+    meses_2021 = [f"2021-{mes:02d}" for mes in range(1, 13)]
+    metodos = ["PUE", "PPD"] + (["Nómina"] if nomina_mensual is not None else [])
+    meses_vacios = pd.DataFrame(
+        [
+            {"Periodo": periodo, "Método": metodo, "Monto": 0.0}
+            for periodo in meses_2021
+            for metodo in metodos
+        ]
+    )
+    g = pd.concat([g, meses_vacios], ignore_index=True).groupby(
+        ["Periodo", "Método"], as_index=False
+    )["Monto"].sum()
     fig = px.bar(g, x="Periodo", y="Monto", color="Método", barmode="stack", color_discrete_map={"PUE": PALETA_ING["pue"], "PPD": PALETA_ING["ppd"]},
                  category_orders={"Periodo": sorted(g["Periodo"].unique()), "Método": ["PUE", "PPD", "Nómina"]})
     fig.update_traces(marker_color="#F59E0B", selector={"name": "Nómina"})
