@@ -179,7 +179,9 @@ def excluir_cfdis_divisas(facturas: pd.DataFrame, productos: pd.DataFrame) -> tu
 
     clave = (productos[columnas["Clave"]].fillna("").astype(str).str.strip()
              .str.replace(r"\.0$", "", regex=True))
-    filas = productos.loc[clave.eq("84121603")].copy()
+    
+    # Clave que hace refrencia al cambio de divisas y servicios
+    filas = productos.loc[clave.str.startswith("841216", na=False)].copy()
     estadisticas = {"conceptos": len(filas), "coincidencias": 0, "sin_coincidencia": 0, "ambiguos": 0}
     if filas.empty:
         return facturas.copy(), set(), estadisticas

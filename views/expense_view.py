@@ -76,7 +76,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                      f"de divisas. {e}")
             st.stop()
         st.info(
-            f"Filtro de divisas: {estadisticas_divisas['coincidencias']} concepto(s) de 84121603 "
+            f"Filtro de divisas: {estadisticas_divisas['coincidencias']} concepto(s) de 841216 "
             f"coincidieron de forma exacta con CFDI por RFC, fecha e importe. "
             f"{estadisticas_divisas['sin_coincidencia']} sin coincidencia y "
             f"{estadisticas_divisas['ambiguos']} ambiguo(s) no se excluyeron."

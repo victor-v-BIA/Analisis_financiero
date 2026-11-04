@@ -649,7 +649,6 @@ def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:
     return fig
 
 
-# correcta
 def _fig_facturacion_tiempo(
     d: pd.DataFrame,
     col_monto: str,
