@@ -12,7 +12,14 @@ from core.loader import (anios_5_archivos,_columnas_archivo,validar_columnas,
                          _facturas_egresos_cache,excluir_años_incompletos,
                          cargar_base, buscar_columna,preparar_complementos_egresos,_preparar_nomina)
 
-from config import (CODIGO_VERSION,COLUMNAS_FACTURAS_EGR_REQUERIDAS,VISTAS_MODULO,AYUDA_TOTAL,NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,NOMBRE_NOMINA,COLOR_NOMINA,AYUDA_TOP10_ANUAL)
+from config import (CODIGO_VERSION, COLUMNAS_FACTURAS_EGR_REQUERIDAS,
+                    VISTAS_MODULO, AYUDA_TOTAL,
+NOMBRE_EGR_PUE,
+                    NOMBRE_EGR_PPD,
+                    NOMBRE_NOMINA,
+                    COLOR_NOMINA,
+                    AYUDA_TOP10_ANUAL)
+
 from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,
                                 matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos,
                                 excluir_cfdis_divisas,excluir_complementos_de_cfdis,_es_nomina_ingresos)
@@ -29,7 +36,7 @@ from components.pdf_generator import generate_modular_pdf
 
 def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5=None,
                    file_ingresos_facturas=None, file_egresos_productos=None) -> None:
-    """Módulo de Egresos: facturación recibida (candados estrictos, sin alterar) + complementos pagados.
+    """Módulo de Egresos: facturación recibida  + complementos pagados.
 
     Revelación progresiva: el hard stop de Facturación Recibida se evalúa ANTES de dibujar cualquier otro
     control, así que nada de este módulo aparece hasta que esa base exista. Los complementos de pago salen de la
@@ -39,7 +46,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     st.title("Facturación Recibida y Egresos")
 
     if file_egresos_facturas is None:
-        st.info("👋 Para iniciar el análisis de Egresos, arrastra tu base de Facturación Recibida en la zona "
+        st.info("Para iniciar el análisis de Egresos, arrastra tu base de Facturación Recibida en la zona "
                 "de carga.")
         st.stop()
     if anios_5 is None:   # ventana móvil de 5 años (main() la deduce de Emitidos y Recibidos)
@@ -182,7 +189,8 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     # Inicialización del acumulador para PDF
     pdf_elements = []
 
-    if not econ:   # las tarjetas de KPI solo van en la Vista Financiera (la Vista Económica no las muestra)
+    # Las tarjetas de KPI solo van en la Vista Financiera (la Vista Económica no las muestra)
+    if not econ:
         with st.container(key="egr_kpis_facturacion_pdf"):
             k = st.columns(3)
             k[0].metric("**Facturación Recibida Total**", dinero(fact_total),
@@ -292,7 +300,12 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                          column_config={año: columna_texto for año in texto.index})
 
     st.divider()
-    if econ:   # Vista Económica: tabla anual y luego sus gráficas macro
+    
+    # ==================================================
+    # VISTA ECONOMICA
+    # ==================================================
+    
+    if econ:
         _mostrar_desglose()
         
         # Agregar tabla de desglose a la vista económica en PDF
@@ -370,8 +383,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         comp_mes = pd.Series(dtype=float)
         total_complementos = 0.0
         st.info(
-            "Los pagos PPD no están disponibles sin la base PAGO. La gráfica de egresos muestra los importes "
-            "PUE y, solo si hay nómina con Fecha Pago, esa nómina; no representa el egreso total."
+            '''Los pagos PPD no están disponibles sin la base PAGO. La gráfica de egresos muestra los importes
+            PUE y, solo si hay nómina con Fecha Pago, esa nómina; no representa el egreso total.'''
         )
     res = resumen_egresos(pue_t, ppd_t, total_complementos, float(nom["Monto"].sum()))
     series_mensuales = {
@@ -413,17 +426,17 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     fig_tiempo = _fig_egresos_tiempo(mensual)
     with st.container(key="egr_tiempo_pdf", width="stretch"):
         render_grafica(fig_tiempo, key="egr_tiempo")
-    # nota_tiempo = st.text_area("Conclusión - Egresos en el Tiempo", max_chars=600, key="note_egr_tiempo")
+
 
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
-            # "section_title": "2. Evolución de los Egresos",
             "title": ("Egresos en el Tiempo" if comp_df is not None and nomina_disponible
-                      else "Egresos Identificados en el Tiempo; componentes faltantes no disponibles"),
+                      else "Egresos en el Tiempo"),
             "fig": fig_tiempo,
             "custom_height": 240
         })
+
     st.divider()
     st.markdown("**Egresos facturados por mes**" if comp_df is not None and nomina_disponible
                 else "**Egresos identificados por mes (componentes disponibles)**")
@@ -431,13 +444,13 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         tabla_mes, "Egreso total" if comp_df is not None and nomina_disponible else "Egreso identificado")
     with st.container(key="egr_facturado_por_mes_pdf", width="stretch"):
         render_grafica(fig_fact_mes, key="egr_facturado_por_mes")
-    # nota_fact_mes = st.text_area("Conclusión - Egresos Facturados por Mes", max_chars=600, key="note_egr_fact_mes")
+
 
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
             "title": ("Egresos Facturados por Mes" if comp_df is not None and nomina_disponible
-                      else "Egresos Identificados por Mes; componentes faltantes no disponibles"),
+                      else "Egresos Facturados por Mes"),
             "fig": fig_fact_mes,
             "custom_height": 270
         })
@@ -462,7 +475,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 st.caption("Gastos incluye PUE + PPD facturados; el importe PPD no representa pagos efectivos.")
             elif comp_df is None:
                 st.caption("Composición parcial; no incluye pagos PPD.")
-        # nota_nom_gastos = st.text_area("Conclusión - Nómina vs. Gastos", max_chars=600, key="note_egr_nom_gastos")
+
 
     # Secciones cuadradas: Método de Pago de Gastos
     if comp_df is not None:
@@ -493,16 +506,13 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                         hide_index=True,
                     )
                     st.info("Los importes PUE/PPD mostrados son facturados; los pagos y saldo pendiente PPD no se conocen sin PAGO.")
-        # nota_metodo_pago = st.text_area("Conclusión - Método de Pago", max_chars=600, key="note_egr_metodo_pago")
 
     # Registro en PDF para Nómina vs. Gastos y Método de Pago
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
             "section_title": "3. Composición y Métodos de Pago",
-            "title": ("Nómina vs. Gastos facturados (PUE + PPD)" if nomina_formato_ingresos
-                      else ("Nómina vs. Gastos" if comp_df is not None
-                            else "Nómina vs. Gastos identificados; pagos PPD no disponibles")),
+            "title": "Nómina vs. Gastos ",
             "fig": fig_nom_gastos,
             "preserve_textfont_size": True,
         })
@@ -594,7 +604,6 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         fig_bump = _fig_bump_anual(df_prov, col_monto)
         with st.container(key="egr_bump_anual_pdf", width="stretch"):
             render_grafica(fig_bump, key="egr_bump_anual")
-        # nota_bump = st.text_area("Conclusión - Top 10 Proveedores", max_chars=600, key="note_egr_bump")
 
         if pdf_elements is not None:
             pdf_elements.append({
@@ -602,6 +611,5 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 "section_title": "4. Egresos y Riesgo de Dependencia",
                 "title": "Top 10 Proveedores de Cada Año",
                 "fig": fig_bump,
-                # "note": nota_bump,
                 "custom_height": 320  # Alto extendido para evitar corte de ejes X
             })

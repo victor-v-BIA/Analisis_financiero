@@ -123,7 +123,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             nota_grafica = st.text_area(
                 f"Insight para el detalle anual ({'Clientes' if lado == 'clientes' else 'Proveedores'})",
                 max_chars=600,
-                placeholder="Escribe tus conclusiones de la tabla (máx. 600 caracteres)...",
+                placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
                 key=nota_key
             )
             

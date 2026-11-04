@@ -28,7 +28,7 @@ from config import (CODIGO_VERSION, REP_VACIO, VISTAS_MODULO, NOMBRE_FECHA,
 from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vigentes,
                                 _total_facturado_ppd_vigente, diferencia_ppd,
                                 matriz_anual, _preparar_concentracion, _pagos_por_factura,
-                                _insight_ingresos_gastos, _anio_base, _rebase, _insight_itaee,
+                                _anio_base, _rebase, _insight_itaee,
                                 _insight_inpp, _insight_tiie, _desglose_cobros, _serie_mensual_por_anio,
                                 _resumen_metodo_cobro_global, _resumen_metodo_cobro, facturas_a_mxn,
                                 _nomina_ingresos_mensual_mxn)
@@ -40,6 +40,7 @@ def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
                              egresos: pd.Series, ingresos_nomina: pd.Series | None = None,
                              mostrar_diferencia: bool = True,
                              forzar_egresos_negativos: bool = False) -> go.Figure:
+    
     """Crea una serie mensual con ingresos y egresos alrededor de cero y su diferencia."""
     x = [str(periodo) for periodo in periodos]
     egresos_negativos = -egresos.abs() if forzar_egresos_negativos else -egresos
@@ -70,7 +71,8 @@ def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
     fig.update_layout(
         barmode="relative", height=380,
         margin=dict(l=90, r=20, t=55, b=55),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         xaxis_title=None, yaxis_title="MXN",
     )
@@ -437,7 +439,9 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             st.dataframe(tabla, hide_index=True, key="ing_desglose_anual",
                          column_config={año: columna_texto for año in texto.index})
 
-    # Copia limpia y formateada del desglose para el PDF
+    # ==================================================
+    # MAQUETACION PARA EL PDF
+    # ==================================================
     tabla_pdf = tabla.copy()
     for col in tabla_pdf.columns:
         if col != "Concepto":
@@ -542,7 +546,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         st.markdown("**Ingresos vs Gastos Anuales (Millones MXN)**")
         fig_ing_gas = _grafica_ingresos_gastos(anios_str, ing, gas)
         render_grafica(fig_ing_gas, key=f"eco_{lado}_ingresos_gastos")
-        # _insight_html(_insight_ingresos_gastos(anios, ing, gas))
+  
         
         nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
         pdf_elements.append({"type": "heading", "text": "2. Evolución de Ingresos"})
@@ -667,7 +671,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
     with col_pdf_info:
         econ_notes = st.text_area(
             "Notas / Observaciones Generales de la Vista Económica:",
-            placeholder="Escribe tus conclusiones económicas ejecutivas aquí...",
+            placeholder="Escribe tus conclusiones económicas aquí...",
             key="eco_notes_general"
         )
     with col_pdf_desc:
@@ -730,22 +734,20 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         st.markdown("**Facturación emitida en el tiempo**")
         fig_tiempo = _fig_facturacion_tiempo(d, col_monto)
         render_grafica(fig_tiempo, key="ing_facturacion_tiempo")
-        # nota_tiempo = st.text_area("Conclusión - Facturación Emitida en el Tiempo", max_chars=600, key="note_ing_tiempo")
+        
         
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
-                # "section_title": "2. Comportamiento de la Facturación e Ingresos",
                 "title": "Ingresos en el Tiempo",
                 "fig": fig_tiempo,
                 "custom_height": 250
-                # "note": nota_tiempo
             })
         st.divider()
         st.markdown("**Ingresos facturados**")
         fig_ing_fact = _fig_ingresos_facturados(d, col_monto, nomina_mensual=nomina_mensual)
         render_grafica(fig_ing_fact, key="ingresos_facturados")
-        # nota_ing_fact = st.text_area("Conclusión - Ingresos Facturados", max_chars=600, key="note_ing_fact")
+        
         
         if pdf_elements is not None:
             pdf_elements.append({
@@ -766,7 +768,6 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         with c_tabla:
             st.markdown(_html_resumen_metodo_cobro(resumen, col_monto, rotular_base=False), unsafe_allow_html=True)
         
-        # nota_metodo = st.text_area("Conclusión - Método de Cobro", max_chars=600, key="note_ing_metodo")
         
         if pdf_elements is not None:
             # 1. Agregamos la gráfica de dona al PDF
@@ -828,7 +829,6 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                     "title": "Resumen del Método de Cobro",
                     "df": df_metodo_pdf,
                     "white_background": True,
-                    # "note": nota_metodo
                 })
             except Exception as e:
                 pass
@@ -848,9 +848,9 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             )
         else:
             st.info(
-                "La base PAGO no permite relacionar los complementos con cada factura. Se muestra la facturación "
-                "por método y mes; el cobro PPD y su saldo se presentan solo de forma global."
-            )
+                '''La base PAGO no permite relacionar los complementos con cada factura. Se muestra la facturación
+                por método y mes; el cobro PPD y su saldo se presentan solo de forma global.''')
+
         st.divider()
         st.markdown("**Facturación emitida por método y mes**")
         fig_tiempo = _fig_facturacion_tiempo(d, col_monto, nomina_mensual=nomina_mensual)
@@ -934,7 +934,6 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
     else:
         fig_bump = _fig_bump_anual(df, col_monto)
         render_grafica(fig_bump, key="ing_bump_anual", width="stretch")
-        # nota_bump = st.text_area("Conclusión - Concentración y Top 10 Clientes", max_chars=600, key="note_ing_bump")
         
         if pdf_elements is not None:
             pdf_elements.append({

@@ -6,7 +6,6 @@ matrices anuales, cruces PPD, plazos y cálculos de dictamen.'''
 import pandas as pd
 import streamlit as st
 import io
-import unicodedata
 import re
 import numpy as np
 from config import (CODIGO_VERSION, DIAS_GRACIA_PPD, MESES_ES, COLUMNAS_DETALLE_ANUAL,PERIODOS_EVALUACION,MARGEN_SEGURIDAD_PCT,TASA_REFERENCIA_ANUAL
@@ -263,9 +262,10 @@ def matriz_anual_egresos(fac: pd.DataFrame, pagado_ppd_por_año: pd.Series, ncr_
     pagado_ppd = pagado_ppd_por_año.reindex(idx, fill_value=0.0)
     ncr_a = ncr_anual.reindex(idx, fill_value=0.0)
     nomina = nomina_por_año.reindex(idx, fill_value=0.0)
-    cifras = resumen_egresos(fact_pue, fact_ppd, pagado_ppd, nomina)          # la misma función de las tarjetas y las gráficas
+    # la misma función de las tarjetas y las gráficas
+    cifras = resumen_egresos(fact_pue, fact_ppd, pagado_ppd, nomina)
     fact_total, pagado_total, egreso_total, saldo_ppd = cifras["facturacion"], cifras["pagado_total"], cifras["egreso_total"], cifras["diferencia"]
-    egreso_operativo_neto = pagado_total - ncr_a["NCR_Total"]                  # indicador aparte: las NCR no se descuentan del Egreso Total
+    egreso_operativo_neto = pagado_total - ncr_a["NCR_Total"] # indicador aparte: las NCR no se descuentan del Egreso Total
     pct_saldo_ppd = (saldo_ppd / fact_ppd * 100).where(fact_ppd != 0, 0.0)
 
     m = pd.DataFrame({
@@ -306,7 +306,6 @@ def resumen_mensual_egresos(fac_factura: pd.DataFrame, df_rep: pd.DataFrame, eje
     out.index = out.index.strftime("%Y-%m")
     out.index.name = "Mes"
     return out
-
 
 
 def _uuids_pue(facturas: pd.DataFrame) -> frozenset:
@@ -429,7 +428,7 @@ def _aplicaciones_pago_validas(df_fac: pd.DataFrame, df_pagos: pd.DataFrame) -> 
     fac = fac[estatus_fac.isin(["VIGENTE", "ACTIVO"])]
     tipo_doc = fac["Tipo Documento"].astype(str).str.strip().str.upper()
     fac = fac[tipo_doc.isin(["I", "FACTURA"])]
-    fac["Fecha_Emision"] = a_fecha(fac["Fecha y Hora"])  # DD/MM/YYYY o ISO (pd.to_datetime las lee mes-primero)
+    fac["Fecha_Emision"] = a_fecha(fac["Fecha y Hora"])  # DD/MM/YYYY 
     fac = (fac[["UUID", "Fecha_Emision"]].dropna(subset=["Fecha_Emision"])
                                          .drop_duplicates(subset="UUID", keep="first"))
 
@@ -499,7 +498,8 @@ def _valor_mxn_facturas(df: pd.DataFrame, metodo_pago: str | None) -> tuple[pd.S
     `None`) -nunca se asume $0 por una columna faltante-.
     """
     col_fecha = buscar_columna(df.columns, "Fecha y Hora") or buscar_columna(df.columns, "Fecha")
-    col_valor = buscar_columna(df.columns, "Total") or buscar_columna(df.columns, "SubTotal")   # el Total (con impuestos), igual que el resto del tablero
+    # El Total (con impuestos)
+    col_valor = buscar_columna(df.columns, "Total") or buscar_columna(df.columns, "SubTotal")
     col_estatus = buscar_columna(df.columns, "Estatus")
     col_tipo = buscar_columna(df.columns, "Tipo Documento")
     col_metodo = buscar_columna(df.columns, "Metodo de Pago")
@@ -538,7 +538,7 @@ def _valor_mxn_facturas(df: pd.DataFrame, metodo_pago: str | None) -> tuple[pd.S
     n_excluidas = int((~convertible).sum())
     valor_mxn = (valor_crudo * factor).where(convertible)
 
-    fechas = a_fecha(d[col_fecha])  # DD/MM/YYYY o ISO (pd.to_datetime las lee mes-primero)
+    fechas = a_fecha(d[col_fecha])  # DD/MM/YYYY 
     mensual = pd.DataFrame({"Mes": fechas.dt.to_period("M"), "Valor": valor_mxn}).dropna(subset=["Mes", "Valor"])
     return mensual.groupby("Mes")["Valor"].sum(), None, n_excluidas
 
@@ -580,7 +580,7 @@ def _rep_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]:
                                      .str.replace(",", "", regex=False), errors="coerce").fillna(0)
         monto = si - sf
 
-    fechas = a_fecha(d[col_fecha])  # DD/MM/YYYY o ISO (pd.to_datetime las lee mes-primero)
+    fechas = a_fecha(d[col_fecha])  # DD/MM/YYYY
     mensual = pd.DataFrame({"Mes": fechas.dt.to_period("M"), "Valor": monto}).dropna(subset=["Mes"])
     return mensual.groupby("Mes")["Valor"].sum(), None
 
@@ -605,7 +605,7 @@ def _nomina_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, str | None]
         return pd.Series(dtype=float), None
     total = pd.to_numeric(d[col_total].astype(str).str.replace("$", "", regex=False)
                                        .str.replace(",", "", regex=False), errors="coerce").fillna(0)
-    fechas = a_fecha(d[col_fecha])  # DD/MM/YYYY o ISO (pd.to_datetime las lee mes-primero)
+    fechas = a_fecha(d[col_fecha])  # DD/MM/YYYY
     mensual = pd.DataFrame({"Mes": fechas.dt.to_period("M"), "Valor": total}).dropna(subset=["Mes"])
     return mensual.groupby("Mes")["Valor"].sum(), None
 
@@ -1350,15 +1350,6 @@ def _anio_base(anios, empresa: list, externa: dict) -> int | None:
             return a
     return None
 
-# COMENTARIO: SE ELIMINO
-def _insight_ingresos_gastos(anios, ing, gas) -> str:
-    sup = [a for a, i, g in zip(anios, ing, gas) if i > g]
-    deficit = [a for a, i, g in zip(anios, ing, gas) if g > i]
-    dif = ing[-1] - gas[-1]
-    return (f"<b>Insight Analítico:</b> superávit (ingresos &gt; gastos) en {_lista_anios(sup)}; déficit (gastos &gt; ingresos) en "
-            f"{_lista_anios(deficit)}. En {anios[-1]}: ingresos {ing[-1]:,.1f} MDP vs. gastos {gas[-1]:,.1f} MDP, "
-            f"{'superávit' if dif >= 0 else 'déficit'} de {abs(dif):,.1f} MDP. Los gastos son la facturación recibida (no un estado de resultados).")
-
 
 def _ultimo_valido(anios, *series):
     for i in range(len(anios) - 1, -1, -1):
@@ -1394,7 +1385,7 @@ def _insight_tiie(anios, ing, tiie) -> str:
     pares = [(anios[k], ing[k] / ing[k - 1] * 100 - 100, tiie[k] - tiie[k - 1]) for k in range(1, len(anios))
              if ing[k - 1] > 0 and pd.notna(tiie[k]) and pd.notna(tiie[k - 1])]
     if not pares:
-        return "<b>💡 Inteligencia de Mercado:</b> se necesitan dos o más ejercicios consecutivos con dato de TIIE para evaluar la sensibilidad."
+        return "<b>Inteligencia de Mercado:</b> se necesitan dos o más ejercicios consecutivos con dato de TIIE para evaluar la sensibilidad."
     alza = [c for _, c, d in pares if d > 0.25]
     baja = [c for _, c, d in pares if d < -0.25]
     primero = next((v for v in tiie if pd.notna(v)), None)
@@ -1407,7 +1398,7 @@ def _insight_tiie(anios, ing, tiie) -> str:
         r = float(np.corrcoef([c for _, c, _ in pares], [d for _, _, d in pares])[0, 1])
         nivel = "baja" if abs(r) < 0.3 else "moderada" if abs(r) < 0.6 else "alta"
         txt += f"Correlación entre el crecimiento anual de ingresos y el cambio de la TIIE: {r:+.2f} (sensibilidad {nivel}). "
-    return f"<b>💡 Inteligencia de Mercado:</b> {txt}Lectura descriptiva con pocos años; no prueba causalidad."
+    return f"<b>Inteligencia de Mercado:</b> {txt}Lectura descriptiva con pocos años; no prueba causalidad."
 
 
 def _preparar_concentracion(df: pd.DataFrame, col_nombre: str | None, col_rfc: str | None) -> pd.DataFrame:
@@ -1433,9 +1424,9 @@ def _normalizar_por_rfc(df: pd.DataFrame) -> pd.DataFrame:
     no depende de `monto_calc`."""
     d = df.assign(Entidad=df["RFC_Receptor"].where(df["RFC_Receptor"].ne(""), df["Razon_Social"]))
     reales = d[d["Nombre_Crudo"].ne("")].sort_values("Periodo", kind="stable")
-    mapeo = reales.groupby("Entidad")["Nombre_Crudo"].last().rename("Razon_Social_Limpia")        # nombre más reciente por RFC
+    mapeo = reales.groupby("Entidad")["Nombre_Crudo"].last().rename("Razon_Social_Limpia") # nombre más reciente por RFC
     d = d.merge(mapeo, left_on="Entidad", right_index=True, how="left")
-    d["Razon_Social_Limpia"] = d["Razon_Social_Limpia"].fillna(d["Razon_Social"])                    # RFC sin ningún nombre real: se muestra el RFC
+    d["Razon_Social_Limpia"] = d["Razon_Social_Limpia"].fillna(d["Razon_Social"]) # RFC sin ningún nombre real: se muestra el RFC
     return d
 
 
@@ -1516,7 +1507,6 @@ def _ranking_anual(df: pd.DataFrame, col_monto: str, top: int = 10) -> pd.DataFr
     return g.reset_index(drop=True)
 
 
-
 def _resumen_nomina_gastos(res: dict, incluir_ppd_facturado: bool = False) -> dict:
     """Nómina vs. Gastos: por defecto proveedores = PUE + Complementos; opcionalmente PUE + PPD facturado."""
     gastos = res["pue"] + (res["ppd"] if incluir_ppd_facturado else res["complementos"])
@@ -1534,7 +1524,6 @@ def evaluar_escenario(flujo_mes: float, flujo_max: float, tasa_mensual: float, p
                 "porcentaje": 0.0, "cuota": 0.0, "credito": 0.0, "proporcion": proporcion}
     return {"es_viable": True, "estatus_texto": "Viable para financiamiento", "motivo_badge": None, "porcentaje": PCT_CAPACIDAD, "cuota": flujo_mes * PCT_CAPACIDAD,
             "credito": credito, "proporcion": proporcion}
-
 
 
 def _escenarios_credito(flujo: pd.Series, plazo: int, tasa_anual: float) -> dict:

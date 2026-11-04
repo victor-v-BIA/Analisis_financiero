@@ -10,8 +10,6 @@ from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
 from views.expense_view import (modulo_egresos)
 
-
-# 1. Importar estilos globales de tu archivo modular
 # 1. Importar estilos globales de tu archivo modular
 from components.styles import  CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
 from config import CSS_TARJETAS_KPI

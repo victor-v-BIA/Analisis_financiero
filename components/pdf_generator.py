@@ -398,7 +398,7 @@ def generate_modular_pdf(
                 
                 section_content.append(Spacer(1, 10))
                 
-                # ¡Esto obliga a que el título de sección, de gráfica, imagen y nota viajen juntos o salten de hoja!
+                # Esto obliga a que el título de sección, de gráfica, imagen y nota viajen juntos o salten de hoja
                 story.append(KeepTogether(section_content))
 
         elif el_type == "metrics":

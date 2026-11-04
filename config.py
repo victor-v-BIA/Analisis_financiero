@@ -1,10 +1,11 @@
-# ----------------------------------------------------------------------------
-# 1. CARGA Y LIMPIEZA
-# ----------------------------------------------------------------------------
-
 # ======================================
 #  BLOQUE DE VARIABLES / CONSTANTES
 # ======================================
+
+
+# ----------------------------------------------------------------------------
+# 1. CARGA Y LIMPIEZA
+# ----------------------------------------------------------------------------
 import hashlib
 from pathlib import Path
 import re
@@ -128,13 +129,16 @@ CSS_DETALLE_ANUAL = (
     # columnas que contienen esta tabla)-.
     'div[data-testid="stColumn"]:has(.ppd-detalle-wrap){min-width:300px}</style>')
 
-
-# ***** DICTAMEN CREDITICIO *****
+# ==================================================
+# DICTAMEN CREDITICIO
+# ==================================================
 
 TASA_REFERENCIA_ANUAL = 16.0   # tasa fija del dictamen: TIIE + margen comercial estimado (% anual); no es un input del usuario
 MARGEN_SEGURIDAD_PCT = 30.0    # % del Flujo Neto MÍNIMO del periodo que se destina a la mensualidad (margen conservador)
 PLAZO_DEFECTO_MESES = 36
-PERIODOS_EVALUACION = {"Últimos 12 meses": 12, "Últimos 24 meses": 24, "Historial completo": None}
+PERIODOS_EVALUACION = {"Últimos 12 meses": 12,
+                       "Últimos 24 meses": 24,
+                       "Historial completo": None}
 
 
 
@@ -160,18 +164,30 @@ BANDAS_DICTAMEN = ((85.0, "Desempeño Documental Sólido", "#10B981"), (70.0, "D
 SIN_DICTAMEN = ("Datos insuficientes para dictaminar", "#9AA0A6")
 
 
-#  ********** INGRESOS (FINANCIERA Y ECONOMICA) ***********************
-# VISTA ECONÓMICA (Ingresos / Egresos): ingresos y gastos de la empresa frente a ITAEE / INPP (INEGI) y TIIE (Banxico).
-# ============================================================================
+# ==================================================
+# INGRESOS (FINANCIERA Y ECONOMICA)
+# ==================================================
+
+# VISTA ECONÓMICA (Ingresos / Egresos): ingresos y gastos de la empresa frente a ITAEE / INPP (INEGI).
+
 VISTAS_MODULO = ["Vista Financiera", "Vista Económica"]
 MENSAJE_CARGA_ECONOMICA = "Carga la base económica correspondiente (ITAEE / INPP / TIIE) para generar el comparativo sectorial."
 ETIQUETA_SELECTOR_SERIE = "Selecciona el sector / serie a comparar:"
 _MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
 
-# RIESGO DEPENDENCIA
 
-# Paleta sobria para fondo oscuro (el fondo de las figuras es transparente y hereda el tema; sin cuadrículas)
-PALETA_BUMP = ["#60A5FA", "#34D399", "#FBBF24", "#F87171", "#A78BFA", "#22D3EE", "#FB923C", "#A3E635", "#F472B6", "#94A3B8"]
+# PALETA DE COLORES PARA GRAFICAS DE TOP 10
+PALETA_BUMP = ["#60A5FA",
+               "#34D399", 
+               "#FBBF24",
+               "#F87171", 
+               "#A78BFA", 
+               "#22D3EE", 
+               "#FB923C", 
+               "#A3E635", 
+               "#F472B6", 
+               "#94A3B8"]
+
 PALETA_BUMP_INGRESOS = [
     "#1E3A8A",  # Azul marino muy oscuro (Base fuerte)
     "#1D4ED8",  # Azul rey profundo
@@ -188,18 +204,29 @@ AYUDA_TOP10_ANUAL = ("Cada año muestra sus diez principales empresas. La leyend
 
 
 # Ingresos (variaciones de azul sobre fondo oscuro). PPD total = PPD cobrado
-PALETA_ING = {"pue": "#3B82F6", "ppd": "#7DD3FC", "pendiente": "#2563EB"}               # azul medio · azul claro · azul profundo
-TEXTO_SOBRE_ING = {"#3B82F6": "#FFFFFF", "#7DD3FC": "#0B1220", "#2563EB": "#FFFFFF", "#1D4ED8": "#FFFFFF", "#F59E0B": "#0B1220"}   # etiqueta legible sobre cada tono (claro -> texto oscuro)
-SEPARADOR_PIE = "rgba(14,17,23,0.9)"  
+PALETA_ING = {"pue": "#3B82F6", 
+              "ppd": "#7DD3FC", 
+              "pendiente": "#2563EB"} # azul medio · azul claro · azul profundo
 
+TEXTO_SOBRE_ING = {"#3B82F6": 
+                   "#FFFFFF", 
+                   "#7DD3FC": 
+                   "#0B1220", 
+                   "#2563EB": 
+                   "#FFFFFF", 
+                   "#1D4ED8": 
+                   "#FFFFFF", 
+                   "#F59E0B": 
+                   "#0B1220"}  # etiqueta legible sobre cada tono (claro -> texto oscuro)
 
-#  **************** EGRESOS *************
-#  ============================================
+# ==================================================
+# PANTALLA DE EGRESOS
+# ==================================================
+
 # Categorías de Egresos, con el mismo nombre y color en barras, sectores, leyendas, tooltips e indicadores
 NOMBRE_EGR_PUE, NOMBRE_EGR_PPD, NOMBRE_NOMINA = "PUE", "PPD", "Nómina"
 COLOR_EGR_PUE, COLOR_EGR_PPD, COLOR_NOMINA = "#3B82F6", "#7DD3FC", "#F59E0B" # azul medio · azul claro · naranja (la nómina se distingue de los proveedores)
 COLOR_GASTOS = "#7DD3FC" # «Gastos (Proveedores)» en Nómina vs. Gastos: azul claro
-
 
 
 # ======================================
@@ -284,17 +311,16 @@ _GRUPO_FINANCIERO_FINAL = re.compile(r"\bGRUPO\s+FINANCIERO\s+\S+\s*$", re.IGNOR
 _PARENTESIS = re.compile(r"\([^)]*\)")
 
 
-# PARA EL ESCENARIO DE CREDITO
-# AQUIII
-
-# ARCHIVOS DEFAULT PARA EVITAR QUE USUARIO CARGUE LOS ARCHIVOS DE ECONOMICA
+# ARCHIVOS DEFAULT PARA EVITAR QUE USUARIO CARGUE LOS ARCHIVOS DE VISTA ECONOMICA
 
 RUTA_ITAEE_DEFAULT = "data/itaee_20.xlsx"
 RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
 RUTA_INPC_DEFAULT = "data/INPC_base.csv"
 
-# ____________________________________________________
+# ==================================================
 # VARIABLES PARA EL MODULO 7 DEL DASHBOARD EJECUTIVO
+# ==================================================
+ 
 
 # Evaluación INDEPENDIENTE de cada escenario: proporción del flujo del mes frente al mejor mes de la ventana -> viabilidad y porcentaje del flujo libre.
 PROPORCION_MINIMA = 0.05        # flujo del mes < 5 % del mejor mes: flujo marginal, no viable

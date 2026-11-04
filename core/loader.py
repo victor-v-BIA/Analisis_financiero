@@ -28,7 +28,7 @@ def cargar_base(uploaded_file) -> pd.DataFrame:
 def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     """
     Lee archivos infiriendo tipos nativos para ahorrar memoria.
-    FASE 3 (Silver Bullet): Filtra columnas desde la lectura (usecols).
+    FASE 3: Filtra columnas desde la lectura (usecols).
     DESCARGA PEREZOSA EXTREMA: Destruye los bytes tras la lectura.
     """
     # 0. MANEJO DE MÚLTIPLES ARCHIVOS (Grupos)
@@ -114,8 +114,7 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
                 df = df[cols_ok]
                 break
 
-    # 2.5 ¡EL GOLPE FINAL AL OOM KILLER! 💥
-    # Destruimos los megabytes crudos en cuanto Pandas crea la pequeña tabla útil
+    # 2.5 Destruimos los megabytes crudos en cuanto Pandas crea la pequeña tabla útil
     if isinstance(contenido, bytes):
         del contenido
     gc.collect()
@@ -160,7 +159,7 @@ def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) 
     faltantes = [concepto for concepto, variantes in requeridas.items()
                 if not any(_norm(v) in normalizadas for v in [concepto, *variantes])]
     if faltantes:
-        st.error(f"🚨 Error en el archivo de {etiqueta}: Faltan las siguientes columnas requeridas para el "
+        st.error(f"Error en el archivo de {etiqueta}: Faltan las siguientes columnas requeridas para el "
                  f"cálculo: {faltantes}")
         st.stop()
 
@@ -359,7 +358,8 @@ def leer_complementos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list
     if "Estatus" in df.columns:
         estatus = df["Estatus"].astype(str).str.strip().str.upper()
         df = df[estatus.isin(["ACTIVO", "VIGENTE"])].copy()
-        df["Estatus"] = df["Estatus"].astype("category")  # Optimización de RAM
+        # Optimización de RAM
+        df["Estatus"] = df["Estatus"].astype("category")
         avisos.append(f"{etiqueta}: {n0 - len(df)} filas descartadas por Estatus distinto de 'Activo'/'Vigente'.")
         
     if "RFC Emisor" not in df.columns:
@@ -616,8 +616,6 @@ def _anio_de_celda(v) -> int | None:
     return None
 
 
-
-
 def _leer_tabla_fecha_valor(df: pd.DataFrame) -> dict | None:
     """Serie económica genérica (p. ej. TIIE de Banxico): busca la columna de fechas y, en las demás columnas numéricas, promedia por año. Devuelve
     {nombre de la columna: {año: promedio}} | None si no hay una columna de fechas con valores numéricos. Es deliberadamente estricta para no
@@ -646,7 +644,7 @@ def _leer_tabla_fecha_valor(df: pd.DataFrame) -> dict | None:
     return None
 
 
-@st.cache_data(show_spinner="Leyendo base económica...")
+@st.cache_data(show_spinner="Leyendo base...")
 def _procesar_archivo_economico(nombre: str, contenido: bytes, version: str) -> dict:
     """Clasifica por contenido un archivo económico como ITAEE, INPP, INPC o TIIE.
     Devuelve {'tipo': str | None, 'series': {nombre de la serie: {año: valor}}}."""
@@ -663,7 +661,7 @@ def _procesar_archivo_economico(nombre: str, contenido: bytes, version: str) -> 
 
 
 def _cargar_bases_economicas(lado: str) -> dict:
-    """Carga las bases económicas subidas o, si no hay ninguna, las predeterminadas de `data/`."""
+    """Carga las bases económicas subidas o, si no hay ninguna, las predeterminadas de la carpeta `data/`."""
     if lado not in ("ingresos", "egresos"):
         raise ValueError(f"El lado debe ser 'ingresos' o 'egresos', no {lado!r}.")
 
@@ -692,7 +690,7 @@ def _cargar_bases_economicas(lado: str) -> dict:
     for nombre, contenido in entradas:
         try:
             r = _procesar_archivo_economico(nombre, contenido, CODIGO_VERSION)
-        except (pa.ArrowException, OSError, ValueError) as exc:  # <--- Cambio aquí
+        except (pa.ArrowException, OSError, ValueError) as exc: 
             st.error(f"No se pudo leer la base económica «{nombre}»: {exc}")
             continue
         if r["tipo"] is None:
@@ -704,8 +702,6 @@ def _cargar_bases_economicas(lado: str) -> dict:
             series.setdefault(r["tipo"], {}).update(r["series"])
     return series
 
-
-# =============== FUNCIONES CON @st.cache_data
 
 # =============== FUNCIONES CON @st.cache_data
 @st.cache_data(show_spinner="Procesando facturas…", max_entries=2)
@@ -750,7 +746,6 @@ def _columnas_archivo(nombre: str, _contenido: bytes, version: str) -> list[str]
 @st.cache_data(show_spinner="Procesando bases CFDI...", max_entries=2)
 def _cargar_base_cache(nombre: str, _contenido: bytes, version: str) -> pd.DataFrame:
     return leer_archivo(nombre, _contenido)
-
 
 @st.cache_data(show_spinner=False)
 def _anios_analisis_cache(_fac_ing, _fac_egr, version: str) -> tuple:
@@ -843,7 +838,8 @@ def _concentracion_cache(_fac: tuple, anios: tuple, version: str) -> dict:
         nombre_por_id = {}
     return {"motivo": None, "sin_cliente": False, "agrupa_por_rfc": agrupa_por_rfc, "por_cliente": por_cliente,
             "total_general": float(por_cliente.sum()),
-            "fact_emitida_total": float(base_conc["Total"].sum()),   # = tarjeta "Facturación Emitida Total" de Ingresos
+            # = tarjeta "Facturación Emitida Total" de Ingresos
+            "fact_emitida_total": float(base_conc["Total"].sum()),
             "nombre_por_id": nombre_por_id}
 
 
@@ -908,7 +904,6 @@ def _trazabilidad_cache(_fac_ing: tuple, _pago_ing: tuple, anios: tuple, version
             "pue_con_rep": int(pue["U"].isin(set(rep["U"])).sum()),
             "ncr_n": int(len(ncr)), "ncr_n_ppd": int((ncr["Metodo_Pago"] == "PPD").sum()), "ncr_monto": float(ncr_m.sum()),
             "ncr_monto_ppd": float(ncr_m[ncr["Metodo_Pago"] == "PPD"].sum()), "ventas_total": float(ventas["Total"].sum())}
-
 
 
 @st.cache_data(show_spinner=False)

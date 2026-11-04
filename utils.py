@@ -4,7 +4,8 @@ Funciones de propósito general para formateo, normalización de textos, convers
 import unicodedata
 import pandas as pd
 import re
-from config import (_PARENTESIS,_GRUPO_FINANCIERO_FINAL, _SUFIJOS_CORPORATIVOS, _CONECTORES_MINUSCULA, COL_FECHA_REP,MESES_ES)
+from config import (_PARENTESIS,_GRUPO_FINANCIERO_FINAL,
+                      _SUFIJOS_CORPORATIVOS,_CONECTORES_MINUSCULA, COL_FECHA_REP,MESES_ES)
 
 ContenidoArchivo = bytes | tuple[tuple[str, bytes], ...]
 
@@ -95,7 +96,6 @@ def _mxn(x: float) -> str:
     """Importe para textos que Streamlit interpreta como Markdown: "MXN 7,172,647" / "-MXN 7,172,647". NO usa
     "$": dos "$" en un mismo st.info/st.caption se interpretan como fórmula LaTeX (cursivas, sin espacios)."""
     return f"-MXN {abs(x):,.0f}" if round(x) < 0 else f"MXN {x:,.0f}"
-
 
 
 def _importe_abreviado_2d(x) -> str:
