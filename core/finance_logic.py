@@ -630,7 +630,7 @@ def _nomina_ingresos_mensual_mxn(df: pd.DataFrame) -> tuple[pd.Series | None, st
     """Nómina de ingresos por Fecha de Certificación (o Fecha de Emisión en ese formato), Total y Estatus."""
     columnas = _columnas_nomina_ingresos(df)
     if columnas is None:
-        return None, "El formato de nómina con **Fecha Pago** corresponde a Egresos"
+        return None, "El formato de nómina detectado corresponde a Egresos"
 
     col_fecha, col_total, col_estatus = columnas
     col_tipo = buscar_columna(df.columns, "Tipo de Factura")
