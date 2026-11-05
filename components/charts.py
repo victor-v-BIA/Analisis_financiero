@@ -182,7 +182,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
                 y=[None if pd.isna(x) or float(x) == 0 else float(x)
                    for x in series_anio[metrica][anio]],
                 name=str(anio), legendgroup=str(anio), showlegend=(j == 0),
-                mode="lines+markers", connectgaps=False,
+                mode="lines+markers", connectgaps=True,
                 line=dict(
                     color=color, 
                     width=2, 
@@ -386,7 +386,11 @@ def _fig_lineas_por_anio(
     (`lines+markers`, marcadores circulares), eje X = Ene-Dic, eje Y en millones (`$20M`), sin cuadrícula vertical, guías horizontales tenues y
     leyenda horizontal inferior. `rotulo` = texto del monto en el hover y en el título del eje Y."""
     fig = go.Figure()
-    for i, anio in enumerate(tabla.columns):
+    anios = [
+        anio for anio in tabla.columns
+        if not ocultar_ceros or (tabla[anio].notna() & tabla[anio].ne(0)).any()
+    ]
+    for i, anio in enumerate(anios):
         color = PALETA_BUMP_INGRESOS[i % len(PALETA_BUMP_INGRESOS)]
         y = [
             None if pd.isna(v) or (ocultar_ceros and float(v) == 0) else float(v)
@@ -394,7 +398,7 @@ def _fig_lineas_por_anio(
         ]
         fig.add_trace(go.Scatter(
             x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers",
-            connectgaps=True,
+            connectgaps=not ocultar_ceros,
             line=dict(color=color, width=2, shape="spline",
                     smoothing=0.5    
                 ),

@@ -773,20 +773,62 @@ def _anual_ppd_cache(lado: str, _fac: tuple, _rep: tuple, anios: tuple, version:
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
 def _balance_cache(_fac_ing: tuple, _pago_ing: tuple, _fac_egr: tuple, _pago_egr: tuple, _nomina: tuple,
+                   _productos: tuple | None, productos_cache_key: tuple | None,
                    anios: tuple, version: str) -> dict:
     """Sección 2: carga de las 5 bases, complementos mensuales (`rep_mensual_*`) y `_balance_documental_mensual`, todo
     en caché (el cambio de radio/selector no recalcula nada)."""
-    from core.finance_logic import (rep_mensual_clientes, rep_mensual_proveedores,
+    from core.finance_logic import (excluir_cfdis_divisas, rep_mensual_clientes, rep_mensual_proveedores,
                                     _balance_documental_mensual)
 
     f_fi, f_pi, f_fe, f_pe = (_ArchivoMem(*a) for a in (_fac_ing, _pago_ing, _fac_egr, _pago_egr))
     df_fac_ing, df_pago_ing = cargar_base(f_fi), cargar_base(f_pi)
     df_fac_egr = cargar_base(f_fe).rename(columns={"Fecha": "Fecha y Hora"})
     df_pago_egr = cargar_base(f_pe).rename(columns={"Documento Relacionado": "UUID DR"})
+    uuids_divisas: set[str] = set()
+    estadisticas_divisas = None
+    pagos_divisas_excluidos = 0
+    relacion_pago_disponible = True
+    if _productos is not None:
+        facturas_egr, _ = leer_facturas_egresos(f_fe.name, f_fe.getvalue())
+        nombre_productos, contenido_productos = _productos
+        if isinstance(contenido_productos, tuple):
+            productos = pd.concat(
+                [leer_archivo(nombre, contenido) for nombre, contenido in contenido_productos],
+                ignore_index=True,
+            )
+        else:
+            productos = leer_archivo(nombre_productos, contenido_productos)
+        _, uuids_divisas, estadisticas_divisas = excluir_cfdis_divisas(facturas_egr, productos)
+        if uuids_divisas:
+            columna_uuid = buscar_columna(df_fac_egr.columns, "UUID")
+            if columna_uuid is None:
+                raise KeyError("La Facturación Recibida no incluye la columna 'UUID'.")
+            uuid_facturas = df_fac_egr[columna_uuid].fillna("").astype(str).str.strip().str.upper()
+            df_fac_egr = df_fac_egr.loc[~uuid_facturas.isin(uuids_divisas)]
+
+            columna_relacion = (buscar_columna(df_pago_egr.columns, "UUID DR")
+                                or buscar_columna(df_pago_egr.columns, "Documento Relacionado"))
+            if columna_relacion is None:
+                relacion_pago_disponible = False
+            else:
+                uuid_relacionados = df_pago_egr[columna_relacion].fillna("").astype(str).str.strip().str.upper()
+                excluir_pagos = uuid_relacionados.isin(uuids_divisas)
+                pagos_divisas_excluidos = int(excluir_pagos.sum())
+                df_pago_egr = df_pago_egr.loc[~excluir_pagos]
     rep_ing = rep_mensual_clientes(f_fi, f_pi, anios)
-    rep_egr = rep_mensual_proveedores(f_fe, f_pe, anios)
-    return _balance_documental_mensual(df_fac_ing, df_pago_ing, df_fac_egr, df_pago_egr, cargar_base(_ArchivoMem(*_nomina)),
-                                       rep_ing=rep_ing, rep_egr=rep_egr, anios=anios)
+    rep_egr = rep_mensual_proveedores(f_fe, f_pe, anios, uuids_excluir_divisas=uuids_divisas)
+    balance = _balance_documental_mensual(
+        df_fac_ing, df_pago_ing, df_fac_egr, df_pago_egr, cargar_base(_ArchivoMem(*_nomina)),
+        rep_ing=rep_ing, rep_egr=rep_egr, anios=anios)
+    if estadisticas_divisas is not None:
+        balance["divisas"] = {
+            **estadisticas_divisas,
+            "cfdis_excluidos": len(uuids_divisas),
+            "uuids_divisas": uuids_divisas,
+            "complementos_excluidos": pagos_divisas_excluidos,
+            "relacion_pago_disponible": relacion_pago_disponible,
+        }
+    return balance
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")

@@ -36,7 +36,21 @@ from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa
 from components.pdf_generator import generate_modular_pdf
 
 
-def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago, f_nomina) -> None:
+def _datos_archivo_cache(archivo) -> tuple[str, bytes | tuple[tuple[str, bytes], ...]]:
+    nombre, contenido = _nb(archivo)
+    if isinstance(contenido, list):
+        partes = []
+        for parte in contenido:
+            bytes_parte = parte.descargar() if hasattr(parte, "descargar") else parte.getvalue()
+            partes.append((parte.name, bytes_parte))
+        return nombre, tuple(partes)
+    if hasattr(contenido, "descargar"):
+        contenido = contenido.descargar()
+    return nombre, contenido
+
+
+def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago, f_nomina,
+                  file_egresos_productos=None) -> None:
     """Dashboard Ejecutivo (Flujo de Efectivo): cruza Ingresos y Egresos para un vistazo de riesgo y viabilidad, antes de entrar
     al detalle operativo de cada módulo."""
     st.title("Dashboard Ejecutivo (Riesgo y Viabilidad)")
@@ -162,8 +176,28 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     if faltantes_balance:
         balance = {"disponible": False, "motivos": {"**Archivos faltantes**": ", ".join(faltantes_balance)}}
     else:
-        balance = _balance_cache(a_fac_ing, a_pago_ing, a_fac_egr, a_pago_egr, a_nomina,
-                                 anios_5, CODIGO_VERSION)
+        a_productos = _datos_archivo_cache(file_egresos_productos) if file_egresos_productos is not None else None
+        try:
+            balance = _balance_cache(a_fac_ing, a_pago_ing, a_fac_egr, a_pago_egr, a_nomina,
+                                     a_productos, a_productos, anios_5, CODIGO_VERSION)
+        except (KeyError, ValueError) as e:
+            if file_egresos_productos is not None:
+                st.error(f"'{file_egresos_productos.name}' no tiene la estructura esperada para detectar compras "
+                         f"de divisas. {e}")
+            else:
+                st.error(f"No se pudo calcular el flujo ejecutivo: {e}")
+            st.stop()
+        if a_productos is not None:
+            divisas = balance["divisas"]
+            st.info(
+                f"Filtro de divisas: {divisas['coincidencias']} concepto(s) 841216 coincidieron exactamente "
+                f"con CFDI por RFC, fecha e importe; se excluyeron {divisas['cfdis_excluidos']} CFDI."
+            )
+            if divisas["uuids_divisas"] and not divisas["relacion_pago_disponible"]:
+                st.warning("No se pudieron excluir pagos relacionados con CFDI de divisas: la Base de PAGO no "
+                           "incluye UUID DR o Documento Relacionado.")
+            elif divisas["complementos_excluidos"]:
+                st.info(f"Se excluyeron {divisas['complementos_excluidos']} pago(s) relacionado(s) con CFDI de divisas.")
     nombre_cobros, nombre_pagos = "Cobros", "Pagos considerados"
 
     if not balance["disponible"]:

@@ -1130,7 +1130,8 @@ def rep_mensual_clientes(f_fac, f_rep, anios=None) -> tuple[pd.Series | None, st
     return rep.groupby(rep["Fecha_Cobro"].dt.to_period("M"))["Cobro_Efectivo"].sum(), None
 
 
-def rep_mensual_proveedores(f_fac, f_rep, anios=None) -> tuple[pd.Series | None, str | None]:
+def rep_mensual_proveedores(f_fac, f_rep, anios=None,
+                            uuids_excluir_divisas: set[str] | None = None) -> tuple[pd.Series | None, str | None]:
     """Complementos de Proveedores por MES con los MISMOS pasos que `modulo_egresos()` / `anual_ppd_proveedores()`:
     `preparar_complementos_egresos` (Monto MXN por su propia fecha: Fecha Pago) y solo los años de la facturación recibida (`excluir_años_incompletos`)."""
     try:
@@ -1152,8 +1153,12 @@ def rep_mensual_proveedores(f_fac, f_rep, anios=None) -> tuple[pd.Series | None,
     if col_est is not None:   # solo complementos vigentes
         df_rep = df_rep[df_rep[col_est].astype(str).str.strip().str.upper().isin(["VIGENTE", "ACTIVO"])]
     col_rel = buscar_columna(df_rep.columns, "Documento Relacionado") or buscar_columna(df_rep.columns, "UUID DR")
-    if col_rel is not None and len(uuids_pue):
-        df_rep = df_rep[~df_rep[col_rel].fillna("").astype(str).str.strip().str.upper().isin(uuids_pue)]
+    if col_rel is not None:
+        relacionados = df_rep[col_rel].fillna("").astype(str).str.strip().str.upper()
+        excluir = relacionados.isin(uuids_pue)
+        if uuids_excluir_divisas:
+            excluir |= relacionados.isin(uuids_excluir_divisas)
+        df_rep = df_rep[~excluir]
     df_rep = preparar_complementos_egresos(df_rep, col_monto, col_fecha)
     df_rep = df_rep[df_rep["Año"].isin(ejercicios)]
     return df_rep.groupby("Mes")["Monto_Num"].sum(), None
