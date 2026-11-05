@@ -148,6 +148,8 @@ def _grafica_diferencia_cobros_pagos(periodos, cobros, pagos, diferencia, nombre
     return fig
 
 
+
+# Ciclos y Estacionalidad Operativa
 def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
                             metricas: list[str] | None = None) -> go.Figure:
     """Flujo mensual de los años seleccionados. El color identifica el ejercicio fiscal; si se muestran ambas métricas,
@@ -176,9 +178,11 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
         for j, metrica in enumerate(metricas_sel):
             dash, simbolo = estilos[metrica]
             fig.add_trace(go.Scatter(
-                x=MESES_ES, y=[None if pd.isna(x) else float(x) for x in series_anio[metrica][anio]],
+                x=MESES_ES,
+                y=[None if pd.isna(x) or float(x) == 0 else float(x)
+                   for x in series_anio[metrica][anio]],
                 name=str(anio), legendgroup=str(anio), showlegend=(j == 0),
-                mode="lines+markers", connectgaps=True,
+                mode="lines+markers", connectgaps=False,
                 line=dict(
                     color=color, 
                     width=2, 
@@ -372,17 +376,26 @@ def _fig_bump_top10(df: pd.DataFrame, monto_calc: str) -> go.Figure:
 
 
 
-
-def _fig_lineas_por_anio(tabla: pd.DataFrame, rotulo: str) -> go.Figure:
+# Egresos facturados por mes
+def _fig_lineas_por_anio(
+    tabla: pd.DataFrame,
+    rotulo: str,
+    ocultar_ceros: bool = False,
+) -> go.Figure:
     """Líneas comparativas mensuales por Año (`tabla` = 12 filas Mes x una columna por Año, monto NETO sin acumular): un `go.Scatter` por año
     (`lines+markers`, marcadores circulares), eje X = Ene-Dic, eje Y en millones (`$20M`), sin cuadrícula vertical, guías horizontales tenues y
     leyenda horizontal inferior. `rotulo` = texto del monto en el hover y en el título del eje Y."""
     fig = go.Figure()
     for i, anio in enumerate(tabla.columns):
         color = PALETA_BUMP_INGRESOS[i % len(PALETA_BUMP_INGRESOS)]
-        y = [None if pd.isna(v) else float(v) for v in tabla[anio]]
+        y = [
+            None if pd.isna(v) or (ocultar_ceros and float(v) == 0) else float(v)
+            for v in tabla[anio]
+        ]
         fig.add_trace(go.Scatter(
-            x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers", connectgaps=True, line=dict(color=color, width=2,shape="spline",    
+            x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers",
+            connectgaps=True,
+            line=dict(color=color, width=2, shape="spline",
                     smoothing=0.5    
                 ),
             marker=dict(symbol="circle", size=7, color=color), customdata=[[str(int(anio)), _mxn_2d(v) if v is not None else "Sin movimientos"] for v in y],
@@ -803,7 +816,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", 
         mode="lines+markers+text",  # <-- Añadido "+text" para mostrar etiquetas fijas
         text=texto_inpc,            # <-- Lista con el texto de cada punto
-        textposition="bottom left",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
+        textposition="top left",  # <-- Posición del texto respecto al marcador (top, bottom, middle, etc.)
         textfont=dict(color="#FA4A15", size=11), # Opcional: color a juego con la línea
         line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,
@@ -816,7 +829,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         x=anios_str, y=idx_emp, name="Ingresos (Base 100)", 
         mode="lines+markers+text",  # <-- Añadido "+text"
         text=texto_ingresos,        # <-- Lista con el texto de cada punto
-        textposition="top right", # <-- Posición para evitar que se encimen con los del INPC
+        textposition="bottom right", # <-- Posición para evitar que se encimen con los del INPC
         textfont=dict(color="#2563EB", size=11), # Opcional: color a juego
         line=dict(color="#2563EB", width=3), marker=dict(size=9, color="#2563EB"),
         customdata=datos_hover_ingresos,

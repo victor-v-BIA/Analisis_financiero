@@ -439,7 +439,10 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     st.markdown("**Egresos facturados por mes**" if comp_df is not None and nomina_disponible
                 else "**Egresos identificados por mes (componentes disponibles)**")
     fig_fact_mes = _fig_lineas_por_anio(
-        tabla_mes, "Egreso total" if comp_df is not None and nomina_disponible else "Egreso identificado")
+        tabla_mes,
+        "Egreso total" if comp_df is not None and nomina_disponible else "Egreso identificado",
+        ocultar_ceros=True,
+    )
     with st.container(key="egr_facturado_por_mes_pdf", width="stretch"):
         render_grafica(fig_fact_mes, key="egr_facturado_por_mes")
 
