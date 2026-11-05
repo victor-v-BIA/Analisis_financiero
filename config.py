@@ -334,3 +334,27 @@ TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de
 
 # Variable para finance_logic.py (escenario de credito)
 PCT_CAPACIDAD = 0.30
+
+
+# _______ SECCION 8________
+# Análisis de Divisas (clave 841216): identificación de las compras de divisas y parámetros del cruce con el Tipo de Cambio FIX de Banxico
+PREFIJO_DIVISAS = "841216"                       # Clave UNSPSC: cambio de divisas y transferencia de fondos (84121600, 84121603, 84121604, 84121605...)
+SERIES_COMPRA_DIVISAS = frozenset({"BSM390DIV"})  # Serie del encabezado con la que Santander timbra sus ventas de divisas (las comisiones, 84121500, van sin esta serie)
+RFCS_CASAS_CAMBIO = frozenset({"BMI9704113PA"})   # RFC de Monex: sus facturas recibidas son operaciones cambiarias
+SERIES_FIX = {"SF43718": "USD", "SF46410": "EUR"}  # series del SIE de Banxico: Tipo de Cambio FIX USD/MXN y EUR/MXN
+DIAS_DESFASE_ALERTA = 5                          # alerta de auditoría: CFDI timbrado más de 5 días después de la operación
+DIAS_MAX_FFILL_FIX = 7                           # un día inhábil toma el último FIX hábil previo, hasta 7 días hacia atrás
+BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa / Especialistas FX", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia:
+                     ("Banca Empresarial Preferente", 0.12, 0.15),                       # parámetros competitivos supuestos del mercado cambiario mexicano (no son
+                     ("Ventanilla Bancaria Tradicional", 0.25, 0.35))                    # cotizaciones: se ajustan aquí)
+
+CSS_KPI_DIVISAS = """
+<style>
+.div-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:.4rem 0 .6rem 0; }
+.div-kpi { border:1px solid rgba(128,128,128,.35); background:rgba(128,128,128,.07); border-radius:10px; padding:.7rem .9rem; }
+.div-kpi .t { font-size:.8rem; opacity:.75; }
+.div-kpi .v { font-size:1.3rem; font-weight:700; line-height:1.3; }
+.div-kpi .s { font-size:.78rem; opacity:.7; }
+@media (max-width: 900px) { .div-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+</style>
+"""

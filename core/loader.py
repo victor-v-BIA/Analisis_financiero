@@ -9,13 +9,15 @@ import streamlit as st
 import io
 import re
 import gc
+import html
 import hashlib
 import numpy as np
 from pathlib import Path
 from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
-                    RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT)
+                    RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,CSS_KPI_DIVISAS,
+                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA)
 
 from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
 
@@ -73,7 +75,10 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "fechadepago", "fechapago", "documentorelacionado", "uuidrelacionado",
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
-        "ivatrasladado", "uuiddr", "subtotal", "montomxn"
+        "ivatrasladado", "uuiddr", "subtotal", "montomxn", "descripcion",
+        "cantidad", "valorunitario", "unidad", "unidaddemedida", "numeroorden", "numerodeorden",
+        "numorden", "nodeorden", "orden", "ordencompra", "ordendecompra",
+        "folio", "fechadeoperacion", "claveunidad", "moneda"
     }
     
     def es_columna_util(col_name):
@@ -484,7 +489,7 @@ def _preparar_nomina(df_nomina: pd.DataFrame) -> pd.DataFrame | None:
 
 def _hojas_crudas(nombre: str, contenido: bytes) -> list[pd.DataFrame]:
     """Tablas de un Excel, Parquet o CSV para inspeccionar bases económicas."""
-    if nombre.lower().endswith(".parquet"):
+    if nombre.lower().endswith((".parquet", ".pqt")):
         return [pd.read_parquet(io.BytesIO(contenido), engine="pyarrow")]
     try:
         if nombre.lower().endswith(".csv"):
@@ -960,3 +965,110 @@ def _facturacion_anual_cache(_fac: tuple, lado: str, anios: tuple, version: str)
     f = f[~f["Es_NCR"]]
     por_anio = f.groupby(f["Fecha"].dt.year)["Total"].sum().reindex([int(a) for a in anios], fill_value=0.0)
     return {int(a): float(v) for a, v in por_anio.items()}
+
+
+@st.cache_data(show_spinner="Procesando base de productos...", max_entries=2)
+def _operaciones_divisas_cache(nombre: str, _contenido, version: str) -> pd.DataFrame:
+    """Devuelve conceptos 841216 USD/EUR normalizados; marca duplicados solo con orden explícita y filas idénticas."""
+    df = leer_archivo(nombre, _contenido)
+    if isinstance(df, pd.DataFrame) and df.empty and not len(df.columns):
+        return pd.DataFrame(columns=_COLUMNAS_OPERACIONES_DIVISAS)
+
+    requeridas = {
+        "Clave": [],
+        "Descripcion": ["Descripción"],
+        "Fecha": ["Fecha y Hora", "Fecha de emisión", "Fecha de Emision"],
+        "RFC Emisor": [],
+        "Razon Social Emisor": ["Razón Social Emisor", "Nombre Emisor", "Nombre del Emisor"],
+        "Cantidad": [],
+        "Valor Unitario": ["Precio Unitario"],
+        "Importe": ["Monto", "Importe MXN"],
+    }
+    opcionales = {
+        "Orden": ["Número de orden", "No. de orden", "No Orden", "Num Orden", "Orden de compra"],
+        "Unidad": ["Unidad de medida"],
+        "Clave Unidad": [],
+        "Moneda": ["Divisa"],
+    }
+    df = resolver_columnas(df, requeridas, opcionales)
+    clave = df["Clave"].fillna("").astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+    df = df.loc[clave.str.startswith(PREFIJO_DIVISAS, na=False)].copy()
+    if df.empty:
+        return pd.DataFrame(columns=_COLUMNAS_OPERACIONES_DIVISAS)
+
+    descripcion = df["Descripcion"].fillna("").astype(str)
+    texto_divisa = descripcion.copy()
+    for columna in ("Unidad", "Clave Unidad", "Moneda"):
+        if columna in df.columns:
+            texto_divisa = texto_divisa.str.cat(df[columna].fillna("").astype(str), sep=" ")
+    desc_norm = texto_divisa.map(_norm)
+    divisa = pd.Series(pd.NA, index=df.index, dtype="string")
+    es_usd = desc_norm.str.contains(
+        r"\b(?:usd|dls?|dlls?|dollars?|(?:us\s*)?dolares?|(?:us\s*)?dolar(?:es)?|us\s*dollar)\b",
+        regex=True, na=False,
+    )
+    es_eur = desc_norm.str.contains(r"\b(?:eur|euros?)\b", regex=True, na=False)
+    divisa.loc[es_usd & ~es_eur] = "USD"
+    divisa.loc[es_eur & ~es_usd] = "EUR"
+
+    patron_fecha = r"(?:operaci[oó]n|liquidaci[oó]n|fecha)\D{0,30}(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})"
+    fecha_texto = descripcion.str.extract(patron_fecha, flags=re.IGNORECASE)[0]
+    fecha_operacion = a_fecha(fecha_texto)
+    fecha_cfdi = a_fecha(df["Fecha"])
+    fecha_operacion = fecha_operacion.fillna(fecha_cfdi)
+
+    cantidad = a_numero(df["Cantidad"])
+    tc_facturado = a_numero(df["Valor Unitario"])
+    importe_mxn = a_numero(df["Importe"])
+    orden = df.get("Orden", pd.Series("", index=df.index)).fillna("").astype(str).str.strip()
+    rfc = df["RFC Emisor"].fillna("").astype(str).str.strip().str.upper()
+    institucion = df["Razon Social Emisor"].fillna("").astype(str).str.strip()
+    institucion = institucion.mask(institucion.eq(""), rfc)
+
+    salida = pd.DataFrame({
+        "Clave": clave.loc[df.index],
+        "Descripcion": descripcion,
+        "Divisa": divisa,
+        "Fecha_Operacion": fecha_operacion,
+        "Fecha_CFDI": fecha_cfdi,
+        "Cantidad": cantidad,
+        "Monto_Divisa": cantidad,
+        "TC_Facturado": tc_facturado,
+        "Importe_MXN": importe_mxn,
+        "RFC_Emisor": rfc,
+        "Institucion": institucion,
+        "Num_Orden": orden,
+        "Orden_Duplicada": False,
+        "Desfase_Alerta": False,
+    }, index=df.index)
+    valida = (
+        salida["Divisa"].notna()
+        & salida["Fecha_Operacion"].notna()
+        & salida["Cantidad"].gt(0)
+        & salida["TC_Facturado"].gt(0)
+        & salida["Importe_MXN"].gt(0)
+        & salida["RFC_Emisor"].ne("")
+    )
+    salida = salida.loc[valida].copy()
+
+    # Marcar únicamente filas idénticas que comparten un identificador explícito de orden.
+    tiene_orden = salida["Num_Orden"].ne("")
+    clave_orden = ["RFC_Emisor", "Divisa", "Num_Orden", "Fecha_Operacion", "Cantidad", "TC_Facturado", "Importe_MXN"]
+    repetida = salida.loc[tiene_orden].duplicated(clave_orden, keep=False)
+    salida.loc[repetida.index[repetida], "Orden_Duplicada"] = True
+    desfase = (salida["Fecha_CFDI"] - salida["Fecha_Operacion"]).dt.days
+    salida["Desfase_Alerta"] = desfase.gt(DIAS_DESFASE_ALERTA).fillna(False)
+    return salida.reset_index(drop=True)
+
+
+_COLUMNAS_OPERACIONES_DIVISAS = [
+    "Clave", "Descripcion", "Divisa", "Fecha_Operacion", "Fecha_CFDI", "Cantidad",
+    "Monto_Divisa", "TC_Facturado", "Importe_MXN", "RFC_Emisor", "Institucion",
+    "Num_Orden", "Orden_Duplicada", "Desfase_Alerta",
+]
+
+def _html_kpis_divisas(tarjetas: list) -> str:
+    """Fila de indicadores limpios (tarjetas claras que heredan el tema, sin cajas oscuras): lista de (título, valor, nota). En una sola línea de HTML."""
+    esc = lambda s: html.escape(str(s), quote=True)
+    celdas = "".join(f'<div class="div-kpi"><div class="t">{esc(t)}</div><div class="v">{esc(v)}</div><div class="s">{esc(s)}</div></div>' for t, v, s in tarjetas)
+    return f'{CSS_KPI_DIVISAS}<div class="div-kpis">{celdas}</div>'

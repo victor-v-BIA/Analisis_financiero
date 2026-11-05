@@ -13,25 +13,28 @@ from utils import _mxn, _formatear_mxn
 from utils import (_nb, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear, _monto_por_cuota)
 from core.loader import (anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
-                         _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache)
+                         _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache,_operaciones_divisas_cache,_html_kpis_divisas)
+from core.api_rates import _obtener_fix, cruzar_fix
 
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
                     METRICAS_VISUALIZAR, PESOS_INDICE,BANDA_CONCENTRACION_ALTA,
                     BANDA_CONCENTRACION_BAJA,MOSTRAR_INDICE_DESEMPENO,
                     REGLAS_INDICE,PLAZO_DEFECTO_MESES,PERIODOS_EVALUACION, TASA_REFERENCIA_ANUAL,MARGEN_SEGURIDAD_PCT,
                     PROPORCION_MINIMA, CREDITO_MINIMO, PCT_CAPACIDAD, PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
-                    MARGEN_COMERCIAL_DEFECTO, VENTANA_DICTAMEN_MESES, TIIE_DEFECTO)
+                    MARGEN_COMERCIAL_DEFECTO, VENTANA_DICTAMEN_MESES, TIIE_DEFECTO,PREFIJO_DIVISAS)
 
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
                                 _layout_plotly,_html_tabla_sin_facturacion,_grafica_gauge_score,_grafica_pilares_score,
-                                render_grafica)
+                                render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,_html_tabla_benchmark)
 
 from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,
                                  _flujo_bruto_mensual, _ohlc_mensual,
                                  _promedios_mensuales_historicos,
                                  _series_anuales_por_mes,_tabla_clientes_sin_facturacion,
-                                 _trazabilidad_indicadores,_indice_desempeno,_periodo_evaluacion,_excedente_homologado,_dictamen_credito,_escenarios_credito)
+                                 _trazabilidad_indicadores,_indice_desempeno,_periodo_evaluacion,
+                                 _excedente_homologado,_dictamen_credito,_escenarios_credito,
+                                 kpis_divisas, tabla_intermediarios, benchmark_mercado)
 
 from components.pdf_generator import generate_modular_pdf
 
@@ -50,7 +53,7 @@ def _datos_archivo_cache(archivo) -> tuple[str, bytes | tuple[tuple[str, bytes],
 
 
 def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago, f_nomina,
-                  file_egresos_productos=None) -> None:
+                  file_egresos_productos=None, file_fix=None) -> None:
     """Dashboard Ejecutivo (Flujo de Efectivo): cruza Ingresos y Egresos para un vistazo de riesgo y viabilidad, antes de entrar
     al detalle operativo de cada módulo."""
     st.title("Dashboard Ejecutivo (Riesgo y Viabilidad)")
@@ -804,6 +807,12 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                       a un crédito que se ajuste a sus necesidades."""
         })
     # ---------------------------------------------------------------
+    # SECCIÓN 8: Operaciones en divisas
+    # ---------------------------------------------------------------
+    st.divider()
+    _seccion_divisas(file_egresos_productos, f_fix=file_fix, anios=anios_5)
+
+    # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA DE REPORTES EN PDF
     # ---------------------------------------------------------------
     st.divider()
@@ -960,3 +969,77 @@ def _simulador_financiamiento(balance: dict):
     }
 
     return resultado_dictamen, plazo
+
+
+#===================================
+# SECCION 8
+#===================================
+
+def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
+    """Sección «8. Eficiencia Cambiaria y Operaciones en Divisas» del Dashboard Ejecutivo, 100% automática para cualquier empresa cargada: conceptos de CFDI recibidos con
+    clave 841216 (base de Productos Recibidos, ruteada desde la barra lateral; sin cargadores aquí) frente al tipo de cambio de referencia consultado por `_obtener_fix`
+    (archivo FIX, Banxico SIE, Frankfurter o Yahoo Finance). El contraste es contra el tipo de cambio del DÍA de la operación (`Fecha de operación`). `anios` es la
+    ventana de ejercicios de los CFDI cargados (`anios_5`, p. ej. 2021-2025): operaciones y gráfica quedan dentro de ella (nada de meses posteriores sin facturación). Una moneda
+    a la vez (inicia en la de mayor volumen en MXN). Cuatro indicadores limpios, UNA gráfica y dos tablas: A) intermediarios actuales y B) benchmark de mercado."""
+    st.header("8. Eficiencia Cambiaria y Operaciones en Divisas",
+              help=("Compras de divisas (conceptos de CFDI recibidos con clave 841216) comparadas contra el tipo de cambio de referencia del DÍA de la operación (Fecha de "
+                    "operación; último día hábil previo si es inhábil): mide la ejecución spot del banco frente al mercado de ese mismo día. Spread = TC facturado − referencia; "
+                    "sobreprecio = divisa comprada × spread. Estas compras no cuentan como egresos operativos; las comisiones bancarias (84121500) sí."))
+    if f_productos is None:
+        st.info("Para analizar las operaciones en divisas, incluye en la carga la base «CFDI Recibidos Productos» (conceptos de CFDI recibidos).")
+        return
+    try:
+        ops = _operaciones_divisas_cache(f_productos.name, f_productos.getvalue(), CODIGO_VERSION)
+    except (KeyError, ValueError) as e:
+        st.info(f"Información insuficiente: «{f_productos.name}» no trae las columnas esperadas de conceptos de CFDI recibidos. {e.args[0]}")
+        return
+    if ops.empty:
+        st.info(f"La base «{f_productos.name}» no trae conceptos con la clave {PREFIJO_DIVISAS}… (cambio de divisas).")
+        return
+    fuera_periodo = 0
+    if anios:                                                            # ejercicios cerrados de los CFDI cargados: se descarta todo lo de fuera de la ventana
+        en_ventana = ops["Fecha_Operacion"].dt.year.isin([int(a) for a in anios])
+        fuera_periodo = int((~en_ventana).sum())
+        ops = ops[en_ventana].reset_index(drop=True)
+        if ops.empty:
+            st.info(f"La base «{f_productos.name}» no trae operaciones de divisas dentro de {min(anios)}–{max(anios)}, el periodo de los CFDI cargados.")
+            return
+    volumenes = ops.groupby("Divisa")["Importe_MXN"].sum().reindex(["USD", "EUR"], fill_value=0)
+    monedas = ["USD", "EUR"]
+    moneda_inicial = int(volumenes["EUR"] > volumenes["USD"])
+    fix, fuente, aviso = _obtener_fix(ops, f_fix)
+    moneda = st.radio("Moneda", monedas, index=moneda_inicial, horizontal=True, key="div_moneda")
+    ops_moneda = ops[ops["Divisa"].eq(moneda)]
+    if ops_moneda.empty:
+        st.info(f"No se identificaron operaciones {moneda} en los conceptos 841216. Revisa si la descripción, unidad o moneda del producto indica {moneda}.")
+        return
+    d = cruzar_fix(ops_moneda, fix)
+    k = kpis_divisas(d)
+    hay_fix = k["n_fix"] > 0
+    nd = "No disponible"
+    st.markdown(_html_kpis_divisas([
+        ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
+        ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}: lo que pagó según sus facturas {PREFIJO_DIVISAS}"),
+        ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else nd, "Mercado del día de cada operación (Fecha de operación)" if hay_fix else "Sin conexión a la fuente de mercado"),
+        ("Spread promedio y sobreprecio total", f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else nd,
+         f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Cantidad × (TC facturado − referencia)")]), unsafe_allow_html=True)
+    if anios:
+        st.caption(f"Periodo analizado: {min(anios)}–{max(anios)} (ejercicios de los CFDI cargados)"
+                   + (f"; {fuera_periodo} operaciones de divisas de otros años quedaron fuera." if fuera_periodo else "."))
+
+    
+    if aviso:
+        st.warning(f"Referencia de mercado incompleta: {aviso}.")
+    if k["n_fix"] < k["n"]:
+        st.warning(f"Hay referencia para {k['n_fix']} de {k['n']} operaciones; los cálculos de spread y benchmark solo consideran las que tienen referencia.")
+
+    st.plotly_chart(fig_tc_fix_vs_facturado(d, fix.get(moneda), moneda, anios), use_container_width=True, key="div_fig_tc")
+    st.markdown("**A) Intermediarios actuales de la empresa**")
+    st.markdown(_html_tabla_intermediarios(tabla_intermediarios(d), moneda), unsafe_allow_html=True)
+    st.markdown(f"**B) Benchmark de mercado:** ¿con quién conviene operar? Lo que la empresa habría pagado por el mismo volumen de {moneda} y las mismas fechas, sobre la referencia")
+    if hay_fix:
+        st.markdown(_html_tabla_benchmark(benchmark_mercado(d)), unsafe_allow_html=True)
+        st.caption("Spreads de mercado supuestos (pesos por unidad de divisa sobre la referencia): especialistas FX +0.05 a +0.08, banca empresarial preferente +0.12 a +0.15 y ventanilla "
+                   "tradicional +0.25 a +0.35. Ahorro neto = lo facturado − lo que habría pagado; negativo si el banco actual fue más barato que ese nivel.")
+    else:
+        st.info("El benchmark necesita el tipo de cambio de referencia; no se pudo consultar (sin conexión).")

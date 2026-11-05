@@ -126,10 +126,11 @@ def main() -> None:
         st.markdown("---")
         
         metodo_carga = st.toggle("Empresa con múltiples archivos (Usar Google Drive)", value=False)
+        st.caption("Opcional: nombra el archivo histórico de Banxico con «FIX» o «Banxico» para usarlo como primera referencia cambiaria.")
         
         tipos_archivo = {
             "ingresos_facturas": [], "ingresos_pago": [], "egresos_facturas": [],
-            "egresos_productos": [], "egresos_pago": [], "nomina": []
+            "egresos_productos": [], "egresos_pago": [], "nomina": [], "fix": []
         }
         timbrado_omitido = False
         no_clasificados = []
@@ -151,7 +152,8 @@ def main() -> None:
                             continue
                         
                         tipo = None
-                        if "emitid" in nombre and "producto" not in nombre: tipo = "ingresos_facturas"
+                        if nombre.startswith("fix") or "_fix" in nombre or "fix_" in nombre or "banxico" in nombre or "tipo de cambio" in nombre: tipo = "fix"
+                        elif "emitid" in nombre and "producto" not in nombre: tipo = "ingresos_facturas"
                         elif "cliente" in nombre and "pago" in nombre: tipo = "ingresos_pago"
                         elif "producto" in nombre and "emitid" not in nombre: tipo = "egresos_productos"
                         elif "recibid" in nombre and "pago" not in nombre: tipo = "egresos_facturas"
@@ -183,7 +185,8 @@ def main() -> None:
                         continue
                     
                     tipo = None
-                    if "emitid" in nombre and "producto" not in nombre: tipo = "ingresos_facturas"
+                    if nombre.startswith("fix") or "_fix" in nombre or "fix_" in nombre or "banxico" in nombre or "tipo de cambio" in nombre: tipo = "fix"
+                    elif "emitid" in nombre and "producto" not in nombre: tipo = "ingresos_facturas"
                     elif "cliente" in nombre and "pago" in nombre: tipo = "ingresos_pago"
                     elif "producto" in nombre and "emitid" not in nombre: tipo = "egresos_productos"
                     elif "recibid" in nombre and "pago" not in nombre: tipo = "egresos_facturas"
@@ -207,7 +210,7 @@ def main() -> None:
 
         if archivos_listos:
             def archivo_tipo(clave):
-                arch_tipo = tipos_archivo[clave]
+                arch_tipo = tipos_archivo.get(clave, [])
                 if not arch_tipo: return None
                 if len(arch_tipo) > 1: return ArchivoGrupoSeguro(arch_tipo)
                 return arch_tipo[-1]
@@ -218,13 +221,15 @@ def main() -> None:
             file_egresos_productos = archivo_tipo("egresos_productos")
             file_egresos_pago = archivo_tipo("egresos_pago")
             file_nomina = archivo_tipo("nomina")
+            file_fix = archivo_tipo("fix")
             
             hay_archivos_ruteados = any(f is not None for f in (
                 file_ingresos_facturas, file_ingresos_pago,
-                file_egresos_facturas, file_egresos_pago, file_nomina))
+                file_egresos_facturas, file_egresos_productos,
+                file_egresos_pago, file_nomina))
         else:
             hay_archivos_ruteados = False
-            file_ingresos_facturas = file_ingresos_pago = file_egresos_facturas = file_egresos_productos = file_egresos_pago = file_nomina = None
+            file_ingresos_facturas = file_ingresos_pago = file_egresos_facturas = file_egresos_productos = file_egresos_pago = file_nomina = file_fix = None
 
         if hay_archivos_ruteados:
             modulo = st.radio("Módulo a Analizar:",
@@ -243,7 +248,8 @@ def main() -> None:
     # ENRUTAMIENTO FINAL
     if modulo == "Dashboard Ejecutivo (Riesgo y Viabilidad)":
         modulo_riesgo(file_ingresos_facturas, file_ingresos_pago, file_egresos_facturas,
-                      file_egresos_pago, file_nomina, file_egresos_productos=file_egresos_productos)
+                      file_egresos_pago, file_nomina, file_egresos_productos=file_egresos_productos,
+                      file_fix=file_fix)
     elif modulo == "Ingresos (Auditoría Operativa)":
         modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, None,
                         file_egresos_facturas, file_egresos_pago, file_nomina)

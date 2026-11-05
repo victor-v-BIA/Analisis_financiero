@@ -10,7 +10,7 @@ import re
 import numpy as np
 from config import (CODIGO_VERSION, DIAS_GRACIA_PPD, MESES_ES, COLUMNAS_DETALLE_ANUAL,PERIODOS_EVALUACION,MARGEN_SEGURIDAD_PCT,TASA_REFERENCIA_ANUAL
 ,BANDAS_DICTAMEN,PESOS_INDICE,REGLAS_INDICE,MIN_MESES_MARGEN, VENTANA_MARGEN_MESES, MIN_ANIOS_ESTABILIDAD,
-SIN_DICTAMEN, PCT_CAPACIDAD, PROPORCION_MINIMA, VENTANA_DICTAMEN_MESES,CREDITO_MINIMO)
+SIN_DICTAMEN, PCT_CAPACIDAD, PROPORCION_MINIMA, VENTANA_DICTAMEN_MESES,CREDITO_MINIMO,BENCHMARK_MERCADO)
 
 
 from core.loader import (_facturas_cache,
@@ -1552,3 +1552,61 @@ def _escenarios_credito(flujo: pd.Series, plazo: int, tasa_anual: float) -> dict
             "conservador": escenario(flujo_min, idx_min),
             "medio": escenario(float(ventana.loc[idx_intermedio]), idx_intermedio) if idx_intermedio is not None else None,
             "optimista": escenario(flujo_max, idx_max)}
+
+
+def _promedio_ponderado(valores: pd.Series, pesos: pd.Series) -> float:
+    validos = valores.notna() & pesos.notna() & pesos.gt(0)
+    if not validos.any():
+        return float("nan")
+    pesos_validos = pesos.loc[validos]
+    return float((valores.loc[validos] * pesos_validos).sum() / pesos_validos.sum())
+
+
+def kpis_divisas(d: pd.DataFrame) -> dict:
+    """KPI de una divisa: volúmenes, TC facturado/de referencia ponderados, spread, costo cambiario y alertas."""
+    con = d[d["TC_FIX"].notna()]
+    fix_pond = _promedio_ponderado(con["TC_FIX"], con["Monto_Divisa"])
+    fact_con_fix = _promedio_ponderado(con["TC_Facturado"], con["Monto_Divisa"])
+    return {"n": int(len(d)), "n_fix": int(len(con)), "vol_divisa": float(d["Monto_Divisa"].sum()), "vol_mxn": float(d["Importe_MXN"].sum()),
+            "tc_facturado": _promedio_ponderado(d["TC_Facturado"], d["Monto_Divisa"]), "tc_fix": fix_pond,
+            "spread_mxn": fact_con_fix - fix_pond if len(con) else float("nan"),
+            "spread_pct": (fact_con_fix / fix_pond - 1) * 100 if len(con) and fix_pond else float("nan"),
+            "costo_total": float(con["Sobreprecio_Total_MXN"].sum()) if len(con) else float("nan"),
+            "ordenes_duplicadas": int(d.loc[d["Orden_Duplicada"], "Num_Orden"].nunique()),
+            "filas_duplicadas": int(d["Orden_Duplicada"].sum()),
+            "desfases": int(d["Desfase_Alerta"].sum())}
+
+def tabla_intermediarios(d: pd.DataFrame) -> pd.DataFrame:
+    """Intermediarios actuales por RFC/institución: operaciones, volúmenes, concentración, TC, spread y costo cambiario."""
+    columnas = ["RFC", "Institución", "Operaciones", "Volumen divisa", "Volumen MXN", "Concentración %",
+                "TC promedio", "TC referencia promedio", "Spread MXN", "Spread %", "Costo implícito MXN"]
+    if d.empty:
+        return pd.DataFrame(columns=columnas)
+    filas = []
+    total_mxn = float(d["Importe_MXN"].sum())
+    for (rfc, inst), g in d.groupby(["RFC_Emisor", "Institucion"], sort=False):
+        con = g[g["TC_FIX"].notna()]
+        filas.append({"RFC": rfc, "Institución": inst, "Operaciones": int(len(g)), "Volumen divisa": float(g["Monto_Divisa"].sum()), "Volumen MXN": float(g["Importe_MXN"].sum()),
+                      "Concentración %": float(g["Importe_MXN"].sum()) / total_mxn * 100 if total_mxn else float("nan"),
+                      "TC promedio": _promedio_ponderado(g["TC_Facturado"], g["Monto_Divisa"]),
+                      "TC referencia promedio": _promedio_ponderado(con["TC_FIX"], con["Monto_Divisa"]) if len(con) else float("nan"),
+                      "Spread MXN": _promedio_ponderado(con["Spread_MXN"], con["Monto_Divisa"]) if len(con) else float("nan"),
+                      "Spread %": (_promedio_ponderado(con["TC_Facturado"], con["Monto_Divisa"]) / _promedio_ponderado(con["TC_FIX"], con["Monto_Divisa"]) - 1) * 100 if len(con) else float("nan"),
+                      "Costo implícito MXN": float(con["Sobreprecio_Total_MXN"].sum()) if len(con) else float("nan")})
+    return pd.DataFrame(filas, columns=columnas).sort_values("Volumen MXN", ascending=False, kind="stable").reset_index(drop=True)
+
+def benchmark_mercado(d: pd.DataFrame) -> pd.DataFrame:
+    """Benchmark de mercado de UNA divisa: lo que la empresa habría pagado por el MISMO volumen y en las MISMAS fechas si hubiera operado a cada nivel de spread de
+    `BENCHMARK_MERCADO` sobre la referencia (monto = Σ Cantidad × (TC referencia + spread), en el extremo bajo y en el alto del rango) frente a lo que le facturaron sus bancos (Σ Importe,
+    solo operaciones con FIX). Ahorro neto = facturado − lo que habría pagado (negativo si el banco actual fue más barato que ese nivel). Un spread más bajo da más ahorro."""
+    con = d[d["TC_FIX"].notna()]
+    real = float(con["Importe_MXN"].sum())
+    filas = []
+    for nivel, bajo, alto in BENCHMARK_MERCADO:
+        pagaria_bajo = float((con["Monto_Divisa"] * (con["TC_FIX"] + bajo)).sum())
+        pagaria_alto = float((con["Monto_Divisa"] * (con["TC_FIX"] + alto)).sum())
+        filas.append({"Nivel": nivel, "Spread bajo": bajo, "Spread alto": alto, "Pagaría bajo": pagaria_bajo, "Pagaría alto": pagaria_alto,
+                      "Ahorro máximo": real - pagaria_bajo, "Ahorro mínimo": real - pagaria_alto})
+    t = pd.DataFrame(filas)
+    t.attrs["facturado_real"] = real
+    return t

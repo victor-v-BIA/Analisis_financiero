@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 import pandas as pd
+import numpy as np
 import html
 import plotly.express as px
 from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
@@ -893,3 +894,69 @@ def _fig_eficiencia_operativa(anios_str, idx_emp, idx_inpp):
         yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
     )
     return fig
+
+
+# SECCION 8
+
+def fig_tc_fix_vs_facturado(d: pd.DataFrame, serie_fix: pd.Series | None, moneda: str, anios=None) -> go.Figure:
+    """Gráfica comparativa de UNA divisa: línea punteada gris oscuro con la evolución del TC de referencia (diario, `ffill` en inhábiles) y, por cada institución emisora
+    (Razon Social Emisor), una línea con marcadores con el TC facturado (Valor Unitario) en cada operación, para ver qué tan arriba del FIX vendió la divisa cada banco."""
+    fig = go.Figure()
+    f0, f1 = d["Fecha_Operacion"].min() - pd.Timedelta(days=7), d["Fecha_Operacion"].max() + pd.Timedelta(days=7)
+    if anios:                                                            # la línea del FIX nunca sale de la ventana de ejercicios de los CFDI (p. ej. 2021-2025)
+        f0, f1 = max(f0, pd.Timestamp(int(min(anios)), 1, 1)), min(f1, pd.Timestamp(int(max(anios)), 12, 31))
+    if serie_fix is not None and len(serie_fix):
+        s = serie_fix.loc[f0:f1]
+        if len(s):
+            s = s.reindex(pd.date_range(s.index.min(), s.index.max(), freq="D")).ffill()
+            fig.add_trace(go.Scatter(x=s.index, y=s.to_numpy(), name=f"TC referencia {moneda}/MXN", mode="lines", line=dict(color="#94A3B8" , width=2, dash="dot"),
+                                     hovertemplate="<b>TC de referencia</b> %{x|%d/%m/%Y}: %{y:.4f}<extra></extra>"))
+    for i, (inst, g) in enumerate(d.sort_values("Fecha_Operacion", kind="stable").groupby("Institucion", sort=False)):
+        color = PALETA_BUMP[i % len(PALETA_BUMP)]
+        spread = [("sin referencia" if pd.isna(v) else f"{v * 100:+.2f} ¢ ({p:+.2f}%)") for v, p in zip(g["Spread_MXN"], g["Spread_Pct"])]
+        fig.add_trace(go.Scatter(
+            x=g["Fecha_Operacion"], y=g["TC_Facturado"], name=str(_nombre_abreviado(inst)).upper(), mode="lines+markers", line=dict(color=color, width=2), marker=dict(color=color, size=8),
+            customdata=np.column_stack([g["Monto_Divisa"].map(lambda v: f"{v:,.2f}"), g["Num_Orden"].fillna("s/d"), spread, g["Importe_MXN"].map(_mxn_2d), [inst] * len(g)]),
+            hovertemplate=("<b>%{customdata[4]}</b><br>Operación: %{x|%d/%m/%Y}<br>TC facturado: %{y:.4f}<br>Cantidad: %{customdata[0]} " + moneda
+                           + "<br>Importe: %{customdata[3]}<br>Orden: %{customdata[1]}<br>Spread vs referencia: %{customdata[2]}<extra></extra>")))
+    fig.update_xaxes(showgrid=False, zeroline=False,tickformat="%m/%Y")
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=".2f", title_text=f"MXN por {moneda}")
+    fig.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="closest",
+                      legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="left", x=0), legend_title_text=None)
+    return fig
+
+
+def _html_tabla_intermediarios(t: pd.DataFrame, moneda: str) -> str:
+    """A) Intermediarios actuales de la empresa (mismo estilo que la tabla de la sección 6): una fila por RFC Emisor / Razon Social Emisor con sus operaciones, volumen,
+    concentración, TC facturado, TC de referencia, spread cobrado y costo cambiario sobre la referencia. En una sola línea de HTML; el '$' va como entidad."""
+    esc = lambda s: html.escape(str(s), quote=True)
+    dinero_ = lambda v: "n/d" if pd.isna(v) else f"{'-' if v < 0 else ''}&#36;{abs(v):,.2f}"
+    anchos = (23, 7, 11, 11, 9, 9, 9, 11, 10)
+    cols = ["Institución (RFC)", "Operaciones", f"Volumen ({moneda})", "Volumen (MXN)", "Concentración", "TC facturado", "TC referencia", "Spread cobrado", "Costo sobre referencia"]
+    filas = []
+    for r in t.itertuples(index=False):
+        nombre = f"{r[1]} ({r[0]})" if r[0] else str(r[1])
+        spread = "n/d" if pd.isna(r[8]) else f"{r[8] * 100:+.2f}¢ ({r[9]:+.2f}%)"
+        filas.append(f'<tr><td class="sf-nombre" title="{esc(nombre)}">{esc(nombre)}</td><td class="sf-num">{int(r[2])}</td><td class="sf-num">{r[3]:,.2f}</td>'
+                     f'<td class="sf-num">{dinero_(r[4])}</td><td class="sf-num">{r[5]:.1f}%</td><td class="sf-num">{r[6]:.4f}</td>'
+                     f'<td class="sf-num">{"n/d" if pd.isna(r[7]) else f"{r[7]:.4f}"}</td><td class="sf-num">{spread}</td><td class="sf-num">{dinero_(r[10])}</td></tr>')
+    colgroup = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in anchos) + "</colgroup>"
+    encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i else f"<th>{esc(c)}</th>" for i, c in enumerate(cols)) + "</tr></thead>"
+    return (f'{CSS_SIN_FACTURACION}<div class="sf-wrap" style="max-height:{min(38 + 35 * len(t), 300)}px"><table class="sf-tabla">{colgroup}{encabezado}'
+            f"<tbody>{''.join(filas)}</tbody></table></div>")
+
+def _html_tabla_benchmark(b: pd.DataFrame) -> str:
+    """B) Benchmark de mercado: para cada nivel de intermediario, su rango de spread sobre la referencia, el monto que la empresa habría pagado por el mismo volumen y fechas, y el
+    ahorro neto frente a lo que le facturaron sus bancos (renglón de referencia al inicio). Rangos «bajo – alto»; el ahorro máximo corresponde al spread bajo."""
+    esc = lambda s: html.escape(str(s), quote=True)
+    mxn = lambda v: f"{'-' if v < 0 else ''}&#36;{abs(v):,.2f}"
+    real = b.attrs.get("facturado_real", float("nan"))
+    cols = ["Nivel de mercado", "Spread sobre referencia", "Monto que habría pagado (MXN)", "Ahorro neto (MXN)"]
+    filas = [f'<tr><td class="sf-nombre"><b>Lo que le facturaron sus bancos actuales</b></td><td class="sf-num">—</td><td class="sf-num"><b>{mxn(real)}</b></td><td class="sf-num">—</td></tr>']
+    for r in b.itertuples(index=False):
+        filas.append(f'<tr><td class="sf-nombre" title="{esc(r[0])}">{esc(r[0])}</td><td class="sf-num">+&#36;{r[1]:.2f} a +&#36;{r[2]:.2f}</td>'
+                     f'<td class="sf-num">{mxn(r[3])} a {mxn(r[4])}</td><td class="sf-num">{mxn(r[6])} a {mxn(r[5])}</td></tr>')
+    colgroup = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in (34, 18, 28, 20)) + "</colgroup>"
+    encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i else f"<th>{esc(c)}</th>" for i, c in enumerate(cols)) + "</tr></thead>"
+    return (f'{CSS_SIN_FACTURACION}<div class="sf-wrap" style="max-height:{38 + 35 * (len(b) + 1)}px"><table class="sf-tabla">{colgroup}{encabezado}'
+            f"<tbody>{''.join(filas)}</tbody></table></div>")

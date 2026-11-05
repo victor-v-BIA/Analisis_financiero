@@ -61,8 +61,9 @@ def a_numero(serie: pd.Series) -> pd.Series:
 def a_fecha(serie: pd.Series) -> pd.Series:
     """Texto DD/MM/YYYY HH:MM (CSV) o YYYY-MM-DD HH:MM:SS (Excel) -> fecha sin hora."""
     s = serie.astype(str).str.strip()
-    formatos = ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S",
-                "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
+    formatos = ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%d-%m-%Y",
+                "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M",
+                "%Y-%m-%d", "%Y/%m/%d")
     dt = pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
     for fmt in formatos:
         if not dt.isna().any():
