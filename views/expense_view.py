@@ -326,7 +326,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
 
     st.divider()
     st.subheader("Exportación de Reporte - Vista Financiera")
-    col_pdf_desc, col_pdf_info = st.columns([1, 2])
+    col_pdf_desc, col_pdf_info = st.columns([1, 1])
 
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")

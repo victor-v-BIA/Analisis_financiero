@@ -471,7 +471,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
 
     st.divider()
     st.subheader("Exportación de Reporte - Vista Financiera")
-    col_pdf_desc, _ = st.columns([1, 2])
+    col_pdf_desc, _ = st.columns([1, 1])
 
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
