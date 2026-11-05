@@ -617,7 +617,7 @@ def _html_resumen_nomina_gastos(r: dict, gastos_label: str = "Gastos (Proveedore
                                      f'<span style="margin-left:18px">{_mxn_2d(v)} · {pct(v)}</span></div>')
     return (f'<div style="padding:6px 4px"><div style="opacity:.75">Monto total (Gastos + Nómina)</div>'
             f'<div style="font-size:1.4rem;font-weight:700">{_mxn_2d(tot)}</div>'
-            + fila(COLOR_NOMINA, NOMBRE_NOMINA, r["nomina"]) + fila(COLOR_GASTOS, gastos_label, r["gastos"]) + "</div>")
+            + fila(COLOR_GASTOS, gastos_label, r["gastos"])  + fila(COLOR_NOMINA, NOMBRE_NOMINA, r["nomina"])+ "</div>")
 
 
 def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:

@@ -571,8 +571,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
 
                 filas_pago_pdf = [
                     {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},
-                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Egresos PUE</font></b><br/><font color='#4B5563'>MXN {pue_g:,.2f} · {pct_pago(pue_g)}</font>"},
-                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Egresos PPD</font></b><br/><font color='#4B5563'>MXN {ppd_g:,.2f} · {pct_pago(ppd_g)}</font>"}
+                    {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>PUE</font></b><br/><font color='#4B5563'>MXN {pue_g:,.2f} · {pct_pago(pue_g)}</font>"},
+                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>PPD</font></b><br/><font color='#4B5563'>MXN {ppd_g:,.2f} · {pct_pago(ppd_g)}</font>"}
                 ]
                 if ppd_pendiente_g >= 0:
                     filas_pago_pdf.extend([

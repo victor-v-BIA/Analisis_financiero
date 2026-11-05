@@ -313,7 +313,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         st.text_area(
             "Comentario para la vista de Volatilidad (Velas Japonesas)",
             max_chars=600,
-            placeholder="Escribe un comentario compartido para las gráficas de velas (máx. 600 caracteres)...",
+            placeholder="Escribe un comentario para las gráficas de velas (máx. 600 caracteres)...",
             key="note_graf_ciclos_velas_input",
         )
 
@@ -455,7 +455,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         nota_plazos = st.text_area(
             "Insight - Tiempos Documentados",
             max_chars=600,
-            key="note_graf_plazos_m"
+            key="note_graf_plazos_m",
+            placeholder="Escríbe tus conslusiones (máx. 600 caracteres)..."
         )
 
         if fig_plazos_y is not None:
@@ -546,7 +547,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             with col_dona:
                 render_grafica(fig_dona, key="exec_concentracion_clientes")
-            nota_conc = st.text_area("Insight - Concentración de Ingresos", max_chars=600, key="note_graf_conc")
+            nota_conc = st.text_area("Insight - Concentración de Ingresos",
+                                      max_chars=600, 
+                                      key="note_graf_conc",
+                                      placeholder="Escríbe tus conslusiones (máx. 600 caracteres)...")
             
             tabla_conc = por_cliente.rename("Facturación Total").reset_index().rename(
                 columns={"Cliente": "RFC" if conc["agrupa_por_rfc"] else "Razón Social"})
@@ -628,7 +632,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
            # Agregar tabla y nota de clientes sin facturación al PDF
             if df_sf_original is not None and not df_sf_original.empty:
-                nota_no_fact = st.text_area("Insight - Clientes sin facturación en el periodo", max_chars=600, key="nota_no_fact")
+                nota_no_fact = st.text_area("Insight - Clientes sin facturación en el periodo",
+                                            max_chars=600,
+                                            key="nota_no_fact",
+                                            placeholder="Escríbe tus conslusiones (máx. 600 caracteres)...")
                 
                 df_sf_pdf = df_sf_original.copy()
                 col_facturado = f"Facturado {res_sf['anio_prev']} (MXN)"

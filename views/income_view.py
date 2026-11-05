@@ -388,10 +388,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
              "Complementos de Pago Emitidos entre Facturación PPD"),
             ("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito"),
             ("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d",
-             "Cobrado menos Notas de Crédito" if ingreso_neto is not None else "No disponible sin la base PAGO"),
-            ("Ingresos por Nómina",
-             dinero(nomina_ingresos_total) if nomina_ingresos_total is not None else "n/d",
-             "Total vigente por Fecha de Certificación; separado de la facturación")
+             "Cobrado menos Notas de Crédito" if ingreso_neto is not None else "No disponible sin la base PAGO")
         ]
         # 2. Las dividimos automáticamente en bloques de 3 en 3 para que salgan filas perfectas
         for i in range(0, len(metrics_kpis), 3):
@@ -403,15 +400,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                 "title": titulo_bloque, 
                 "data": bloque_tres
             })
-    if nomina_ingresos_total is not None:
-        
-        with st.container(key="ing_kpis_nomina_pdf"):
-            st.metric(
-                "Ingresos por Nómina",
-                dinero(nomina_ingresos_total) if nomina_ingresos_total is not None else "n/d",
-                help=("Suma del Total de comprobantes de nómina Vigente/Activo por Fecha de Certificación, "
-                    "en los ejercicios seleccionados; se presenta separado de la facturación.")
-            )
+
 
     matriz = matriz_anual(res, ncr_anual)
 
@@ -489,13 +478,13 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin"):
             with st.spinner("Generando reporte financiero en PDF..."):
                 final_elements = [
-                    {"type": "heading", "text": "Observaciones del Analista"},
+                    {"type": "heading", "text": "Detalle del reporte"},
                     {"type": "callout"},
                     *pdf_elements,
                 ]
                 pdf_bytes = generate_modular_pdf(
                     title="Reporte de Auditoría de Ingresos — Vista Financiera",
-                    subtitle="Análisis de Facturación Emitida, Cobranza y Concentración",
+                    subtitle="Análisis extraido del modulo de ingresos",
                     elements=final_elements
                 )
                 st.download_button(
@@ -594,8 +583,8 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
                         
                         # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
-                        textposition="bottom right",
-                        textfont=dict(size=11, color="gray"),
+                        textposition="top right",
+                        textfont=dict(size=11, color="black"),
                         cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
                         
                         hovertemplate="<b>%{x}</b><br>ITAEE (Base 100): %{y:.1f}<extra></extra>"
@@ -667,26 +656,18 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
     st.divider()
     st.subheader("Exportación de Reporte - Vista Económica")
     
-    col_pdf_desc, col_pdf_info = st.columns([1, 2])
-    with col_pdf_info:
-        econ_notes = st.text_area(
-            "Notas / Observaciones Generales de la Vista Económica:",
-            placeholder="Escribe tus conclusiones económicas aquí...",
-            key="eco_notes_general"
-        )
+    col_pdf_desc, col_pdf_info = st.columns([1, 1])
+ 
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas de contexto macroeconómico e indicadores.")
         if st.button("Generar PDF Vista Económica", key=f"btn_generar_pdf_eco_{lado}"):
             with st.spinner("Generando reporte económico en PDF..."):
                 final_elements = []
-                if econ_notes.strip():
-                    final_elements.append({"type": "heading", "text": "Observaciones Económicas"})
-                    final_elements.append({"type": "callout", "text": econ_notes})
                 final_elements.extend(pdf_elements)
 
                 titulo_pdf = ("Reporte de Auditoría de Ingresos — Vista Económica" if ingresos
                               else "Reporte de Egresos — Vista Económica")
-                subtitulo_pdf = ("Contexto Macroeconómico e Indicadores de Sector" if ingresos
+                subtitulo_pdf = ("Contexto Macroeconómico" if ingresos
                                  else "Vista Económica y Evolución Anual")
                 nombre_archivo_pdf = ("Reporte_Ingresos_Vista_Economica.pdf" if ingresos
                                       else "Reporte_Egresos_Vista_Economica.pdf")
@@ -773,7 +754,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             # 1. Agregamos la gráfica de dona al PDF
             pdf_elements.append({
                 "type": "image",
-                "section_title": "3. Estructura y Método de Cobro",
+                "section_title": "3. Método de Cobro",
                 "title": "Distribución por Método de Cobro",
                 "fig": fig_pie,
                 "preserve_textfont_size": True,
@@ -797,7 +778,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 # Intentamos extraer por clave exacta o por posición si el diccionario usa nombres estándar
                 total_monto = float(dic_resumen.get("Total", dic_resumen.get("Total Facturado", valores_lista[0] if len(valores_lista) > 0 else 0)))
                 pue_monto = float(dic_resumen.get("PUE", dic_resumen.get("Facturado PUE", valores_lista[1] if len(valores_lista) > 1 else 0)))
-                ppd_monto = float(dic_resumen.get("PPD", dic_resumen.get("Cobros a plazos (PPD Total)", valores_lista[2] if len(valores_lista) > 2 else 0)))
+                ppd_monto = float(dic_resumen.get("PPD", dic_resumen.get("Facturado PPD", valores_lista[2] if len(valores_lista) > 2 else 0)))
                 
                 # Para PPD pendiente y cobrado
                 ppd_cobrado = float(dic_resumen.get("PPD cobrado", dic_resumen.get("Cobrado_PPD", valores_lista[3] if len(valores_lista) > 3 else 0)))
@@ -817,7 +798,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 filas_resumen = [
                     {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_monto:,.2f}</font></b>"},
                     {"Concepto": f"<font color='#2563EB'>●</font> <b><font color='#1F2937'>Facturado PUE</font></b><br/><font color='#4B5563'>MXN {pue_monto:,.2f} · {pct_pue:.1f}%</font>"},
-                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Cobros a plazos (PPD Total)</font></b><br/><font color='#4B5563'>MXN {ppd_monto:,.2f} · {pct_ppd:.1f}%</font>"},
+                    {"Concepto": f"<font color='#60A5FA'>●</font> <b><font color='#1F2937'>Facturado PPD</font></b><br/><font color='#4B5563'>MXN {ppd_monto:,.2f} · {pct_ppd:.1f}%</font>"},
                     {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#2563EB'>●</font> <b><font color='#1F2937'>PPD pendiente</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_pendiente:,.2f} · {pct_pendiente:.1f}%</font>"},
                     {"Concepto": f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#60A5FA'>●</font> <b><font color='#1F2937'>PPD cobrado</font></b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color='#4B5563'>MXN {ppd_cobrado:,.2f} · {pct_cobrado:.1f}%</font>"}
                 ]
