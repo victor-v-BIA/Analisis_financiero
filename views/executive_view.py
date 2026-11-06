@@ -568,12 +568,12 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 color_discrete_sequence=colores_azules  # <-- paleta de azules
             )
             
-            # 2. Configuramos el textinfo, posición y el tamaño de fuente (size=18)
+            # 2. Configuramos el textinfo, posición y el tamaño de fuente 
             fig_dona.update_traces(
                 textinfo="percent", 
                 textposition="inside", 
                 sort=False,
-                textfont=dict(size=15,color="white")  # <-- Tamaño de fuente configurado en 18
+                textfont=dict(size=15,color="white")  # <-- Tamaño de fuente configurado
             )
             
             fig_dona = _layout_plotly(fig_dona, altura=ALTURA_CONC)
@@ -859,6 +859,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 )
 
 
+# ___________________________
+# SECCION 7
 # ___________________________
 
 
