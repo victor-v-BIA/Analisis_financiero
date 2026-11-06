@@ -12,3 +12,4 @@ __pycache__/
 .md
 .xml
 google_credentials.json
+repomix-output.xml
