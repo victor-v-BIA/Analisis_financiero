@@ -84,7 +84,7 @@ def main() -> None:
                 </div>
                 <br>
                 """, unsafe_allow_html=True)
-                if st.button("Elegir Persona Física", use_container_width=True, key="btn_pf"):
+                if st.button("Elegir Persona Física", width='stretch' , key="btn_pf"):
                     st.session_state['regimen'] = "Persona Física"
                     st.rerun()
 
@@ -102,7 +102,7 @@ def main() -> None:
                 </div>
                 <br>
                 """, unsafe_allow_html=True)
-                if st.button("Elegir Persona Moral", use_container_width=True, key="btn_pm"):
+                if st.button("Elegir Persona Moral", width='stretch' , key="btn_pm"):
                     st.session_state['regimen'] = "Persona Moral"
                     st.rerun()
             

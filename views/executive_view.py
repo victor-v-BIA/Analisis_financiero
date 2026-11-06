@@ -1023,6 +1023,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
         ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else nd, "Mercado del día de cada operación (Fecha de operación)" if hay_fix else "Sin conexión a la fuente de mercado"),
         ("Spread promedio y sobreprecio total", f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else nd,
          f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Cantidad × (TC facturado − referencia)")]), unsafe_allow_html=True)
+    st.divider()
     if anios:
         st.caption(f"Periodo analizado: {min(anios)}–{max(anios)} (ejercicios de los CFDI cargados)"
                    + (f"; {fuera_periodo} operaciones de divisas de otros años quedaron fuera." if fuera_periodo else "."))
@@ -1033,9 +1034,10 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
     if k["n_fix"] < k["n"]:
         st.warning(f"Hay referencia para {k['n_fix']} de {k['n']} operaciones; los cálculos de spread y benchmark solo consideran las que tienen referencia.")
 
-    st.plotly_chart(fig_tc_fix_vs_facturado(d, fix.get(moneda), moneda, anios), use_container_width=True, key="div_fig_tc")
+    st.plotly_chart(fig_tc_fix_vs_facturado(d, fix.get(moneda), moneda, anios), width='stretch', key="div_fig_tc")
     st.markdown("**A) Intermediarios actuales de la empresa**")
     st.markdown(_html_tabla_intermediarios(tabla_intermediarios(d), moneda), unsafe_allow_html=True)
+    st.divider()
     st.markdown(f"**B) Benchmark de mercado:** ¿con quién conviene operar? Lo que la empresa habría pagado por el mismo volumen de {moneda} y las mismas fechas, sobre la referencia")
     if hay_fix:
         st.markdown(_html_tabla_benchmark(benchmark_mercado(d)), unsafe_allow_html=True)
