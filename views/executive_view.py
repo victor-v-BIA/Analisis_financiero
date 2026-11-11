@@ -810,7 +810,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # SECCIÓN 8: Operaciones en divisas
     # ---------------------------------------------------------------
     st.divider()
-    _seccion_divisas(file_egresos_productos, f_fix=file_fix, anios=anios_5)
+    _seccion_divisas(file_egresos_productos, f_fix=file_fix, anios=anios_5, pdf_elements=pdf_elements)
 
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA DE REPORTES EN PDF
@@ -977,7 +977,7 @@ def _simulador_financiamiento(balance: dict):
 # SECCION 8
 #===================================
 
-def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
+def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> None:
     """Sección «8. Eficiencia Cambiaria y Operaciones en Divisas» del Dashboard Ejecutivo, 100% automática para cualquier empresa cargada: conceptos de CFDI recibidos con
     clave 841216 (base de Productos Recibidos, ruteada desde la barra lateral; sin cargadores aquí) frente al tipo de cambio de referencia consultado por `_obtener_fix`
     (archivo FIX, Banxico SIE, Frankfurter o Yahoo Finance). El contraste es contra el tipo de cambio del DÍA de la operación (`Fecha de operación`). `anios` es la
@@ -987,16 +987,32 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
               help=("Compras de divisas (conceptos de CFDI recibidos con clave 841216) comparadas contra el tipo de cambio de referencia del DÍA de la operación (Fecha de "
                     "operación; último día hábil previo si es inhábil): mide la ejecución spot del banco frente al mercado de ese mismo día. Spread = TC facturado − referencia; "
                     "sobreprecio = divisa comprada × spread. Estas compras no cuentan como egresos operativos; las comisiones bancarias (84121500) sí."))
+    if pdf_elements is not None:
+        pdf_elements.append({
+            "type": "heading",
+            "text": "8. Eficiencia Cambiaria y Operaciones en Divisas"
+        })
+
+    def _pdf_sin_datos(mensaje):
+        if pdf_elements is not None:
+            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+
     if f_productos is None:
-        st.info("Para analizar las operaciones en divisas, incluye en la carga la base «CFDI Recibidos Productos» (conceptos de CFDI recibidos).")
+        mensaje = "Para analizar las operaciones en divisas, incluye en la carga la base «CFDI Recibidos Productos» (conceptos de CFDI recibidos)."
+        st.info(mensaje)
+        _pdf_sin_datos(mensaje)
         return
     try:
         ops = _operaciones_divisas_cache(f_productos.name, f_productos.getvalue(), CODIGO_VERSION)
     except (KeyError, ValueError) as e:
-        st.info(f"Información insuficiente: «{f_productos.name}» no trae las columnas esperadas de conceptos de CFDI recibidos. {e.args[0]}")
+        mensaje = f"Información insuficiente: «{f_productos.name}» no trae las columnas esperadas de conceptos de CFDI recibidos. {e.args[0]}"
+        st.info(mensaje)
+        _pdf_sin_datos(mensaje)
         return
     if ops.empty:
-        st.info(f"La base «{f_productos.name}» no trae conceptos con la clave {PREFIJO_DIVISAS}… (cambio de divisas).")
+        mensaje = f"La base «{f_productos.name}» no trae conceptos con la clave {PREFIJO_DIVISAS}… (cambio de divisas)."
+        st.info(mensaje)
+        _pdf_sin_datos(mensaje)
         return
     fuera_periodo = 0
     if anios:                                                            # ejercicios cerrados de los CFDI cargados: se descarta todo lo de fuera de la ventana
@@ -1004,7 +1020,9 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
         fuera_periodo = int((~en_ventana).sum())
         ops = ops[en_ventana].reset_index(drop=True)
         if ops.empty:
-            st.info(f"La base «{f_productos.name}» no trae operaciones de divisas dentro de {min(anios)}–{max(anios)}, el periodo de los CFDI cargados.")
+            mensaje = f"La base «{f_productos.name}» no trae operaciones de divisas dentro de {min(anios)}–{max(anios)}, el periodo de los CFDI cargados."
+            st.info(mensaje)
+            _pdf_sin_datos(mensaje)
             return
     volumenes = ops.groupby("Divisa")["Importe_MXN"].sum().reindex(["USD", "EUR"], fill_value=0)
     monedas = ["USD", "EUR"]
@@ -1013,7 +1031,9 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
     moneda = st.radio("Moneda", monedas, index=moneda_inicial, horizontal=True, key="div_moneda")
     ops_moneda = ops[ops["Divisa"].eq(moneda)]
     if ops_moneda.empty:
-        st.info(f"No se identificaron operaciones {moneda} en los conceptos 841216. Revisa si la descripción, unidad o moneda del producto indica {moneda}.")
+        mensaje = f"No se identificaron operaciones {moneda} en los conceptos 841216. Revisa si la descripción, unidad o moneda del producto indica {moneda}."
+        st.info(mensaje)
+        _pdf_sin_datos(mensaje)
         return
     d = cruzar_fix(ops_moneda, fix)
     k = kpis_divisas(d)
@@ -1021,7 +1041,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
     nd = "No disponible"
     st.markdown(_html_kpis_divisas([
         ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
-        ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}: lo que pagó según sus facturas {PREFIJO_DIVISAS}"),
+        ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}: lo que pagó según sus facturas  {PREFIJO_DIVISAS}"),
         ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else nd, "Mercado del día de cada operación (Fecha de operación)" if hay_fix else "Sin conexión a la fuente de mercado"),
         ("Spread promedio y sobreprecio total", f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else nd,
          f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Cantidad × (TC facturado − referencia)")]), unsafe_allow_html=True)
@@ -1036,7 +1056,9 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
     if k["n_fix"] < k["n"]:
         st.warning(f"Hay referencia para {k['n_fix']} de {k['n']} operaciones; los cálculos de spread y benchmark solo consideran las que tienen referencia.")
 
-    st.plotly_chart(fig_tc_fix_vs_facturado(d, fix.get(moneda), moneda, anios), width='stretch', key="div_fig_tc")
+    fig_divisas = fig_tc_fix_vs_facturado(d, fix.get(moneda), moneda, anios)
+    st.plotly_chart(fig_divisas, width='stretch', key="div_fig_tc")
+
     st.markdown("**A) Intermediarios actuales de la empresa**")
     st.markdown(_html_tabla_intermediarios(tabla_intermediarios(d), moneda), unsafe_allow_html=True)
     st.divider()
@@ -1047,3 +1069,119 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None) -> None:
                    "tradicional +0.25 a +0.35. Ahorro neto = lo facturado − lo que habría pagado; negativo si el banco actual fue más barato que ese nivel.")
     else:
         st.info("El benchmark necesita el tipo de cambio de referencia; no se pudo consultar (sin conexión).")
+    nota_divisas = st.text_area(
+                        f"Insight para la gráfica de Operaciones en Divisas {moneda}",
+                        max_chars=600,
+                        placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
+                        key="note_divisas"
+                    )
+
+    if pdf_elements is not None:
+        pdf_elements.append({
+            "type": "metrics",
+            "data": [
+                ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
+                ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}"),
+                ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else "No disponible",
+                 "Mercado del día de cada operación" if hay_fix else "Sin conexión a la fuente de mercado"),
+                ("Spread y sobreprecio total",
+                 f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else "No disponible",
+                 f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Sin referencia de mercado"),
+            ],
+        })
+        if aviso:
+            pdf_elements.append({
+                "type": "callout",
+                "text": f"<b>Referencia de mercado incompleta:</b> {escape(aviso)}",
+            })
+        if k["n_fix"] < k["n"]:
+            pdf_elements.append({
+                "type": "callout",
+                "text": f"Hay referencia para {k['n_fix']} de {k['n']} operaciones; los cálculos de spread y benchmark solo consideran las que tienen referencia.",
+            })
+        pdf_elements.append({
+            "type": "image",
+            "title": f"Tipo de cambio facturado vs. referencia — {moneda}",
+            "fig": fig_divisas
+        })
+        intermediarios = tabla_intermediarios(d)
+        formato_dinero = lambda valor: (
+            "n/d" if pd.isna(valor)
+            else f"{'-' if valor < 0 else ''}&#36;{abs(valor):,.2f}"
+        )
+        intermediarios_pdf = pd.DataFrame({
+            "Institución (RFC)": intermediarios.apply(
+                lambda fila: escape(
+                    f"{fila['Institución']} ({fila['RFC']})"
+                    if fila["RFC"] else str(fila["Institución"])
+                ),
+                axis=1,
+            ),
+            "Operaciones": intermediarios["Operaciones"],
+            f"Volumen ({moneda})": intermediarios["Volumen divisa"].map(
+                lambda valor: f"{valor:,.2f}"
+            ),
+            "Volumen (MXN)": intermediarios["Volumen MXN"].map(formato_dinero),
+            "Concentración": intermediarios["Concentración %"].map(
+                lambda valor: f"{valor:.1f}%"
+            ),
+            "TC facturado": intermediarios["TC facturado"].map(
+                lambda valor: f"{valor:.4f}"
+            ),
+            "TC referencia": intermediarios["TC referencia"].map(
+                lambda valor: "n/d" if pd.isna(valor) else f"{valor:.4f}"
+            ),
+            "Spread cobrado": intermediarios.apply(
+                lambda fila: (
+                    "n/d" if pd.isna(fila["Spread MXN"])
+                    else f"{fila['Spread MXN'] * 100:+.2f}¢ ({fila['Spread %']:+.2f}%)"
+                ),
+                axis=1,
+            ),
+            "Costo sobre referencia": intermediarios["Costo sobre referencia"].map(
+                formato_dinero
+            ),
+        })
+        pdf_elements.append({
+            "type": "table",
+            "title": f"A) Intermediarios actuales de la empresa — {moneda}",
+            "df": intermediarios_pdf,
+        })
+
+        if hay_fix:
+            benchmark_pdf = benchmark_mercado(d).copy()
+            formato_mxn = lambda valor: f"${abs(valor):,.2f}" if valor >= 0 else f"-${abs(valor):,.2f}"
+            benchmark_pdf = pd.DataFrame([
+                {
+                    "Nivel de mercado": "<b>Lo que le facturaron sus bancos actuales</b>",
+                    "Spread sobre referencia": "—",
+                    "Monto que habría pagado (MXN)": f"<b>{formato_mxn(benchmark_pdf.attrs['facturado_real'])}</b>",
+                    "Ahorro neto (MXN)": "—",
+                },
+                *[
+                    {
+                        "Nivel de mercado": escape(str(fila["Nivel"])),
+                        "Spread sobre referencia": (
+                            f"+${fila['Spread bajo']:.2f} a +${fila['Spread alto']:.2f}"
+                        ),
+                        "Monto que habría pagado (MXN)": (
+                            f"{formato_mxn(fila['Pagaría bajo'])} a {formato_mxn(fila['Pagaría alto'])}"
+                        ),
+                        "Ahorro neto (MXN)": (
+                            f"{formato_mxn(fila['Ahorro máximo'])} a {formato_mxn(fila['Ahorro mínimo'])}"
+                        ),
+                    }
+                    for _, fila in benchmark_pdf.iterrows()
+                ],
+            ])
+            pdf_elements.append({
+                "type": "table",
+                "title": f"B) Benchmark de mercado — {moneda}",
+                "df": benchmark_pdf,
+                "note":( nota_divisas if nota_divisas and nota_divisas.strip() else ""),
+            })
+        else:
+            pdf_elements.append({
+                "type": "callout",
+                "text": "El benchmark de mercado no está disponible porque no se obtuvo tipo de cambio de referencia.",
+            })

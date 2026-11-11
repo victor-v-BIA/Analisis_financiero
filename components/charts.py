@@ -921,7 +921,7 @@ def fig_tc_fix_vs_facturado(d: pd.DataFrame, serie_fix: pd.Series | None, moneda
                            + "<br>Importe: %{customdata[3]}<br>Orden: %{customdata[1]}<br>Spread vs referencia: %{customdata[2]}<extra></extra>")))
     fig.update_xaxes(showgrid=False, zeroline=False,tickformat="%m/%Y")
     fig.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.18)", zeroline=False, tickformat=".2f", title_text=f"MXN por {moneda}")
-    fig.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="closest",
+    fig.update_layout(height=360, margin=dict(l=90, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="closest",
                       legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="left", x=0), legend_title_text=None)
     return fig
 

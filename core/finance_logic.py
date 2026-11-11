@@ -1579,20 +1579,24 @@ def kpis_divisas(d: pd.DataFrame) -> dict:
 def tabla_intermediarios(d: pd.DataFrame) -> pd.DataFrame:
     """Intermediarios actuales por RFC/institución: operaciones, volúmenes, concentración, TC, spread y costo cambiario."""
     columnas = ["RFC", "Institución", "Operaciones", "Volumen divisa", "Volumen MXN", "Concentración %",
-                "TC promedio", "TC referencia promedio", "Spread MXN", "Spread %", "Costo implícito MXN"]
+                "TC facturado", "TC referencia", "Spread MXN", "Spread %", "Costo sobre referencia"]
     if d.empty:
         return pd.DataFrame(columns=columnas)
     filas = []
     total_mxn = float(d["Importe_MXN"].sum())
+    # 1. Limpiamos y reemplazamos el nombre en el DataFrame ANTES de agrupar
+    # Esto buscará cualquier texto que contenga "SANTANDER" y lo reemplazará por el valor que quieras
+    d.loc[d['Institucion'].str.contains('SANTANDER', case=False, na=False), 'Institucion'] = "BANCO SANTANDER MEXICO S.A"
     for (rfc, inst), g in d.groupby(["RFC_Emisor", "Institucion"], sort=False):
         con = g[g["TC_FIX"].notna()]
+
         filas.append({"RFC": rfc, "Institución": inst, "Operaciones": int(len(g)), "Volumen divisa": float(g["Monto_Divisa"].sum()), "Volumen MXN": float(g["Importe_MXN"].sum()),
                       "Concentración %": float(g["Importe_MXN"].sum()) / total_mxn * 100 if total_mxn else float("nan"),
-                      "TC promedio": _promedio_ponderado(g["TC_Facturado"], g["Monto_Divisa"]),
-                      "TC referencia promedio": _promedio_ponderado(con["TC_FIX"], con["Monto_Divisa"]) if len(con) else float("nan"),
+                      "TC facturado": _promedio_ponderado(g["TC_Facturado"], g["Monto_Divisa"]),
+                      "TC referencia": _promedio_ponderado(con["TC_FIX"], con["Monto_Divisa"]) if len(con) else float("nan"),
                       "Spread MXN": _promedio_ponderado(con["Spread_MXN"], con["Monto_Divisa"]) if len(con) else float("nan"),
                       "Spread %": (_promedio_ponderado(con["TC_Facturado"], con["Monto_Divisa"]) / _promedio_ponderado(con["TC_FIX"], con["Monto_Divisa"]) - 1) * 100 if len(con) else float("nan"),
-                      "Costo implícito MXN": float(con["Sobreprecio_Total_MXN"].sum()) if len(con) else float("nan")})
+                      "Costo sobre referencia": float(con["Sobreprecio_Total_MXN"].sum()) if len(con) else float("nan")})
     return pd.DataFrame(filas, columns=columnas).sort_values("Volumen MXN", ascending=False, kind="stable").reset_index(drop=True)
 
 def benchmark_mercado(d: pd.DataFrame) -> pd.DataFrame:
