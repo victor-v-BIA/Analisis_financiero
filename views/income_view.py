@@ -205,7 +205,7 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     pdf_elements.append({
         "type": "image",
         "title": ("Flujo Fiscal Mensual" if flujo_completo
-                  else "Flujo Identificado Mensual; componentes faltantes no disponibles"),
+                  else "Flujo Neto Mensual"),
         "fig": fig_flujo,
         "custom_height": 270,
     })
@@ -733,7 +733,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
-                "title": "Ingresos Facturados por Mes",
+                "title": "Ingresos Facturados por Año",
                 "fig": fig_ing_fact,
                 "custom_height": 270
             })
@@ -833,15 +833,15 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                 por método y mes; el cobro PPD y su saldo se presentan solo de forma global.''')
 
         st.divider()
-        st.markdown("**Facturación emitida por método y mes**")
+        st.markdown("**Facturación**")
         fig_tiempo = _fig_facturacion_tiempo(d, col_monto, nomina_mensual=nomina_mensual)
         render_grafica(fig_tiempo, key="ing_facturacion_tiempo")
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
-                "title": ("Facturación Emitida por Método y Mes (incluye nómina de ingresos)"
+                "title": ("Facturación Recibida "
                           if nomina_mensual is not None
-                          else "Facturación Emitida por Método y Mes (sin datos de cobro PPD)"),
+                          else "Facturación Emitida"),
                 "fig": fig_tiempo,
                 "custom_height": 250,
             })
@@ -853,13 +853,13 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
-                "title": "Ingresos Facturados por Mes",
+                "title": "Ingresos Facturados por Año",
                 "fig": fig_ing_fact,
                 "custom_height": 270,
             })
 
         st.divider()
-        st.markdown("**Método de pago facturado**")
+        st.markdown("**Método de pago**")
         monto_pue = float(d.loc[es_pue, col_monto].sum())
         monto_ppd = float(d.loc[es_ppd, col_monto].sum())
         resumen = {
@@ -885,13 +885,13 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
             pdf_elements.append({
                 "type": "image",
                 "section_title": "3. Estructura de la Facturación",
-                "title": "Método de pago facturado (PUE y PPD)",
+                "title": "Método de pago",
                 "fig": fig_pie,
                 "preserve_textfont_size": True,
             })
             pdf_elements.append({
                 "type": "table",
-                "title": "Resumen — Método de pago facturado",
+                "title": "Resumen — Método de pago",
                 "df": pd.DataFrame({
                     "Concepto": [
                         _html_resumen_metodo_cobro(
