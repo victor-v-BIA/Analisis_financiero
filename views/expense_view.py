@@ -24,7 +24,6 @@ from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egre
                                 matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos,
                                 excluir_cfdis_divisas,excluir_complementos_de_cfdis,_es_nomina_ingresos)
 from utils import dinero
-from components.charts import  render_notas_reporte
 from views.income_view import _vista_economica
 from components.charts import (_fig_egresos_tiempo,_fig_lineas_por_anio,_fig_pie_nomina_gastos,
                                _html_resumen_nomina_gastos,_fig_pie_metodo_pago,

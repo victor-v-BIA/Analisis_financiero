@@ -15,7 +15,7 @@ from components.charts import (_grafica_ingresos_gastos, _insight_html,
                                _layout_eco, _fig_facturacion_tiempo,
                                _fig_ingresos_facturados, _fig_pie_metodo_cobro,
                                _html_resumen_metodo_cobro, _fig_bump_anual, render_grafica,
-                               render_notas_reporte,_fig_poder_adquisitivo,_fig_eficiencia_operativa)
+                               _fig_poder_adquisitivo,_fig_eficiencia_operativa)
 
 from core.loader import (anios_5_archivos, _facturas_cache, excluir_años_incompletos,
                          _complementos_cache, _facturas_egresos_cache, cargar_base,

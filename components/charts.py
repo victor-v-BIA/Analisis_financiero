@@ -40,9 +40,7 @@ def _layout_eco(fig: go.Figure, anios_str: list[str], titulo_y: str) -> go.Figur
     return fig
 
 
-def render_notas_reporte(key: str) -> None:
-    """Renderiza el campo de notas ejecutivas asociado a una gráfica."""
-    
+
 
 
 def render_grafica(
@@ -54,8 +52,6 @@ def render_grafica(
     """Renderiza una gráfica Plotly interactiva y, opcionalmente, sus notas ejecutivas."""
     fig.update_layout(autosize=True)
     st.plotly_chart(fig, width=width, key=f"plot_{key}")
-    if incluir_notas:
-        render_notas_reporte(key)
 
 
 def _grafica_plazos_comparativa(ing: pd.DataFrame, egr: pd.DataFrame, anual: bool) -> go.Figure:
