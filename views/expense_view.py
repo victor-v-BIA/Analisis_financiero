@@ -419,8 +419,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 st.error(f"{nombre} no cuadra con el Egreso Total; diferencia {diferencia:,.2f}. Revisa los datos.")
 
     st.divider()
-    st.markdown("**Egresos en el tiempo**" if comp_df is not None and nomina_disponible
-                else "**Egresos Facturados por año**")
+    st.markdown("**Egresos En El Tiempo**" if comp_df is not None and nomina_disponible
+                else "**Egresos Facturados Por Año**")
     fig_tiempo = _fig_egresos_tiempo(mensual)
     with st.container(key="egr_tiempo_pdf", width="stretch"):
         render_grafica(fig_tiempo, key="egr_tiempo")
