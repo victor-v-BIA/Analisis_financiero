@@ -377,9 +377,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     elemento_tendencia = {
                         "type": "image",
                         "title": (
-                            f"{metrica} · Tendencia mensual · Ejercicios Fiscales: "
-                            f"{', '.join(map(str, ejercicios_pdf))}"
-                        ),
+                            f"{metrica} · Tendencia por Año"),
                         "fig": fig_tendencia,
                     }
                     if i == 0:
@@ -439,9 +437,9 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 
     fig_plazos_y = None
     fig_plazos_m = None
-    titulo_y = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — Histórico Anual"
-    titulo_m_base = "Tiempos de cobro (Clientes) vs. pago (Proveedores) — Detalle Mensual"
-    titulo_m = f"{titulo_m_base} - Todos los años"
+    titulo_y = "Tiempos de cobro vs. Pago  — Histórico Anual"
+    titulo_m_base = "Tiempos de cobro vs. Pago  — Detalle Mensual"
+    titulo_m = f"{titulo_m_base}"
     fig_plazos_m_pdf = None
 
     if not (plazos_ing_y.empty and plazos_egr_y.empty):
@@ -1111,6 +1109,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "metrics",
+            "title": f"{moneda}",
             "data": [
                 ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
                 ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}"),
