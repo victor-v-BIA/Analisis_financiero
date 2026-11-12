@@ -194,10 +194,10 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                        f"{fac_factura['UUID'].nunique()} facturas recibidas", delta_color="off", delta_arrow="off",
                        help=AYUDA_TOTAL)
             k[1].metric("Facturación Recibida PUE", dinero(fact_pue),
-                       f"{fact_pue / fact_total:.1%} del total" if fact_total else "n/a",
+                       f"{fact_pue / fact_total:.1%} del total" if fact_total else "0.00",
                        delta_color="off", delta_arrow="off", help=AYUDA_TOTAL)
             k[2].metric("Facturación Recibida PPD", dinero(fact_ppd),
-                       f"{fact_ppd / fact_total:.1%} del total" if fact_total else "n/a",
+                       f"{fact_ppd / fact_total:.1%} del total" if fact_total else "0.00",
                        delta_color="off", delta_arrow="off", help=AYUDA_TOTAL)
 
         with st.container(key="egr_kpis_cobranza_pdf"):
@@ -241,8 +241,8 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         # Registro de KPIs en el PDF con formato de 3 elementos por tupla
         metrics_kpis_finan = [
             ("Facturación Recibida Total", dinero(fact_total), f"{fac_factura['UUID'].nunique()} facturas recibidas"),
-            ("Facturación Recibida PUE", dinero(fact_pue), f"{fact_pue / fact_total:.1%} del total" if fact_total else "n/a"),
-            ("Facturación Recibida PPD", dinero(fact_ppd), f"{fact_ppd / fact_total:.1%} del total" if fact_total else "n/a"),
+            ("Facturación Recibida PUE", dinero(fact_pue), f"{fact_pue / fact_total:.1%} del total" if fact_total else "0.00"),
+            ("Facturación Recibida PPD", dinero(fact_ppd), f"{fact_ppd / fact_total:.1%} del total" if fact_total else "0.00"),
             
             ("Pagado Total (PUE + Complementos)", dinero(pagado_total) if complementos_disponibles else "n/d",
              f"{pagado_total / fact_total:.1%} de lo facturado" if complementos_disponibles and fact_total else "PUE conocido; PPD no disponible"),
@@ -283,7 +283,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         matriz["Egreso Total (Operación + Nómina)"] = np.nan
 
     texto = matriz.apply(lambda col: col.map(
-        lambda v: "n/a" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
+        lambda v: "$0.00" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
     try:
         columna_texto = st.column_config.TextColumn(alignment="right")
     except TypeError:
@@ -566,7 +566,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 ppd_pendiente_g = float(res.get("diferencia", 0))
                 ppd_pagado_g = float(res.get("complementos", 0))
                 total_g = float(res.get("facturacion", pue_g + ppd_g))
-                pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "n/a"
+                pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "$0.00"
 
                 filas_pago_pdf = [
                     {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},

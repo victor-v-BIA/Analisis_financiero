@@ -501,7 +501,7 @@ def _html_resumen_metodo_cobro(
     paleta = PALETA_ING if paleta is None else paleta
     inmediato, plazo, realizado = (("Facturado PUE", "Facturado PPD", "PPD cobrado") if lado == "ingresos"
                                    else ("Pagos inmediatos (PUE)", "Pagos a plazos (PPD)", "PPD pagado"))
-    pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
+    pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "0.00"
     if formato_pdf:
         fila_pdf = lambda color, nombre, v: (
             f'<font color="{color}">●</font> <b>{nombre}</b><br/>'
@@ -613,7 +613,7 @@ def _fig_pie_nomina_gastos(r: dict, gastos_label: str = "Gastos") -> go.Figure:
 def _html_resumen_nomina_gastos(r: dict, gastos_label: str = "Gastos (Proveedores)") -> str:
     """Tabla lateral: Monto total (Gastos + Nómina) en la cabecera y debajo el monto y % de Pagos a Nómina y de Gastos."""
     tot = r["total"]
-    pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
+    pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "$0.00"
     fila = lambda color, nombre, v: (f'<div style="margin-top:8px;"><span style="color:{color}">●</span> <b>{nombre}</b><br>'
                                      f'<span style="margin-left:18px">{_mxn_2d(v)} · {pct(v)}</span></div>')
     return (f'<div style="padding:6px 4px"><div style="opacity:.75">Monto total (Gastos + Nómina)</div>'
@@ -760,7 +760,7 @@ def _html_resumen_metodo_pago(
     `formato_pdf` usa etiquetas compatibles con ReportLab y `incluir_detalle_ppd=False` omite el desglose si no hay base PAGO."""
     paleta = {"pue": COLOR_EGR_PUE, "ppd": COLOR_EGR_PPD, "pendiente": "#2563EB"} if paleta is None else paleta
     tot = res["facturacion"]
-    pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "n/a"
+    pct = lambda v: f"{v / tot * 100:.1f}%" if tot else "0.00"
     if formato_pdf:
         fila_pdf = lambda color, nombre, v: (
             f'<font color="{color}">●</font> <b>{nombre}</b><br/>'

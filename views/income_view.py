@@ -361,7 +361,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                         help="Macro-cálculo: Total Facturado menos el Total Cobrado vía Complementos de Pago Emitidos.")
             k[3].metric("% Cobranza PPD",
                         f"{cobr_ppd / fact_ppd:.1%}" if complementos_disponibles and fact_ppd
-                        else "n/a" if complementos_disponibles else "n/d",
+                        else "0.00" if complementos_disponibles else "n/d",
                         help="Complementos de Pago Emitidos entre Facturación PPD.")
 
         # Fila 3 - Cierre
@@ -384,7 +384,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             ("Saldo PPD por Cobrar", saldo_ppd_macro, "Total Facturado menos Total Cobrado" if complementos_disponibles else "No disponible sin la base PAGO"),
             ("% Cobranza PPD",
              f"{cobr_ppd / fact_ppd:.1%}" if complementos_disponibles and fact_ppd
-             else "n/a" if complementos_disponibles else "n/d",
+             else "$0.00" if complementos_disponibles else "n/d",
              "Complementos de Pago Emitidos entre Facturación PPD"),
             ("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito"),
             ("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d",
@@ -415,7 +415,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         ]
         matriz[columnas_sin_pagos] = np.nan
     texto = matriz.apply(lambda col: col.map(
-        lambda v: "n/a" if pd.isna(v) else (f"{v / 100:.1%}" if col.name.startswith("%") else f"${v:,.2f}")))
+        lambda v: "$0.00" if pd.isna(v) else (f"{v / 100:.1%}" if col.name.startswith("%") else f"${v:,.2f}")))
     try:
         columna_texto = st.column_config.TextColumn(alignment="right")
     except TypeError:
