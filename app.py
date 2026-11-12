@@ -113,6 +113,7 @@ def main() -> None:
     # PANTALLA 2: BARRA LATERAL Y CARGA DE ARCHIVOS
     # ==================================================
     with st.sidebar:
+        
         st.header("Carga de Datos")
         
         if st.session_state['regimen'] == "Persona Física":
@@ -167,7 +168,7 @@ def main() -> None:
                     
                     st.session_state['cache_archivos_drive'] = tipos_archivo
                     st.session_state['paso_completado'] = True
-                    st.success(f"✅ Se clasificaron {sum(len(v) for v in tipos_archivo.values())} archivos.")
+                    st.success(f"Se clasificaron {sum(len(v) for v in tipos_archivo.values())} archivos.")
 
             if 'cache_archivos_drive' in st.session_state:
                 tipos_archivo = st.session_state['cache_archivos_drive']
@@ -209,6 +210,30 @@ def main() -> None:
             st.warning("Archivos ignorados: " + ", ".join(no_clasificados))
 
         if archivos_listos:
+            # ---------------------------------------------------------
+            # ---> LÓGICA DE VALIDACIÓN (Invisible en el sidebar) <---
+            # ---------------------------------------------------------
+            if 'estado_validacion' not in st.session_state:
+                st.session_state['estado_validacion'] = 'pendiente'
+                st.session_state['alertas_fiscales'] = []
+
+            if st.session_state['estado_validacion'] == 'pendiente':
+                with st.spinner("Analizando datos..."):
+                    from core.loader import validar_congruencia_fiscal
+                    alertas = validar_congruencia_fiscal(tipos_archivo, st.session_state['regimen'])
+                    
+                    if alertas:
+                        st.session_state['estado_validacion'] = 'error'
+                        st.session_state['alertas_fiscales'] = alertas
+                    else:
+                        st.session_state['estado_validacion'] = 'ok'
+                    st.rerun()
+
+            if st.session_state['estado_validacion'] == 'ok':
+                st.success("✅ Archivos validados.")
+            st.markdown("---")
+            # ---------------------------------------------------------
+            
             def archivo_tipo(clave):
                 arch_tipo = tipos_archivo.get(clave, [])
                 if not arch_tipo: return None
@@ -244,6 +269,18 @@ def main() -> None:
     if not hay_archivos_ruteados:
         st.success(f"Has seleccionado **{st.session_state['regimen']}**. Utiliza la barra lateral para subir o sincronizar tus reportes y comenzar.")
         st.stop()
+
+    # ---------------------------------------------------------
+    # ---> BARRERA CENTRAL DE ERROR <---
+    # ---------------------------------------------------------
+    if st.session_state.get('estado_validacion') == 'error':
+        st.error("Ve a la barra lateral y haz clic en **'Cambiar Tipo de Contribuyente'** o **'Limpiar Diagnóstico'** para corregir la carga.")
+        
+        for alerta in st.session_state.get('alertas_fiscales', []):
+            st.warning(alerta)
+        # Detenemos la aplicación aquí. El enrutamiento y las gráficas jamás se ejecutarán.
+        st.stop()
+    # ---------------------------------------------------------
 
     # ENRUTAMIENTO FINAL
     if modulo == "Dashboard Ejecutivo (Riesgo y Viabilidad)":

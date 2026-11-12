@@ -13,7 +13,7 @@ from utils import _mxn, _formatear_mxn
 from utils import (_nb, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear, _monto_por_cuota)
 from core.loader import (anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
-                         _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache,_operaciones_divisas_cache,_html_kpis_divisas)
+                         _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache,_operaciones_divisas_cache)
 from core.api_rates import _obtener_fix, cruzar_fix
 
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
@@ -26,7 +26,7 @@ from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
                                 _layout_plotly,_html_tabla_sin_facturacion,_grafica_gauge_score,_grafica_pilares_score,
-                                render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,_html_tabla_benchmark)
+                                render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,_html_tabla_benchmark, _html_kpis_divisas)
 
 from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,
                                  _flujo_bruto_mensual, _ohlc_mensual,
@@ -591,14 +591,37 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             tabla_conc = por_cliente.rename("Facturación Total").reset_index().rename(
                 columns={"Cliente": "RFC" if conc["agrupa_por_rfc"] else "Razón Social"})
+            
             if conc["agrupa_por_rfc"]:
                 tabla_conc["Razón Social"] = tabla_conc["RFC"].map(conc["nombre_por_id"]).fillna(tabla_conc["RFC"])
+            
             tabla_conc["%"] = tabla_conc["Facturación Total"] / total_general * 100
-            # Reordenamos las columnas explícitamente en el orden deseado: RFC, Razón Social, Facturación Total, %
+            
+            # Reordenamos las columnas explícitamente
             columnas_ordenadas = ["RFC", "Razón Social", "Facturación Total", "%"]
-            # Por si acaso el dataset original viniera sin RFC y solo con Razón Social, validamos las columnas existentes:
             columnas_existentes = [c for c in columnas_ordenadas if c in tabla_conc.columns]
             tabla_conc = tabla_conc[columnas_existentes]
+
+            # -----------------------------------------------------------------
+            # NUEVO: CREAR LA FILA DE TOTALES
+            # -----------------------------------------------------------------
+            # 1. Preparamos un diccionario con los totales
+            fila_total = {
+                "Facturación Total": tabla_conc["Facturación Total"].sum(),
+                "%": tabla_conc["%"].sum()
+            }
+            
+            # 2. Asignamos la etiqueta "TOTAL" a la columna que exista (RFC o Razón Social)
+            if "Razón Social" in tabla_conc.columns:
+                fila_total["Razón Social"] = "TOTAL GENERAL"
+                if "RFC" in tabla_conc.columns:
+                    fila_total["RFC"] = "" # Dejamos el RFC vacío
+            elif "RFC" in tabla_conc.columns:
+                fila_total["RFC"] = "TOTAL GENERAL"
+
+            # 3. Concatenamos la fila al DataFrame original
+            df_total = pd.DataFrame([fila_total])
+            tabla_conc = pd.concat([tabla_conc, df_total], ignore_index=True)
             
             # Copia redondeada para el PDF en Concentración
             tabla_conc_pdf = tabla_conc.head(10).copy()

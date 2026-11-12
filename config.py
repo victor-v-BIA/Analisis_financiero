@@ -358,3 +358,9 @@ CSS_KPI_DIVISAS = """
 @media (max-width: 900px) { .div-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 </style>
 """
+
+_COLUMNAS_OPERACIONES_DIVISAS = [
+    "Clave", "Descripcion", "Divisa", "Fecha_Operacion", "Fecha_CFDI", "Cantidad",
+    "Monto_Divisa", "TC_Facturado", "Importe_MXN", "RFC_Emisor", "Institucion",
+    "Num_Orden", "Orden_Duplicada", "Desfase_Alerta",
+]

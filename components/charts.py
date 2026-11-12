@@ -16,7 +16,7 @@ from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     COLOR_LINEA_PROMEDIO,ANCHOS_SIN_FACTURACION,CSS_SIN_FACTURACION,
                     ANCHOS_DETALLE_ANUAL,CSS_DETALLE_ANUAL, PALETA_BUMP,PALETA_BUMP_INGRESOS, PALETA_ING,
                     TEXTO_SOBRE_ING,NOMBRE_NOMINA,COLOR_GASTOS,COLOR_NOMINA,
-                    NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD)
+                    NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD, CSS_KPI_DIVISAS)
 
 from utils import (_mxn_2d, _importe_abreviado_2d,_abrev_monto, _nombre_abreviado, _abrev_signo, _formatear_mxn )
 
@@ -960,3 +960,9 @@ def _html_tabla_benchmark(b: pd.DataFrame) -> str:
     encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i else f"<th>{esc(c)}</th>" for i, c in enumerate(cols)) + "</tr></thead>"
     return (f'{CSS_SIN_FACTURACION}<div class="sf-wrap" style="max-height:{38 + 35 * (len(b) + 1)}px"><table class="sf-tabla">{colgroup}{encabezado}'
             f"<tbody>{''.join(filas)}</tbody></table></div>")
+
+def _html_kpis_divisas(tarjetas: list) -> str:
+    """Fila de indicadores limpios (tarjetas claras que heredan el tema, sin cajas oscuras): lista de (título, valor, nota). En una sola línea de HTML."""
+    esc = lambda s: html.escape(str(s), quote=True)
+    celdas = "".join(f'<div class="div-kpi"><div class="t">{esc(t)}</div><div class="v">{esc(v)}</div><div class="s">{esc(s)}</div></div>' for t, v, s in tarjetas)
+    return f'{CSS_KPI_DIVISAS}<div class="div-kpis">{celdas}</div>'

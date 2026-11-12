@@ -17,7 +17,7 @@ from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
                     RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,CSS_KPI_DIVISAS,
-                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA)
+                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, _COLUMNAS_OPERACIONES_DIVISAS)
 
 from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
 
@@ -1061,14 +1061,88 @@ def _operaciones_divisas_cache(nombre: str, _contenido, version: str) -> pd.Data
     return salida.reset_index(drop=True)
 
 
-_COLUMNAS_OPERACIONES_DIVISAS = [
-    "Clave", "Descripcion", "Divisa", "Fecha_Operacion", "Fecha_CFDI", "Cantidad",
-    "Monto_Divisa", "TC_Facturado", "Importe_MXN", "RFC_Emisor", "Institucion",
-    "Num_Orden", "Orden_Duplicada", "Desfase_Alerta",
-]
+def validar_congruencia_fiscal(tipos_archivo: dict, regimen_seleccionado: str) -> list[str]:
+    """
+    QUÉ HACE: Analiza el primer archivo de cada categoría cargada, extrae el RFC de la empresa 
+    y compara su longitud con el régimen seleccionado. También busca señales de mala clasificación (ej. Nómina en Egresos).
+    
+    POR QUÉ SE IMPLEMENTA: Para evitar que el usuario procese por error archivos de una Persona Moral 
+    en el módulo de Persona Física (o viceversa), lo cual corrompería las métricas financieras sin lanzar un error técnico.
+    Es una advertencia "no destructiva": avisa, pero no bloquea.
+    """
+    import re
+    import gc
+    
+    advertencias = []
+    archivos_verificados = 0
+    
+    # MAPEO ESTRATÉGICO: 
+    # En facturas emitidas, la empresa es el "Emisor". En recibidas, la empresa es el "Receptor".
+    reglas_busqueda = {
+        "ingresos_facturas": "rfcemisor",
+        "egresos_facturas": "rfcreceptor",
+        "nomina": "rfcemisor"
+    }
+    
+    for tipo, archivos in tipos_archivo.items():
+        if not archivos or tipo not in reglas_busqueda:
+            continue
+            
+        # Tomamos solo el primer archivo de la lista como "Muestra" para no saturar la RAM ni el tiempo de carga
+        archivo = archivos[0] 
+        col_objetivo = reglas_busqueda[tipo]
+        
+        try:
+            # 1. Extracción perezosa de bytes
+            bytes_data = archivo.descargar() if hasattr(archivo, 'descargar') else (archivo.getvalue() if hasattr(archivo, 'getvalue') else archivo)
+            
+            # 2. Leemos la muestra usando el lector
+            df = leer_archivo(archivo.name if hasattr(archivo, 'name') else 'muestra', bytes_data)
+            
+            # 3. Normalizamos los nombres de las columnas (quitamos espacios y mayúsculas) para encontrar el RFC
+            cols_norm = {re.sub(r'[^a-z0-9]', '', str(c).lower()): c for c in df.columns}
+            
+            # 4. REGLA DE ORO DEL SAT: 12 caracteres = Moral, 13 caracteres = Física
+            if col_objetivo in cols_norm:
+                col_real = cols_norm[col_objetivo]
+                # Limpiamos el texto y sacamos los RFCs únicos
+                rfcs = df[col_real].dropna().astype(str).str.strip().unique()
+                
+                if len(rfcs) > 0:
+                    rfc_empresa = rfcs[0] # Tomamos el RFC predominante
+                    longitud = len(rfc_empresa)
+                    
+                    regimen_detectado = None
+                    if longitud == 12:
+                        regimen_detectado = "Persona Moral"
+                    elif longitud == 13:
+                        regimen_detectado = "Persona Física"
+                        
+                    archivos_verificados += 1
+                    
+                    # Si el archivo delata un régimen distinto al que el usuario pulsó en la pantalla 1:
+                    if regimen_detectado and regimen_detectado != regimen_seleccionado:
+                        advertencias.append(
+                            f"**{archivo.name}**: El RFC ({rfc_empresa}) indica que es de **{regimen_detectado}**, "
+                            f"pero elegiste **{regimen_seleccionado}**."
+                        )
+            
+            # 5. SEÑAL ADICIONAL: Si un archivo cayó en Egresos pero tiene datos de Nómina
+            if tipo == "egresos_facturas" and "fechadecertificacion" in cols_norm:
+                advertencias.append(f"**{archivo.name}**: Se clasificó en Egresos, pero contiene formato de Nómina.")
+            
+            # 6. Destruimos la muestra de la RAM inmediatamente
+            del df
+            gc.collect()
+            
+        except Exception:
+            # Si el archivo está corrupto o vacío, lo ignoramos para no romper la app
+            pass
+            
+    # Si los archivos son tan atípicos que no pudimos leer ni un solo RFC:
+    if archivos_verificados == 0:
+        advertencias.append("Los datos no bastan para verificar automáticamente el régimen.")
+        
+    return advertencias
 
-def _html_kpis_divisas(tarjetas: list) -> str:
-    """Fila de indicadores limpios (tarjetas claras que heredan el tema, sin cajas oscuras): lista de (título, valor, nota). En una sola línea de HTML."""
-    esc = lambda s: html.escape(str(s), quote=True)
-    celdas = "".join(f'<div class="div-kpi"><div class="t">{esc(t)}</div><div class="v">{esc(v)}</div><div class="s">{esc(s)}</div></div>' for t, v, s in tarjetas)
-    return f'{CSS_KPI_DIVISAS}<div class="div-kpis">{celdas}</div>'
+
