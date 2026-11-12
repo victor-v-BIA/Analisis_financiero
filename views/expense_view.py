@@ -420,7 +420,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
 
     st.divider()
     st.markdown("**Egresos en el tiempo**" if comp_df is not None and nomina_disponible
-                else "**Egresos identificados en el tiempo (componentes disponibles)**")
+                else "**Egresos Facturados por año**")
     fig_tiempo = _fig_egresos_tiempo(mensual)
     with st.container(key="egr_tiempo_pdf", width="stretch"):
         render_grafica(fig_tiempo, key="egr_tiempo")
@@ -429,15 +429,15 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
-            "title": ("Egresos en el Tiempo" if comp_df is not None and nomina_disponible
+            "title": ("Egresos Facturados" if comp_df is not None and nomina_disponible
                       else "Egresos en el Tiempo"),
             "fig": fig_tiempo,
             "custom_height": 240
         })
 
     st.divider()
-    st.markdown("**Egresos facturados por mes**" if comp_df is not None and nomina_disponible
-                else "**Egresos identificados por mes (componentes disponibles)**")
+    st.markdown("**Egresos facturados por año**" if comp_df is not None and nomina_disponible
+                else "**Egresos identificados por año (componentes disponibles)**")
     fig_fact_mes = _fig_lineas_por_anio(
         tabla_mes,
         "Egreso total" if comp_df is not None and nomina_disponible else "Egreso identificado",
@@ -450,8 +450,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "image",
-            "title": ("Egresos Facturados por Mes" if comp_df is not None and nomina_disponible
-                      else "Egresos Facturados por Mes"),
+            "title": ("Egresos Facturados por año" if comp_df is not None and nomina_disponible
+                      else "Egresos Facturados por año"),
             "fig": fig_fact_mes,
             "custom_height": 270
         })
@@ -489,7 +489,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         )
     with c2:
         st.markdown("**Método de pago de gastos**" if comp_df is not None
-                    else "**Facturación recibida por método de pago**")
+                    else "**Facturación Recibida por Método de Pago**")
         with st.container(key="egr_metodo_pago_layout"):
             p2, t2 = st.columns([1, 1])
             with p2:
@@ -538,7 +538,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         if comp_df is None:
             pdf_elements.append({
                 "type": "image",
-                "title": "Facturación recibida por método de pago",
+                "title": "Facturación Recibida Por Método de Pago",
                 "fig": fig_metodo_pago,
                 "preserve_textfont_size": True,
             })
