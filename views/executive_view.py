@@ -622,9 +622,15 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             # 3. Concatenamos la fila al DataFrame original
             df_total = pd.DataFrame([fila_total])
             tabla_conc = pd.concat([tabla_conc, df_total], ignore_index=True)
-            
+
+            tabla_conc_app = tabla_conc.iloc[:-1].head(10).copy()
+            fila_total_app = df_total.copy()
+            fila_total_app.loc[0, "Facturación Total"] = tabla_conc_app["Facturación Total"].sum()
+            fila_total_app.loc[0, "%"] = tabla_conc_app["%"].sum()
+            tabla_conc_app = pd.concat([tabla_conc_app, fila_total_app], ignore_index=True)
+
             # Copia redondeada para el PDF en Concentración
-            tabla_conc_pdf = tabla_conc.head(10).copy()
+            tabla_conc_pdf = tabla_conc_app.copy()
             if "Facturación Total" in tabla_conc_pdf.columns:
                 tabla_conc_pdf["Facturación Total"] = tabla_conc_pdf["Facturación Total"].apply(
                     lambda val: _formatear_mxn(val) if pd.notnull(val) else val)
@@ -640,11 +646,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             })
             pdf_elements.append({"type": "table", "title": "Detalle de Concentración por Cliente", "df": tabla_conc_pdf, 
                 "note": nota_conc})
-            tabla_conc_app = tabla_conc.iloc[:-1].head(10).copy()
-            fila_total_app = df_total.copy()
-            fila_total_app.loc[0, "Facturación Total"] = tabla_conc_app["Facturación Total"].sum()
-            fila_total_app.loc[0, "%"] = tabla_conc_app["%"].sum()
-            tabla_conc_app = pd.concat([tabla_conc_app, fila_total_app], ignore_index=True)
             col_tabla.dataframe(
                 tabla_conc_app.style.format({
                     "Facturación Total": lambda val: _formatear_mxn(val) if pd.notnull(val) else val,
