@@ -505,6 +505,30 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         return
     anios = sorted(int(a) for a in ejercicios)
     anios_str = [str(a) for a in anios]
+
+    def seleccionar_anios_grafica(key: str, label: str) -> list[int]:
+        seleccion_previa = list(st.session_state.get(key, anios) or [])
+        seleccion_valida = [
+            int(anio) for anio in seleccion_previa
+            if str(anio).isdigit() and int(anio) in anios
+        ]
+        if key not in st.session_state:
+            st.session_state[key] = seleccion_valida or anios
+        elif len(seleccion_valida) != len(seleccion_previa) and not seleccion_valida:
+            st.session_state[key] = anios
+        else:
+            st.session_state[key] = seleccion_valida
+        seleccion = st.pills(label, options=anios, selection_mode="multi", key=key)
+        return sorted(int(anio) for anio in (seleccion or []))
+
+    def informar_anios_excluidos(seleccionados: list[int]) -> None:
+        excluidos = [str(anio) for anio in anios if anio not in seleccionados]
+        if excluidos:
+            st.info(
+                f"No se han seleccionado los años {', '.join(excluidos)}. "
+                "La gráfica mostrará únicamente los años seleccionados."
+            )
+
     ing_d = _facturacion_anual_cache(_nb(f_ingresos_fac), "ingresos", anios_5, CODIGO_VERSION)
     if lado == "egresos" and egresos_facturas is not None:
         facturas_gastos = egresos_facturas[~egresos_facturas["Es_NCR"]]
@@ -533,42 +557,61 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
     fila1 = st.columns(2)
     with fila1[0], st.container(border=True):
         st.markdown("**Ingresos vs Gastos Anuales (Millones MXN)**")
-        fig_ing_gas = _grafica_ingresos_gastos(anios_str, ing, gas)
-        render_grafica(fig_ing_gas, key=f"eco_{lado}_ingresos_gastos")
-  
-        
-        nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
-        pdf_elements.append({"type": "heading", "text": "2. Evolución de Ingresos"})
-        pdf_elements.append({
-            "type": "image",
-            "title": "Ingresos vs Gastos Anuales (Millones MXN)",
-            "fig": fig_ing_gas,
-            "note": nota_ing_gas
-        })
+        anios_ing_gas = seleccionar_anios_grafica(
+            f"eco_{lado}_anios_ing_gas", "Años a mostrar"
+        )
+        informar_anios_excluidos(anios_ing_gas)
+        if anios_ing_gas:
+            indices_ing_gas = [anios.index(anio) for anio in anios_ing_gas]
+            anios_ing_gas_str = [str(anio) for anio in anios_ing_gas]
+            ing_ing_gas = [ing[i] for i in indices_ing_gas]
+            gas_ing_gas = [gas[i] for i in indices_ing_gas]
+            fig_ing_gas = _grafica_ingresos_gastos(anios_ing_gas_str, ing_ing_gas, gas_ing_gas)
+            render_grafica(fig_ing_gas, key=f"eco_{lado}_ingresos_gastos")
+
+            nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
+            pdf_elements.append({"type": "heading", "text": "2. Evolución de Ingresos"})
+            pdf_elements.append({
+                "type": "image",
+                "title": "Ingresos vs Gastos Anuales (Millones MXN)",
+                "fig": fig_ing_gas,
+                "note": nota_ing_gas
+            })
+        else:
+            st.info("Selecciona al menos un año para mostrar esta gráfica.")
 
     with fila1[1], st.container(border=True):
         clave, empresa, color_barra, nombre_barra = (("itaee", ing, "#2563EB", "Ingresos (Base 100)") if ingresos
                                                      else ("inpp", gas, "#991B1B", "Gastos Operativos (Base 100)"))
         titulo_ref = "ITAEE" if ingresos else "INPP"
+        anios_base100 = seleccionar_anios_grafica(
+            f"eco_{lado}_anios_base100", "Años a mostrar"
+        )
+        informar_anios_excluidos(anios_base100)
+        indices_base100 = [anios.index(anio) for anio in anios_base100]
+        empresa_base100 = [empresa[i] for i in indices_base100]
+        anios_base100_str = [str(anio) for anio in anios_base100]
         sector, serie = tarjeta_serie(clave)
-        base = _anio_base(anios, empresa, serie) if serie else None
+        base = _anio_base(anios_base100, empresa_base100, serie) if serie else None
         if serie is None:
             st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref} (Base 100 = Año Base)**")
             st.info(MENSAJE_CARGA_ECONOMICA)
-        elif base is None or len(anios) < 2:
+        elif base is None or len(anios_base100) < 2:
             st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref} (Base 100 = Año Base)**")
             st.info("Selecciona dos o más ejercicios que existan en la base cargada para calcular el índice Base 100.")
         else:
             st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref} (Base 100 = {base})**")
-            idx_emp = [(v / empresa[anios.index(base)] * 100) if a >= base else float("nan") for a, v in zip(anios, empresa)]
-            idx_ext = [v if a >= base else float("nan") for a, v in zip(anios, _rebase(serie, anios, base))]
+            idx_emp = [(v / empresa_base100[anios_base100.index(base)] * 100) if a >= base else float("nan")
+                       for a, v in zip(anios_base100, empresa_base100)]
+            idx_ext = [v if a >= base else float("nan")
+                       for a, v in zip(anios_base100, _rebase(serie, anios_base100, base))]
             fig_base100 = go.Figure()
-            fig_base100.add_trace(go.Bar(x=anios_str, y=idx_emp, name=nombre_barra, marker_color=color_barra, texttemplate="%{y:.1f}",
+            fig_base100.add_trace(go.Bar(x=anios_base100_str, y=idx_emp, name=nombre_barra, marker_color=color_barra, texttemplate="%{y:.1f}",
                                          textposition="outside", cliponaxis=False,
                                          hovertemplate=f"<b>%{{x}}</b><br>{nombre_barra}: %{{y:.1f}}<extra></extra>"))
             if ingresos:
                 fig_base100.add_trace(go.Scatter(
-                        x=anios_str, 
+                        x=anios_base100_str,
                         y=idx_ext, 
                         name="ITAEE (Índice Referencia)", 
                         
@@ -583,15 +626,15 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
                         
                         # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
-                        textposition="top right",
-                        textfont=dict(size=11, color="black"),
+                        textposition="bottom right",
+                        textfont=dict(size=11, color="white"),
                         cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
                         
                         hovertemplate="<b>%{x}</b><br>ITAEE (Base 100): %{y:.1f}<extra></extra>"
                     ))
             else:
                 fig_base100.add_trace(go.Scatter(
-                        x=anios_str,
+                        x=anios_base100_str,
                         y=idx_ext,
                         name="INPP (Inflación Productor)", 
                                                     
@@ -603,13 +646,13 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         text=[f"{y:.1f}" if y is not None else "" for y in idx_ext],
                                                 
                         # 3. Posición del texto respecto al marcador (ej. "top center" para que aparezca arriba del punto)
-                        textposition="top right",
-                        textfont=dict(size=11,color="#cacfd9"),
+                        textposition="bottom right",
+                        textfont=dict(size=11,color="white"),
                         cliponaxis=False, # Evita que los números muy altos se corten en el borde superior de la gráfica
                                                           
                         hovertemplate="<b>%{x}</b><br>INPP (Base 100): %{y:.1f}<extra></extra>"))
             
-            fig_base100 = _layout_eco(fig_base100, anios_str, "Índice (Base 100)")
+            fig_base100 = _layout_eco(fig_base100, anios_base100_str, "Índice (Base 100)")
             fig_base100.update_yaxes(range=_rango_base100(idx_emp, idx_ext))
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
             # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
@@ -637,18 +680,32 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                 })
      
     if not ingresos and serie is not None and base is not None and len(anios) >= 2:
-        fig_ing = _fig_poder_adquisitivo(anios_str, ing, gas)
         st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
-        render_grafica(fig_ing, key="exec_poder_adquisitivo")
+        anios_poder_adquisitivo = seleccionar_anios_grafica(
+            f"eco_{lado}_anios_poder_adquisitivo", "Años a mostrar"
+        )
+        informar_anios_excluidos(anios_poder_adquisitivo)
+        if anios_poder_adquisitivo:
+            indices_poder_adquisitivo = [
+                anios.index(anio) for anio in anios_poder_adquisitivo
+            ]
+            fig_ing = _fig_poder_adquisitivo(
+                [str(anio) for anio in anios_poder_adquisitivo],
+                [ing[i] for i in indices_poder_adquisitivo],
+                [gas[i] for i in indices_poder_adquisitivo],
+            )
+            render_grafica(fig_ing, key="exec_poder_adquisitivo")
 
-        nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
-        pdf_elements.append({
-            "type": "image",
-            "section_title": "4. Comportamiento de Ingresos en el Entorno",
-            "title": "Poder Adquisitivo: Ingresos vs Inflación General",
-            "fig": fig_ing,
-            "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
-        })
+            nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
+            pdf_elements.append({
+                "type": "image",
+                "section_title": "4. Comportamiento de Ingresos en el Entorno",
+                "title": "Poder Adquisitivo: Ingresos vs Inflación General",
+                "fig": fig_ing,
+                "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
+            })
+        else:
+            st.info("Selecciona al menos un año para mostrar esta gráfica.")
    
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA PDF - VISTA ECONÓMICA
