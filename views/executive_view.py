@@ -709,6 +709,9 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     if col == col_facturado:
                         df_sf_pdf[col] = df_sf_pdf[col].apply(
                             lambda val: _formatear_mxn(val, decimales=1) if pd.notnull(val) else val)
+                    elif col == "Participación (%)":
+                        df_sf_pdf[col] = df_sf_pdf[col].apply(
+                            lambda val: _limpiar_y_formatear(val, sufijo="%"))
                     elif col != "Año":
                         df_sf_pdf[col] = df_sf_pdf[col].apply(_limpiar_y_formatear)
 
@@ -1091,7 +1094,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
     st.markdown("**A) Intermediarios actuales de la empresa**")
     st.markdown(_html_tabla_intermediarios(tabla_intermediarios(d), moneda), unsafe_allow_html=True)
     st.divider()
-    st.markdown(f"**B) Benchmark de mercado:** ¿con quién conviene operar? Lo que la empresa habría pagado por el mismo volumen de {moneda} y las mismas fechas, sobre la referencia")
+    st.markdown(f"**B) Comparación de mercados:** ¿con quién conviene operar? Lo que la empresa habría pagado por el mismo volumen de {moneda} y las mismas fechas, sobre la referencia")
     if hay_fix:
         st.markdown(_html_tabla_benchmark(benchmark_mercado(d)), unsafe_allow_html=True)
         st.caption("Spreads de mercado supuestos (pesos por unidad de divisa sobre la referencia): especialistas FX +0.05 a +0.08, banca empresarial preferente +0.12 a +0.15 y ventanilla "
@@ -1136,7 +1139,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
         intermediarios = tabla_intermediarios(d)
         formato_dinero = lambda valor: (
             "n/d" if pd.isna(valor)
-            else f"{'-' if valor < 0 else ''}&#36;{abs(valor):,.2f}"
+            else f"{'-' if valor < 0 else ''}&#36;{abs(valor):,.0f}"
         )
         intermediarios_pdf = pd.DataFrame({
             "Institución (RFC)": intermediarios.apply(
@@ -1148,11 +1151,11 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
             ),
             "Operaciones": intermediarios["Operaciones"],
             f"Volumen ({moneda})": intermediarios["Volumen divisa"].map(
-                lambda valor: f"{valor:,.2f}"
+                lambda valor: f"{valor:,.0f}"
             ),
             "Volumen (MXN)": intermediarios["Volumen MXN"].map(formato_dinero),
             "Concentración": intermediarios["Concentración %"].map(
-                lambda valor: f"{valor:.1f}%"
+                lambda valor: f"{valor:.0f}%"
             ),
             "TC facturado": intermediarios["TC facturado"].map(
                 lambda valor: f"{valor:.4f}"
@@ -1175,6 +1178,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
             "type": "table",
             "title": f"A) Intermediarios actuales de la empresa — {moneda}",
             "df": intermediarios_pdf,
+            "column_widths_pct": [23, 15, 11, 13, 16, 12, 12, 10, 13],
         })
 
         if hay_fix:
@@ -1205,7 +1209,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
             ])
             pdf_elements.append({
                 "type": "table",
-                "title": f"B) Benchmark de mercado — {moneda}",
+                "title": f"B) Comparación de mercados — {moneda}",
                 "df": benchmark_pdf,
                 "note":( nota_divisas if nota_divisas and nota_divisas.strip() else ""),
             })

@@ -282,6 +282,12 @@ def generate_modular_pdf(
                         "%": 60
                     }
                     col_widths = [widths_dict.get(c, total_width / num_cols) for c in cols]
+                elif "column_widths_pct" in el:
+                    widths_pct = el["column_widths_pct"]
+                    if len(widths_pct) != num_cols or any(width < 0 for width in widths_pct) or sum(widths_pct) <= 0:
+                        raise ValueError("column_widths_pct debe tener un ancho no negativo por columna y una suma mayor que cero.")
+                    scale = total_width / sum(widths_pct)
+                    col_widths = [width * scale for width in widths_pct]
                 else:
                     col_widths = [total_width / max(num_cols, 1)] * num_cols
 
