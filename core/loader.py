@@ -12,13 +12,26 @@ import gc
 import hashlib
 import numpy as np
 from pathlib import Path
-from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
+from utils import (_ArchivoMem, _nb, _norm, a_numero, a_fecha, buscar_columna)
 from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
                     RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,
                     PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, _COLUMNAS_OPERACIONES_DIVISAS)
 
+
+
+def _datos_archivo_cache(archivo) -> tuple[str, bytes | tuple[tuple[str, bytes], ...]]:
+    nombre, contenido = _nb(archivo)
+    if isinstance(contenido, list):
+        partes = []
+        for parte in contenido:
+            bytes_parte = parte.descargar() if hasattr(parte, "descargar") else parte.getvalue()
+            partes.append((parte.name, bytes_parte))
+        return nombre, tuple(partes)
+    if hasattr(contenido, "descargar"):
+        contenido = contenido.descargar()
+    return nombre, contenido
 
 
 def cargar_base(uploaded_file) -> pd.DataFrame:
