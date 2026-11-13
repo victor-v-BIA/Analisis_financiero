@@ -5,17 +5,17 @@ Ingresos Corporativos (incluyendo su Vista Económica y concentraciones).
 '''
 import streamlit as st
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 from views.controls import barra_control
-
 from utils import (dinero, _nb, _rango_base100, buscar_columna)
-from components.charts import (_grafica_ingresos_gastos, _insight_html,
+from components.pdf_generator import generate_modular_pdf
+
+from components.charts import (_grafica_ingresos_gastos,
                                _layout_eco, _fig_facturacion_tiempo,
                                _fig_ingresos_facturados, _fig_pie_metodo_cobro,
                                _html_resumen_metodo_cobro, _fig_bump_anual, render_grafica,
-                               _fig_poder_adquisitivo,_fig_eficiencia_operativa)
+                               _fig_poder_adquisitivo)
 
 from core.loader import (anios_5_archivos, _facturas_cache, excluir_años_incompletos,
                          _complementos_cache, _facturas_egresos_cache, cargar_base,
@@ -28,12 +28,8 @@ from config import (CODIGO_VERSION, REP_VACIO, VISTAS_MODULO, NOMBRE_FECHA,
 from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vigentes,
                                 _total_facturado_ppd_vigente, diferencia_ppd,
                                 matriz_anual, _preparar_concentracion, _pagos_por_factura,
-                                _anio_base, _rebase, _insight_itaee,
-                                _insight_inpp, _insight_tiie, _desglose_cobros, _serie_mensual_por_anio,
-                                _resumen_metodo_cobro_global, _resumen_metodo_cobro, facturas_a_mxn,
-                                _nomina_ingresos_mensual_mxn)
-
-from components.pdf_generator import generate_modular_pdf
+                                _anio_base, _rebase, _desglose_cobros,_resumen_metodo_cobro_global, 
+                                _resumen_metodo_cobro, facturas_a_mxn,_nomina_ingresos_mensual_mxn)
 
 
 def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
@@ -190,13 +186,7 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         faltan_flujo.append("Complementos de Pago de Egresos")
     if ingresos_nomina is None:
         faltan_flujo.append("nómina de ingresos con Fecha de Certificación")
-        #  Linea comentada: Es para describir que la nómina no es de Persona fisica.
-    '''if not flujo_completo:
-        st.warning(
-            "Flujo parcial: la gráfica muestra PUE y los componentes disponibles. "
-            "No incluye " + " y ".join(faltan_flujo) +
-            "; la diferencia representa solo los componentes disponibles."
-        )'''
+
     st.markdown("**Flujo Fiscal Mensual**" if flujo_completo else "**Flujo Fiscal**")
     fig_flujo = _figura_ingresos_egresos(
         periodos, ingresos_flujo, egresos_flujo,
@@ -526,8 +516,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         if excluidos:
             st.info(
                 f"No se han seleccionado los años {', '.join(excluidos)}. "
-                "La gráfica mostrará únicamente los años seleccionados."
-            )
+                "La gráfica mostrará únicamente los años seleccionados.")
 
     ing_d = _facturacion_anual_cache(_nb(f_ingresos_fac), "ingresos", anios_5, CODIGO_VERSION)
     if lado == "egresos" and egresos_facturas is not None:
@@ -655,7 +644,6 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             fig_base100 = _layout_eco(fig_base100, anios_base100_str, "Índice (Base 100)")
             fig_base100.update_yaxes(range=_rango_base100(idx_emp, idx_ext))
             render_grafica(fig_base100, key=f"eco_{lado}_base_100")
-            # _insight_html((_insight_itaee if ingresos else _insight_inpp)(anios, idx_emp, idx_ext, sector, base))
             if not ingresos:
                 nota_base100 = st.text_area(f"Insight - Egresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
                 pdf_elements.append({
@@ -663,9 +651,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                                 "section_title": f"3. Egresos vs INPP",
                                 "title": f"Egresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
                                 "fig": fig_base100,
-                                "note": nota_base100
-                                
-                            })
+                                "note": nota_base100})
                 
             else:
                 nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
@@ -675,9 +661,8 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                     "section_title": f"3.Ingresos vs ITAEE",
                     "title": f"Ingresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
                     "fig": fig_base100,
-                    "note": nota_base100
-                    
-                })
+                    "note": nota_base100})
+
      
     if not ingresos and serie is not None and base is not None and len(anios) >= 2:
         st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
@@ -956,10 +941,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
                             col_monto,
                             rotular_base=False,
                             incluir_detalle_ppd=False,
-                            formato_pdf=True,
-                        )
-                    ],
-                }),
+                            formato_pdf=True,)],}),
                 "white_background": True,
             })
 

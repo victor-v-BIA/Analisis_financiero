@@ -4,22 +4,21 @@ financiero del sistema: resúmenes mensuales,
 matrices anuales, cruces PPD, plazos y cálculos de dictamen.'''
 
 import pandas as pd
-import streamlit as st
-import io
-import re
 import numpy as np
-from config import (CODIGO_VERSION, DIAS_GRACIA_PPD, MESES_ES, COLUMNAS_DETALLE_ANUAL,PERIODOS_EVALUACION,MARGEN_SEGURIDAD_PCT,TASA_REFERENCIA_ANUAL
-,BANDAS_DICTAMEN,PESOS_INDICE,REGLAS_INDICE,MIN_MESES_MARGEN, VENTANA_MARGEN_MESES, MIN_ANIOS_ESTABILIDAD,
-SIN_DICTAMEN, PCT_CAPACIDAD, PROPORCION_MINIMA, VENTANA_DICTAMEN_MESES,CREDITO_MINIMO,BENCHMARK_MERCADO)
-
-
-from core.loader import (_facturas_cache,
-                    excluir_años_incompletos, cargar_base,
-                      _complementos_cache, _facturas_egresos_cache, preparar_complementos_egresos, obtener_anios_analisis)
-
-from utils import(_resolver_fecha_pagos, a_fecha, _mxn, _nombre_abreviado, _lista_anios, a_numero,_columna_unica,
-                  buscar_columna)
 from config import (_RFC_GENERICOS )
+from config import (CODIGO_VERSION, DIAS_GRACIA_PPD, MESES_ES, COLUMNAS_DETALLE_ANUAL
+                    ,PERIODOS_EVALUACION,MARGEN_SEGURIDAD_PCT,TASA_REFERENCIA_ANUAL
+                    ,BANDAS_DICTAMEN,PESOS_INDICE,REGLAS_INDICE,MIN_MESES_MARGEN,
+                    VENTANA_MARGEN_MESES, MIN_ANIOS_ESTABILIDAD,
+                    SIN_DICTAMEN, PCT_CAPACIDAD, PROPORCION_MINIMA,
+                    VENTANA_DICTAMEN_MESES,CREDITO_MINIMO,BENCHMARK_MERCADO)
+
+from core.loader import (_facturas_cache,excluir_años_incompletos,
+                         cargar_base,_complementos_cache, _facturas_egresos_cache,
+                         preparar_complementos_egresos, obtener_anios_analisis)
+
+from utils import(_resolver_fecha_pagos, a_fecha, _mxn, _nombre_abreviado, a_numero,
+                  _columna_unica,buscar_columna, _rango_meses_texto, _monto_por_cuota)
 
 
 def resumen_mensual(facturas: pd.DataFrame, complementos: pd.DataFrame, ejercicios: list[int]) -> pd.DataFrame:
@@ -1174,12 +1173,6 @@ def _tabla_detalle_anual(anual: pd.DataFrame) -> pd.DataFrame:
         COLUMNAS_DETALLE_ANUAL[3]: anual["Diferencia"]}).reset_index(drop=True)
 
 
-def _monto_por_cuota(cuota: float, tasa_m: float, plazo: int) -> float:
-    """Monto de crédito estimado (ingeniería inversa, valor actual de la anualidad): cuota = 0 -> 0; tasa 0 -> cuota * plazo; tasa > 0 ->
-    cuota * ((1 - (1 + tasa_m) ** -plazo) / tasa_m)."""
-    if cuota <= 0 or plazo <= 0:
-        return 0.0
-    return cuota * plazo if tasa_m <= 0 else cuota * ((1 - (1 + tasa_m) ** -plazo) / tasa_m)
 
 
 def _excedente_homologado(balance: dict) -> pd.DataFrame:
@@ -1193,12 +1186,6 @@ def _periodo_evaluacion(tabla: pd.DataFrame, periodo: str) -> pd.DataFrame:
     """Los últimos N meses cronológicos de la tabla (meses con registros en los tres componentes); 'Historial completo' = todos."""
     n = PERIODOS_EVALUACION[periodo]
     return tabla if n is None else tabla.sort_index().tail(n)
-
-
-def _rango_meses_texto(tabla: pd.DataFrame) -> str:
-    """'ene 2025 a dic 2025' del rango cronológico de la tabla."""
-    p0, p1 = tabla.index.min(), tabla.index.max()
-    return f"{MESES_ES[p0.month - 1].lower()} {p0.year} a {MESES_ES[p1.month - 1].lower()} {p1.year}"
 
 
 def _dictamen_credito(evaluado: pd.DataFrame, plazo: int) -> dict:

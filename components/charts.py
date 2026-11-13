@@ -4,23 +4,26 @@ Agrupa todas las funciones que construyen objetos
 de Plotly (go.Figure o px) y renderizan tablas HTML personalizadas.
 '''
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 import pandas as pd
 import numpy as np
 import html
 import plotly.express as px
+from utils import (_mxn_2d, _importe_abreviado_2d,
+                   _abrev_monto, _nombre_abreviado,
+                   _abrev_signo, _formatear_mxn )
+from core.finance_logic import (_dictamen_indice, _normalizar_por_rfc,
+                                _serie_mensual_por_anio, _ranking_anual)
+
 from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     METRICAS_VISUALIZAR,MESES_ES,
                     COLOR_VELA_SUBE,COLOR_VELA_BAJA,
                     COLOR_LINEA_PROMEDIO,ANCHOS_SIN_FACTURACION,CSS_SIN_FACTURACION,
                     ANCHOS_DETALLE_ANUAL,CSS_DETALLE_ANUAL, PALETA_BUMP,PALETA_BUMP_INGRESOS, PALETA_ING,
                     TEXTO_SOBRE_ING,NOMBRE_NOMINA,COLOR_GASTOS,COLOR_NOMINA,
-                    NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD, CSS_KPI_DIVISAS)
+                    NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD, CSS_KPI_DIVISAS, PALETA_AZULES_BIA)
 
-from utils import (_mxn_2d, _importe_abreviado_2d,_abrev_monto, _nombre_abreviado, _abrev_signo, _formatear_mxn )
 
-from core.finance_logic import (_dictamen_indice, _normalizar_por_rfc, _serie_mensual_por_anio, _ranking_anual)
 
 def _layout_plotly(fig: go.Figure, y_titulo: str = "MXN", altura: int = 320) -> go.Figure:
     """Margenes reducidos, fondo transparente (hereda el del tema) y altura consistente (320 por defecto,
@@ -38,9 +41,6 @@ def _layout_eco(fig: go.Figure, anios_str: list[str], titulo_y: str) -> go.Figur
                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=anios_str, showgrid=False)
     return fig
-
-
-
 
 
 def render_grafica(
@@ -152,15 +152,6 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     """Flujo mensual de los años seleccionados. El color identifica el ejercicio fiscal; si se muestran ambas métricas,
     Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
     
-    # Tu paleta fija de azules personalizada
-    paleta_azules_fija = [
-        "#0F2E85",  # Azul marino muy oscuro
-        "#4775F7",  # Azul marino intermedio
-        "#1D4ED8",  # Azul rey profundo
-        "#83A3E7",  # Azul vivo principal
-        "#14489C",  # Azul claro brillante pero sólido
-        "#8EA9CA"   # Azul cielo
-    ]
     
     metricas = METRICAS_VISUALIZAR if metricas is None else list(metricas)
     fig = go.Figure()
@@ -170,7 +161,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     
     for i, anio in enumerate(anios):
         # Asignamos el color de tu paleta de forma cíclica (usando el operador módulo % por si hay más años que colores)
-        color = paleta_azules_fija[i % len(paleta_azules_fija)]
+        color = PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)]
         
         for j, metrica in enumerate(metricas_sel):
             dash, simbolo = estilos[metrica]
@@ -325,11 +316,6 @@ def _grafica_pilares_score(pilares: list[dict]) -> go.Figure:
     fig.update_xaxes(range=[0, 150])
     return fig
 
-
-def _insight_html(texto: str, clase: str = "") -> None:
-    st.markdown(f"<div class='eco-insight {clase}'>{texto}</div>", unsafe_allow_html=True)
-
-
 def _grafica_ingresos_gastos(anios_str: list[str], ing: list, gas: list) -> go.Figure:
     fig = go.Figure()
     for nombre, vals, color in (("Ingresos (MDP)", ing, "#2563EB"), ("Gastos (MDP)", gas, "#DC2626")):
@@ -372,16 +358,17 @@ def _fig_bump_top10(df: pd.DataFrame, monto_calc: str) -> go.Figure:
     return fig
 
 
-
 # Egresos facturados por mes
+"""Líneas comparativas mensuales por Año (`tabla` = 12 filas Mes x una columna por Año, monto NETO sin acumular): un `go.Scatter` por año
+(`lines+markers`, marcadores circulares), eje X = Ene-Dic, eje Y en millones (`$20M`), sin cuadrícula vertical, guías horizontales tenues y
+leyenda horizontal inferior. `rotulo` = texto del monto en el hover y en el título del eje Y."""
+
 def _fig_lineas_por_anio(
     tabla: pd.DataFrame,
     rotulo: str,
     ocultar_ceros: bool = False,
 ) -> go.Figure:
-    """Líneas comparativas mensuales por Año (`tabla` = 12 filas Mes x una columna por Año, monto NETO sin acumular): un `go.Scatter` por año
-    (`lines+markers`, marcadores circulares), eje X = Ene-Dic, eje Y en millones (`$20M`), sin cuadrícula vertical, guías horizontales tenues y
-    leyenda horizontal inferior. `rotulo` = texto del monto en el hover y en el título del eje Y."""
+
     fig = go.Figure()
     anios = [
         anio for anio in tabla.columns
@@ -433,7 +420,7 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
     completa la facturación con PUE + PPD y la diferencia se muestra fuera del gráfico (tabla lateral), con su importe sin alterar."""
     paleta = PALETA_ING if paleta is None else paleta
     cobrado, pendiente = r["cobrado"], r["pendiente"]
-    if pendiente < 0:                                       # complementos > facturación PPD: el sector cobrado llega solo hasta el PPD facturado
+    if pendiente < 0:
         cobrado, pendiente = r["ppd"], 0.0
         
     filas = [("PUE", r["pue"], paleta["pue"]),
@@ -475,15 +462,7 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
         plot_bgcolor="rgba(0,0,0,0)"
     )
     return fig
-    
-    fig.update_layout(
-        height=360, 
-        showlegend=False, 
-        margin=dict(l=90, r=10, t=30, b=10), 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    return fig
+   
 
 def _html_resumen_metodo_cobro(
     r: dict,
@@ -543,17 +522,17 @@ def _fig_bump_anual(df: pd.DataFrame, col_monto: str) -> go.Figure:
     r = _ranking_anual(df, col_monto)
     anios = [str(a) for a in sorted(r["Año"].unique())]
     top = r[r["En_Top"]]
-    orden = top.groupby("Entidad")["Monto"].sum().sort_values(ascending=False).index.tolist()           # leyenda: mayor volumen en el Top primero
+    orden = top.groupby("Entidad")["Monto"].sum().sort_values(ascending=False).index.tolist()          
     paleta = PALETA_BUMP + px.colors.qualitative.Light24
     fig = go.Figure()
     for i, ent in enumerate(orden):
         color = paleta[i % len(paleta)]
         por_anio = top[top["Entidad"] == ent].set_index("Año")
-        razon, rfc = str(por_anio["Razon_Social_Limpia"].iloc[0]).upper(), por_anio["RFC"].iloc[0]                 # presentación en MAYÚSCULAS (los datos no cambian)
+        razon, rfc = str(por_anio["Razon_Social_Limpia"].iloc[0]).upper(), por_anio["RFC"].iloc[0]               
         ys, textos, custom = [], [], []
         for a in anios:
             fila = por_anio.loc[int(a)] if int(a) in por_anio.index else None
-            ys.append(None if fila is None else int(fila["Rango"]))                                    # fuera del Top 10 del año: hueco
+            ys.append(None if fila is None else int(fila["Rango"])) 
             textos.append("" if fila is None else _abrev_signo(fila["Monto"]))
             custom.append([razon, rfc, a, "" if fila is None else int(fila["Rango"]), "" if fila is None else _mxn_2d(fila["Monto"]),
                            "" if fila is None else f"{fila['Participacion'] * 100:.1f}%"])
@@ -815,10 +794,10 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
     # Curva de Inflación General (INPC)
     fig.add_trace(go.Scatter(
         x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", 
-        mode="lines+markers+text",  # <-- Añadido "+text" para mostrar etiquetas fijas
-        text=texto_inpc,            # <-- Lista con el texto de cada punto
-        textposition="bottom left",  # <-- Posición del texto respecto  ['top left', 'top center', 'top right', 'middle left', 'middle center', 'middle right', 'bottom left', 'bottom center', 'bottom right']
-        textfont=dict(color="#FA4A15", size=11), # Opcional: color a juego con la línea
+        mode="lines+markers+text",  # Añadido "+text" para mostrar etiquetas fijas
+        text=texto_inpc,            # Lista con el texto de cada punto
+        textposition="bottom left",  # Posición del texto respecto  ['top left', 'top center', 'top right', 'middle left', 'middle center', 'middle right', 'bottom left', 'bottom center', 'bottom right']
+        textfont=dict(color="#FA4A15", size=11),
         line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,
         hovertemplate=("<b>%{x}</b><br>INPC: %{y:.1f}<br>Ingresos: %{customdata[0]:.1f}"
@@ -828,10 +807,10 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
     # Curva de Ingresos DPC (Base 100)
     fig.add_trace(go.Scatter(
         x=anios_str, y=idx_emp, name="Ingresos (Base 100)", 
-        mode="lines+markers+text",  # <-- Añadido "+text"
-        text=texto_ingresos,        # <-- Lista con el texto de cada punto
-        textposition="top right", # <-- Posición para evitar que se encimen con los del INPC
-        textfont=dict(color="#2563EB", size=11), # Opcional: color a juego
+        mode="lines+markers+text",  # Añadido "+text"
+        text=texto_ingresos,        # Lista con el texto de cada punto
+        textposition="top right", # Posición para evitar que se encimen con los del INPC
+        textfont=dict(color="#2563EB", size=11),
         line=dict(color="#2563EB", width=3), marker=dict(size=9, color="#2563EB"),
         customdata=datos_hover_ingresos,
         hovertemplate=("<b>%{x}</b><br>Ingresos: %{y:.1f}<br>INPC: %{customdata[0]:.1f}"
@@ -860,6 +839,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
     )
     return fig
+
 
 # Composición de Gasto Operativo Fijo
 def _fig_eficiencia_operativa(anios_str, idx_emp, idx_inpp):
@@ -891,15 +871,16 @@ def _fig_eficiencia_operativa(anios_str, idx_emp, idx_inpp):
     )
     return fig
 
-
+# ====================================
 # SECCION 8
+# ====================================
 
 def fig_tc_fix_vs_facturado(d: pd.DataFrame, serie_fix: pd.Series | None, moneda: str, anios=None) -> go.Figure:
     """Gráfica comparativa de UNA divisa: línea punteada gris oscuro con la evolución del TC de referencia (diario, `ffill` en inhábiles) y, por cada institución emisora
     (Razon Social Emisor), una línea con marcadores con el TC facturado (Valor Unitario) en cada operación, para ver qué tan arriba del FIX vendió la divisa cada banco."""
     fig = go.Figure()
     f0, f1 = d["Fecha_Operacion"].min() - pd.Timedelta(days=7), d["Fecha_Operacion"].max() + pd.Timedelta(days=7)
-    if anios:                                                            # la línea del FIX nunca sale de la ventana de ejercicios de los CFDI (p. ej. 2021-2025)
+    if anios:
         f0, f1 = max(f0, pd.Timestamp(int(min(anios)), 1, 1)), min(f1, pd.Timestamp(int(max(anios)), 12, 31))
     if serie_fix is not None and len(serie_fix):
         s = serie_fix.loc[f0:f1]
@@ -940,6 +921,7 @@ def _html_tabla_intermediarios(t: pd.DataFrame, moneda: str) -> str:
     encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i else f"<th>{esc(c)}</th>" for i, c in enumerate(cols)) + "</tr></thead>"
     return (f'{CSS_SIN_FACTURACION}<div class="sf-wrap" style="max-height:{min(38 + 35 * len(t), 300)}px"><table class="sf-tabla">{colgroup}{encabezado}'
             f"<tbody>{''.join(filas)}</tbody></table></div>")
+
 
 def _html_tabla_benchmark(b: pd.DataFrame) -> str:
     """B) Benchmark de mercado: para cada nivel de intermediario, su rango de spread sobre la referencia, el monto que la empresa habría pagado por el mismo volumen y fechas, y el

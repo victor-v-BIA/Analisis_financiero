@@ -211,7 +211,7 @@ def main() -> None:
 
         if archivos_listos:
             # ---------------------------------------------------------
-            # ---> LÓGICA DE VALIDACIÓN (Invisible en el sidebar) <---
+            # LÓGICA DE VALIDACIÓN (Invisible en el sidebar)
             # ---------------------------------------------------------
             if 'estado_validacion' not in st.session_state:
                 st.session_state['estado_validacion'] = 'pendiente'
@@ -230,9 +230,9 @@ def main() -> None:
                     st.rerun()
 
             if st.session_state['estado_validacion'] == 'ok':
-                st.success("✅ Archivos validados.")
+                st.success("Archivos validados.")
             st.markdown("---")
-            # ---------------------------------------------------------
+
             
             def archivo_tipo(clave):
                 arch_tipo = tipos_archivo.get(clave, [])
@@ -271,7 +271,7 @@ def main() -> None:
         st.stop()
 
     # ---------------------------------------------------------
-    # ---> BARRERA CENTRAL DE ERROR <---
+    # BARRERA CENTRAL DE ERROR
     # ---------------------------------------------------------
     if st.session_state.get('estado_validacion') == 'error':
         st.error("Ve a la barra lateral y haz clic en **'Cambiar Tipo de Contribuyente'** o **'Limpiar Diagnóstico'** para corregir la carga.")
@@ -280,7 +280,8 @@ def main() -> None:
             st.warning(alerta)
         # Detenemos la aplicación aquí. El enrutamiento y las gráficas jamás se ejecutarán.
         st.stop()
-    # ---------------------------------------------------------
+
+
 
     # ENRUTAMIENTO FINAL
     if modulo == "Dashboard Ejecutivo (Riesgo y Viabilidad)":

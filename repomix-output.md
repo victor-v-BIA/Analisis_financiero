@@ -6011,7 +6011,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
     
     # Tu paleta fija de azules personalizada
-    paleta_azules_fija = [
+    PALETA_AZULES_BIA = [
         "#0F2E85",  # Azul marino muy oscuro
         "#4775F7",  # Azul marino intermedio
         "#1D4ED8",  # Azul rey profundo
@@ -6028,7 +6028,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     
     for i, anio in enumerate(anios):
         # Asignamos el color de tu paleta de forma cíclica (usando el operador módulo % por si hay más años que colores)
-        color = paleta_azules_fija[i % len(paleta_azules_fija)]
+        color = PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)]
         
         for j, metrica in enumerate(metricas_sel):
             dash, simbolo = estilos[metrica]
@@ -7102,7 +7102,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             # 1. Definimos la paleta de azules según la cantidad de sectores de la dona
             num_sectores = len(datos_dona)
             # Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
-            paleta_azules_fija = [
+            PALETA_AZULES_BIA = [
                 "#0F2E85",  # Azul marino muy oscuro
                 "#4160B4",  # Azul marino muy oscuro
                 "#1D4ED8",  # Azul rey profundo
@@ -7112,7 +7112,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             ]
             
             # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
-            colores_azules = [paleta_azules_fija[i % len(paleta_azules_fija)] for i in range(num_sectores)]
+            colores_azules = [PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(num_sectores)]
 
             fig_dona = px.pie(
                 names=etiquetas_dona, 
@@ -13292,7 +13292,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
     
     # Tu paleta fija de azules personalizada
-    paleta_azules_fija = [
+    PALETA_AZULES_BIA = [
         "#0F2E85",  # Azul marino muy oscuro
         "#4775F7",  # Azul marino intermedio
         "#1D4ED8",  # Azul rey profundo
@@ -13309,7 +13309,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     
     for i, anio in enumerate(anios):
         # Asignamos el color de tu paleta de forma cíclica (usando el operador módulo % por si hay más años que colores)
-        color = paleta_azules_fija[i % len(paleta_azules_fija)]
+        color = PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)]
         
         for j, metrica in enumerate(metricas_sel):
             dash, simbolo = estilos[metrica]
@@ -14384,7 +14384,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             # 1. Definimos la paleta de azules según la cantidad de sectores de la dona
             num_sectores = len(datos_dona)
             # Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
-            paleta_azules_fija = [
+            PALETA_AZULES_BIA = [
                 "#0F2E85",  # Azul marino muy oscuro
                 "#4160B4",  # Azul marino muy oscuro
                 "#1D4ED8",  # Azul rey profundo
@@ -14394,7 +14394,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             ]
             
             # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
-            colores_azules = [paleta_azules_fija[i % len(paleta_azules_fija)] for i in range(num_sectores)]
+            colores_azules = [PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(num_sectores)]
 
             fig_dona = px.pie(
                 names=etiquetas_dona, 
@@ -17569,7 +17569,7 @@ fig = _layout_plotly(fig, y_titulo=y_titulo)
     Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
 ⋮----
 # Tu paleta fija de azules personalizada
-paleta_azules_fija = [
+PALETA_AZULES_BIA = [
 ⋮----
 "#0F2E85",  # Azul marino muy oscuro
 "#4775F7",  # Azul marino intermedio
@@ -17585,7 +17585,7 @@ metricas_sel = [metrica for metrica in METRICAS_VISUALIZAR if metrica in metrica
 estilos = {"Cobros": ("solid", "circle"), "Pagos": ("dash", "square")}
 ⋮----
 # Asignamos el color de tu paleta de forma cíclica (usando el operador módulo % por si hay más años que colores)
-color = paleta_azules_fija[i % len(paleta_azules_fija)]
+color = PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)]
 ⋮----
 shape="spline",     # Transforma las líneas rectas en curvas suaves
 smoothing=0.5      # Nivel de suavizado (valores entre 0.0 y 1.3, por defecto es 0.5)
@@ -18046,7 +18046,7 @@ etiquetas_dona = [_nombre_abreviado(n) if n != "Otros" else "Otros" for n in nom
 # 1. Definimos la paleta de azules según la cantidad de sectores de la dona
 num_sectores = len(datos_dona)
 # Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
-paleta_azules_fija = [
+PALETA_AZULES_BIA = [
 ⋮----
 "#0F2E85",  # Azul marino muy oscuro
 "#4160B4",  # Azul marino muy oscuro
@@ -18056,7 +18056,7 @@ paleta_azules_fija = [
 "#60A5FA"   # Azul cielo (último tono, pero aún legible)
 ⋮----
 # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
-colores_azules = [paleta_azules_fija[i % len(paleta_azules_fija)] for i in range(num_sectores)]
+colores_azules = [PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(num_sectores)]
 ⋮----
 fig_dona = px.pie(
 ⋮----
@@ -23957,7 +23957,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
     
     # Tu paleta fija de azules personalizada
-    paleta_azules_fija = [
+    PALETA_AZULES_BIA = [
         "#0F2E85",  # Azul marino muy oscuro
         "#4775F7",  # Azul marino intermedio
         "#1D4ED8",  # Azul rey profundo
@@ -23974,7 +23974,7 @@ def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
     
     for i, anio in enumerate(anios):
         # Asignamos el color de tu paleta de forma cíclica (usando el operador módulo % por si hay más años que colores)
-        color = paleta_azules_fija[i % len(paleta_azules_fija)]
+        color = PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)]
         
         for j, metrica in enumerate(metricas_sel):
             dash, simbolo = estilos[metrica]
@@ -25049,7 +25049,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             # 1. Definimos la paleta de azules según la cantidad de sectores de la dona
             num_sectores = len(datos_dona)
             # Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
-            paleta_azules_fija = [
+            PALETA_AZULES_BIA = [
                 "#0F2E85",  # Azul marino muy oscuro
                 "#4160B4",  # Azul marino muy oscuro
                 "#1D4ED8",  # Azul rey profundo
@@ -25059,7 +25059,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             ]
             
             # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
-            colores_azules = [paleta_azules_fija[i % len(paleta_azules_fija)] for i in range(num_sectores)]
+            colores_azules = [PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(num_sectores)]
 
             fig_dona = px.pie(
                 names=etiquetas_dona, 

@@ -4,40 +4,31 @@
 Contiene la vista completa del Dashboard de Riesgo y Viabilidad.
 '''
 from html import escape
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from core.api_rates import _obtener_fix, cruzar_fix
+from components.pdf_generator import generate_modular_pdf
+from utils import (_nb, _nombre_abreviado, _limpiar_y_formatear, _mxn, _formatear_mxn)
 
-from utils import _mxn, _formatear_mxn
-from utils import (_nb, _nombre_abreviado,_rango_meses_texto, _limpiar_y_formatear, _monto_por_cuota)
 from core.loader import (anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
-                         _resumen_sf_cache,_res_sf_cache,_trazabilidad_cache,_operaciones_divisas_cache)
-from core.api_rates import _obtener_fix, cruzar_fix
+                         _resumen_sf_cache,_res_sf_cache,_operaciones_divisas_cache)
 
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
-                    METRICAS_VISUALIZAR, PESOS_INDICE,BANDA_CONCENTRACION_ALTA,
-                    BANDA_CONCENTRACION_BAJA,MOSTRAR_INDICE_DESEMPENO,
-                    REGLAS_INDICE,PLAZO_DEFECTO_MESES,PERIODOS_EVALUACION, TASA_REFERENCIA_ANUAL,MARGEN_SEGURIDAD_PCT,
-                    PROPORCION_MINIMA, CREDITO_MINIMO, PCT_CAPACIDAD, PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
-                    MARGEN_COMERCIAL_DEFECTO, VENTANA_DICTAMEN_MESES, TIIE_DEFECTO,PREFIJO_DIVISAS)
+                    METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES,
+                    PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
+                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,PALETA_AZULES_BIA)
 
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
-                                _layout_plotly,_html_tabla_sin_facturacion,_grafica_gauge_score,_grafica_pilares_score,
-                                render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,_html_tabla_benchmark, _html_kpis_divisas)
+                                _layout_plotly,_html_tabla_sin_facturacion,
+                                render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,
+                                _html_tabla_benchmark, _html_kpis_divisas)
 
-from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,
-                                 _flujo_bruto_mensual, _ohlc_mensual,
-                                 _promedios_mensuales_historicos,
-                                 _series_anuales_por_mes,_tabla_clientes_sin_facturacion,
-                                 _trazabilidad_indicadores,_indice_desempeno,_periodo_evaluacion,
-                                 _excedente_homologado,_dictamen_credito,_escenarios_credito,
-                                 kpis_divisas, tabla_intermediarios, benchmark_mercado)
-
-from components.pdf_generator import generate_modular_pdf
-
+from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,_flujo_bruto_mensual,
+                                _ohlc_mensual,_promedios_mensuales_historicos,_series_anuales_por_mes,_tabla_clientes_sin_facturacion,
+                                _excedente_homologado,_escenarios_credito,kpis_divisas, tabla_intermediarios, benchmark_mercado)
 
 def _datos_archivo_cache(archivo) -> tuple[str, bytes | tuple[tuple[str, bytes], ...]]:
     nombre, contenido = _nb(archivo)
@@ -544,18 +535,9 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             
             # 1. Definimos la paleta de azules según la cantidad de sectores de la dona
             num_sectores = len(datos_dona)
-            # Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
-            paleta_azules_fija = [
-                "#0F2E85",  # Azul marino muy oscuro
-                "#4160B4",  # Azul marino muy oscuro
-                "#1D4ED8",  # Azul rey profundo
-                "#2563EB",  # Azul vivo principal
-                "#3B82F6",  # Azul claro brillante pero sólido
-                "#60A5FA"   # Azul cielo
-            ]
             
             # Asignamos los colores según la cantidad de sectores (si hay más de 5, se repiten de forma segura)
-            colores_azules = [paleta_azules_fija[i % len(paleta_azules_fija)] for i in range(num_sectores)]
+            colores_azules = [PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(num_sectores)]
 
             fig_dona = px.pie(
                 names=etiquetas_dona, 
@@ -723,7 +705,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 })
 
 # ---------------------------------------------------------------
-    # 6 (Sección 7). Dictamen de riesgo crediticio
+    # (Sección 7). Dictamen de riesgo crediticio
     # ---------------------------------------------------------------
     st.divider()
     st.header("7.Estimación de Capacidad de Pago",
@@ -849,29 +831,19 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     st.subheader("Exportación de Reporte Ejecutivo")
     
     col_pdf_desc, col_pdf_info = st.columns([1, 2])
-    with col_pdf_info:
-        '''exec_notes = st.text_area(
-            "Notas / Observaciones Generales del Analista para el PDF:",
-            placeholder="Agrega tus conclusiones ejecutivas generales aquí...",
-            key="exec_notes_general"
-        )'''
+    
     
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, sus conclusiones individuales, tablas e información financiera de esta vista.")
         
-        # texto_notas = exec_notes
+
         if dictamen_res is not None:
             cons_viabilidad = "VIABLE" if dictamen_res["conservador"] and dictamen_res["conservador"]["es_viable"] else "NO VIABLE"
-            # texto_notas =  exec_notes
 
         if st.button("Generar Reporte PDF", key="btn_generar_pdf"):
             with st.spinner("Construyendo estructura modular y maquetando PDF..."):
                 
-                elementos_finales = []
-                # if texto_notas and texto_notas.strip():
-                # elementos_finales.append({"type": "heading", "text": "Notas y Observaciones Ejecutivas"})
-                # elementos_finales.append({"type": "callout"})
-                
+                elementos_finales = []       
                 elementos_finales.extend(pdf_elements)
 
                 pdf_data = generate_modular_pdf(
@@ -889,9 +861,9 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 )
 
 
-# ___________________________
+# ==================================
 # SECCION 7
-# ___________________________
+# ==================================
 
 
 def _simulador_financiamiento(balance: dict):
@@ -1045,7 +1017,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
         _pdf_sin_datos(mensaje)
         return
     fuera_periodo = 0
-    if anios:                                                            # ejercicios cerrados de los CFDI cargados: se descarta todo lo de fuera de la ventana
+    if anios:
         en_ventana = ops["Fecha_Operacion"].dt.year.isin([int(a) for a in anios])
         fuera_periodo = int((~en_ventana).sum())
         ops = ops[en_ventana].reset_index(drop=True)
@@ -1100,25 +1072,24 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
     else:
         st.info("El benchmark necesita el tipo de cambio de referencia; no se pudo consultar (sin conexión).")
     nota_divisas = st.text_area(
-                        f"Insight para la gráfica de Operaciones en Divisas {moneda}",
-                        max_chars=600,
-                        placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
-                        key="note_divisas"
-                    )
+        f"Insight para la gráfica de Operaciones en Divisas {moneda}",
+        max_chars=600,
+        placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
+        key="note_divisas")
 
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "metrics",
             "title": f"{moneda}",
-            "data": [
-                ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
-                ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}"),
-                ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else "No disponible",
-                 "Mercado del día de cada operación" if hay_fix else "Sin conexión a la fuente de mercado"),
-                ("Spread y sobreprecio total",
-                 f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else "No disponible",
-                 f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Sin referencia de mercado"),
-            ],
+            # "data": [
+            #     ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
+            #     ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}"),
+            #     ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else "No disponible",
+            #      "Mercado del día de cada operación" if hay_fix else "Sin conexión a la fuente de mercado"),
+            #     ("Spread y sobreprecio total",
+            #      f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else "No disponible",
+            #      f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Sin referencia de mercado"),
+            # ],
         })
         if aviso:
             pdf_elements.append({
@@ -1132,7 +1103,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
             })
         pdf_elements.append({
             "type": "image",
-            "title": f"Tipo de cambio facturado vs. referencia — {moneda}",
+            "title": f"Tipo de cambio facturado vs. FIX (referencia) — {moneda}",
             "fig": fig_divisas
         })
         intermediarios = tabla_intermediarios(d)
@@ -1206,12 +1177,23 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
                     for _, fila in benchmark_pdf.iterrows()
                 ],
             ])
+            
+            
             pdf_elements.append({
                 "type": "table",
                 "title": f"B) Comparación de mercados — {moneda}",
                 "df": benchmark_pdf,
                 "note":( nota_divisas if nota_divisas and nota_divisas.strip() else ""),
             })
+
+
+            pdf_elements.append({
+                            "type": "callout", 
+                            "text": '''
+                            <b>Nota:</b> Los spreads sobre el FIX (tipo de cambio de referencia)
+                            de cada nivel son rangos estimados con base en las condiciones del mercado cambiario.
+                            '''
+                            })
         else:
             pdf_elements.append({
                 "type": "callout",

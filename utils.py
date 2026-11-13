@@ -5,7 +5,8 @@ import unicodedata
 import pandas as pd
 import re
 from config import (_PARENTESIS,_GRUPO_FINANCIERO_FINAL,
-                      _SUFIJOS_CORPORATIVOS,_CONECTORES_MINUSCULA, COL_FECHA_REP,MESES_ES)
+                      _SUFIJOS_CORPORATIVOS,_CONECTORES_MINUSCULA,
+                      COL_FECHA_REP,MESES_ES)
 
 ContenidoArchivo = bytes | tuple[tuple[str, bytes], ...]
 
@@ -204,10 +205,6 @@ def _rango_meses_texto(tabla: pd.DataFrame) -> str:
     """'ene 2025 a dic 2025' del rango cronológico de la tabla."""
     p0, p1 = tabla.index.min(), tabla.index.max()
     return f"{MESES_ES[p0.month - 1].lower()} {p0.year} a {MESES_ES[p1.month - 1].lower()} {p1.year}"
-
-
-def _lista_anios(anios) -> str:
-    return ", ".join(str(a) for a in anios) if anios else "ningún año"
 
 
 def _anios_txt(anios: list[int]) -> str:

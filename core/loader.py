@@ -9,17 +9,17 @@ import streamlit as st
 import io
 import re
 import gc
-import html
 import hashlib
 import numpy as np
 from pathlib import Path
+from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
 from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
-                    RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,CSS_KPI_DIVISAS,
+                    RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,
                     PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, _COLUMNAS_OPERACIONES_DIVISAS)
 
-from utils import (_ArchivoMem, _norm, a_numero, a_fecha, buscar_columna)
+
 
 def cargar_base(uploaded_file) -> pd.DataFrame:
     """Lector universal que delega a la función con caché."""
@@ -708,7 +708,9 @@ def _cargar_bases_economicas(lado: str) -> dict:
     return series
 
 
-# =============== FUNCIONES CON @st.cache_data
+# ============================================
+# FUNCIONES CON @st.cache_data
+# ============================================
 @st.cache_data(show_spinner="Procesando facturas…", max_entries=2)
 def _facturas_cache_procesar(nombre: str, _contenido, version: str, huella_contenido: str):
     return leer_facturas(nombre, _contenido)

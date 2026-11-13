@@ -7,30 +7,27 @@ de Facturación Recibida y Egresos
 import streamlit as st
 import pandas as pd
 import numpy as np
+from views.controls import barra_control
+from components.pdf_generator import generate_modular_pdf
+from utils import dinero
+from views.income_view import _vista_economica
 
 from core.loader import (anios_5_archivos,_columnas_archivo,validar_columnas,
                          _facturas_egresos_cache,excluir_años_incompletos,
                          cargar_base, buscar_columna,preparar_complementos_egresos,_preparar_nomina)
 
 from config import (CODIGO_VERSION, COLUMNAS_FACTURAS_EGR_REQUERIDAS,
-                    VISTAS_MODULO, AYUDA_TOTAL,
-NOMBRE_EGR_PUE,
-                    NOMBRE_EGR_PPD,
-                    NOMBRE_NOMINA,
-                    COLOR_NOMINA,
-                    AYUDA_TOP10_ANUAL)
+                    VISTAS_MODULO, AYUDA_TOTAL,NOMBRE_EGR_PUE,
+                    NOMBRE_EGR_PPD,NOMBRE_NOMINA,COLOR_NOMINA,AYUDA_TOP10_ANUAL)
 
 from core.finance_logic import (facturas_a_mxn,resumen_egresos,ncr_por_año_egresos,diferencia_ppd,
                                 matriz_anual_egresos,_preparar_concentracion,_resumen_nomina_gastos,
                                 excluir_cfdis_divisas,excluir_complementos_de_cfdis,_es_nomina_ingresos)
-from utils import dinero
-from views.income_view import _vista_economica
+
 from components.charts import (_fig_egresos_tiempo,_fig_lineas_por_anio,_fig_pie_nomina_gastos,
                                _html_resumen_nomina_gastos,_fig_pie_metodo_pago,
                                _html_resumen_metodo_pago,_fig_bump_anual,render_grafica,
                                _fig_pie_metodo_cobro)
-from views.controls import barra_control
-from components.pdf_generator import generate_modular_pdf
 
 
 def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5=None,
@@ -89,7 +86,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     vista_modulo = st.radio("Vista", VISTAS_MODULO, horizontal=True, key="egr_vista_modulo", label_visibility="collapsed")
     econ = vista_modulo == "Vista Económica"   # Vista Económica: filtro de ejercicios + desglose + 4 gráficas
     ejercicios = barra_control(
-        [int(a) for a in anios_5],   # eje canónico: los 5 años de la ventana (uno sin movimientos queda en 0)
+        [int(a) for a in anios_5],   
         key_anios="egr_ejercicios")
 
     if not ejercicios:
@@ -120,7 +117,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         col_fecha = buscar_columna(df_rep.columns, nombre_fecha)
         faltantes = [c for c, col in ((nombre_monto, col_monto), (nombre_fecha, col_fecha)) if col is None]
         if faltantes:
-            st.error(f"🚨 Faltan columnas en la {etiqueta_base}: {faltantes}")
+            st.error(f" Faltan columnas en la {etiqueta_base}: {faltantes}")
             st.stop()
 
         col_est_rep = buscar_columna(df_rep.columns, "Estatus")

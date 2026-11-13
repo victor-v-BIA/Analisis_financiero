@@ -176,6 +176,18 @@ ETIQUETA_SELECTOR_SERIE = "Selecciona el sector / serie a comparar:"
 _MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
 
 
+# Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
+PALETA_AZULES_BIA = [
+    "#0F2E85",  # Azul marino muy oscuro
+    "#4160B4",  # Azul marino muy oscuro
+    "#1D4ED8",  # Azul rey profundo
+    "#2563EB",  # Azul vivo principal
+    "#3B82F6",  # Azul claro brillante pero sólido
+    "#60A5FA"   # Azul cielo
+]
+
+
+
 # PALETA DE COLORES PARA GRAFICAS DE TOP 10
 PALETA_BUMP = ["#60A5FA",
                "#34D399", 
@@ -344,7 +356,7 @@ RFCS_CASAS_CAMBIO = frozenset({"BMI9704113PA"})   # RFC de Monex: sus facturas r
 SERIES_FIX = {"SF43718": "USD", "SF46410": "EUR"}  # series del SIE de Banxico: Tipo de Cambio FIX USD/MXN y EUR/MXN
 DIAS_DESFASE_ALERTA = 5                          # alerta de auditoría: CFDI timbrado más de 5 días después de la operación
 DIAS_MAX_FFILL_FIX = 7                           # un día inhábil toma el último FIX hábil previo, hasta 7 días hacia atrás
-BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa / Especialistas FX", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia:
+BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia:
                      ("Banca Empresarial Preferente", 0.12, 0.15),                       # parámetros competitivos supuestos del mercado cambiario mexicano (no son
                      ("Ventanilla Bancaria Tradicional", 0.25, 0.35))                    # cotizaciones: se ajustan aquí)
 

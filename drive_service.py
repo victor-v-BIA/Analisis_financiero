@@ -18,7 +18,6 @@ def obtener_servicio_drive():
     # 2. Prioridad Nube: Solo si NO hay archivo local
     else:
         try:
-            # 🛑 TODO el bloque de secrets debe estar indentado dentro del "try"
             if "gcp_credentials" in st.secrets:
                 creds_dict = dict(st.secrets["gcp_credentials"])
                 creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
