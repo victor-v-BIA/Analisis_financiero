@@ -178,7 +178,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         total_pagado_rep = float(df_rep.loc[df_rep["Año"].isin([int(a_) for a_ in anios_5]), "Monto_Num"].sum())
         saldo_ppd_macro = dinero(diferencia_ppd(total_ppd_facturado, total_pagado_rep))
     else:
-        saldo_ppd_macro = "n/d"
+        saldo_ppd_macro = "$0"
 
     # Inicialización del acumulador para PDF
     pdf_elements = []
@@ -200,14 +200,14 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         with st.container(key="egr_kpis_cobranza_pdf"):
             k = st.columns(4)
             k[0].metric("Pagado Total (PUE + Complementos)",
-                       dinero(pagado_total) if complementos_disponibles else "n/d",
+                       dinero(pagado_total) if complementos_disponibles else "$0",
                        f"{pagado_total / fact_total:.1%} de lo facturado" if complementos_disponibles and fact_total
                        else "PUE conocido; PPD no disponible",
                        delta_color="off", delta_arrow="off",
                        help="PUE (pagado al recibir la factura) más el Pago Efectivo de los Complementos de Pago Recibidos "
                             "(por su fecha de pago).")
             k[1].metric("Complementos de Pago Recibidos",
-                       dinero(pagado_ppd) if complementos_disponibles else "n/d",
+                       dinero(pagado_ppd) if complementos_disponibles else "$0",
                        f"{n_rep} complementos de pago" if complementos_disponibles else "Base PAGO no disponible",
                        delta_color="off", delta_arrow="off",
                        help=f"Monto MXN de la {etiqueta_base} cuya {nombre_fecha} cae en los ejercicios seleccionados.")
@@ -215,7 +215,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                        help="Diferencia PPD global: Facturación Recibida PPD vigente (Total en MXN) menos el Total de los "
                             "Complementos de Pago Recibidos vigentes (por su fecha de pago, Flujo de Efectivo), sin cruce por UUID. "
                             "No se filtra por los Ejercicios fiscales seleccionados arriba; puede ser negativa.")
-            k[3].metric("% Saldo PPD por Pagar", f"{pct_saldo_ppd:.1f}%" if pct_saldo_ppd is not None else "n/d",
+            k[3].metric("% Saldo PPD por Pagar", f"{pct_saldo_ppd:.1f}%" if pct_saldo_ppd is not None else "0",
                        help="Saldo PPD por Pagar entre Facturación Recibida PPD, de los ejercicios seleccionados.")
 
         with st.container(key="egr_kpis_cierre_pdf"):
@@ -280,7 +280,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         matriz["Egreso Total (Operación + Nómina)"] = np.nan
 
     texto = matriz.apply(lambda col: col.map(
-        lambda v: "$0.00" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
+        lambda v: "0" if pd.isna(v) else (f"{v:.1f}%" if col.name.startswith("%") else f"${v:,.2f}")))
     try:
         columna_texto = st.column_config.TextColumn(alignment="right")
     except TypeError:
@@ -432,8 +432,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         })
 
     st.divider()
-    st.markdown("**Egresos facturados por año**" if comp_df is not None and nomina_disponible
-                else "**Egresos identificados por año (componentes disponibles)**")
+    st.markdown("**Egresos facturados por año**" )
     fig_fact_mes = _fig_lineas_por_anio(
         tabla_mes,
         "Egreso total" if comp_df is not None and nomina_disponible else "Egreso identificado",
@@ -563,7 +562,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 ppd_pendiente_g = float(res.get("diferencia", 0))
                 ppd_pagado_g = float(res.get("complementos", 0))
                 total_g = float(res.get("facturacion", pue_g + ppd_g))
-                pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "$0.00"
+                pct_pago = lambda monto: f"{monto / total_g * 100:.1f}%" if total_g else "0"
 
                 filas_pago_pdf = [
                     {"Concepto": f"<font size=8 color='#6B7280'>Monto total</font><br/><b><font size=13 color='#1F2937'>MXN {total_g:,.2f}</font></b>"},

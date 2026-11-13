@@ -269,7 +269,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         st.warning(
             "Análisis parcial: falta la base de Complementos de Clientes (PAGO - Flujo Efectivo). "
             "La facturación se mostrará, pero no se pueden determinar los cobros PPD, el saldo por cobrar "
-            "ni el flujo de efectivo; esos datos aparecerán como no disponibles, no como cero."
+            "ni el flujo de efectivo."
         )
 
     fac = facturas[facturas["Fecha"].dt.year.isin(ejercicios)]
@@ -318,9 +318,9 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             total_cobrado_rep = complementos_vigentes(rep_total)
             saldo_ppd_macro = dinero(diferencia_ppd(total_ppd_facturado, total_cobrado_rep))
         except KeyError:
-            saldo_ppd_macro = "n/a"
+            saldo_ppd_macro = "$0"
     else:
-        saldo_ppd_macro = "n/d"
+        saldo_ppd_macro = "$0"
 
     pdf_elements = []
 
@@ -337,11 +337,11 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         # Fila 2 - Cobranza y saldos
         with st.container(key="ing_kpis_cobranza_pdf"):
             k = st.columns(4)
-            k[0].metric("Cobrado Total (PUE + Complementos)", dinero(cobr_total) if cobr_total is not None else "n/d",
+            k[0].metric("Cobrado Total (PUE + Complementos)", dinero(cobr_total) if cobr_total is not None else "$0",
                         f"{cobr_total / fact_total:.1%} de lo facturado" if cobr_total is not None and fact_total else "PUE conocido; PPD no disponible",
                         delta_color="off", delta_arrow="off",
                         help="PUE (cobrado al facturar) más el Cobro Efectivo de los Complementos de Pago Emitidos (por su fecha de pago).")
-            k[1].metric("Complementos de Pago Emitidos", dinero(cobr_ppd) if complementos_disponibles else "n/d",
+            k[1].metric("Complementos de Pago Emitidos", dinero(cobr_ppd) if complementos_disponibles else "$0",
                         f"{n_reps} complementos de pago" if complementos_disponibles else "Base PAGO no disponible",
                         delta_color="off", delta_arrow="off",
                         help=f"Cobro Efectivo (Saldo Inicial - Saldo Final) de los Complementos de Pago Emitidos cuya {NOMBRE_FECHA} "
@@ -351,7 +351,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                         help="Macro-cálculo: Total Facturado menos el Total Cobrado vía Complementos de Pago Emitidos.")
             k[3].metric("% Cobranza PPD",
                         f"{cobr_ppd / fact_ppd:.1%}" if complementos_disponibles and fact_ppd
-                        else "0.00" if complementos_disponibles else "n/d",
+                        else "0" if complementos_disponibles else "0",
                         help="Complementos de Pago Emitidos entre Facturación PPD.")
 
         # Fila 3 - Cierre
@@ -360,7 +360,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             k[0].metric("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito",
                         delta_color="off", delta_arrow="off",
                         help="Suma del Total de las Notas de Crédito emitidas.")
-            k[1].metric("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d", delta_color="off", delta_arrow="off",
+            k[1].metric("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "$0", delta_color="off", delta_arrow="off",
                         help="Ingreso Neto = Cobrado Total (PUE + Complementos) - Notas de Crédito.")
         # Métricas para el PDF Financiero
         metrics_kpis = [
@@ -374,10 +374,10 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
             ("Saldo PPD por Cobrar", saldo_ppd_macro, "Total Facturado menos Total Cobrado" if complementos_disponibles else "No disponible sin la base PAGO"),
             ("% Cobranza PPD",
              f"{cobr_ppd / fact_ppd:.1%}" if complementos_disponibles and fact_ppd
-             else "$0.00" if complementos_disponibles else "n/d",
+             else "$0" if complementos_disponibles else "$0",
              "Complementos de Pago Emitidos entre Facturación PPD"),
             ("Notas de Crédito", dinero(ncr_total), f"{df_ncr['UUID'].nunique()} Notas de Crédito"),
-            ("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "n/d",
+            ("Ingreso Neto", dinero(ingreso_neto) if ingreso_neto is not None else "$0",
              "Cobrado menos Notas de Crédito" if ingreso_neto is not None else "No disponible sin la base PAGO")
         ]
         # 2. Las dividimos automáticamente en bloques de 3 en 3 para que salgan filas perfectas
@@ -405,7 +405,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         ]
         matriz[columnas_sin_pagos] = np.nan
     texto = matriz.apply(lambda col: col.map(
-        lambda v: "$0.00" if pd.isna(v) else (f"{v / 100:.1%}" if col.name.startswith("%") else f"${v:,.2f}")))
+        lambda v: "0" if pd.isna(v) else (f"{v / 100:.1%}" if col.name.startswith("%") else f"${v:,.2f}")))
     try:
         columna_texto = st.column_config.TextColumn(alignment="right")
     except TypeError:

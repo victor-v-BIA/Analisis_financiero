@@ -114,12 +114,8 @@ def main() -> None:
     # ==================================================
     with st.sidebar:
         
-        st.header("Carga de Datos")
-        
-        if st.session_state['regimen'] == "Persona Física":
-            st.info("**Modo actual:** Persona Física")
-        else:
-            st.info("**Modo actual:** Persona Moral")
+        st.header(f"Carga de Datos para {st.session_state['regimen']}")
+
             
         if st.button("Cambiar Tipo de Contribuyente", key="btn_regresar"):
             _reiniciar_diagnostico()
@@ -229,11 +225,15 @@ def main() -> None:
                         st.session_state['estado_validacion'] = 'ok'
                     st.rerun()
 
-            if st.session_state['estado_validacion'] == 'ok':
-                st.success("Archivos validados.")
-            st.markdown("---")
-
-            
+            elif st.session_state['estado_validacion'] == 'ok':
+                # ---------------------------------------------------------
+                # NUEVO: Controlamos que el toast se muestre solo una vez
+                # ---------------------------------------------------------
+                if not st.session_state.get('toast_mostrado', False):
+                    st.toast("Archivos validados y listos", icon="✅")
+                    # Apagamos el interruptor para que no vuelva a salir
+                    st.session_state['toast_mostrado'] = True
+   
             def archivo_tipo(clave):
                 arch_tipo = tipos_archivo.get(clave, [])
                 if not arch_tipo: return None
