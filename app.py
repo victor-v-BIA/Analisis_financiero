@@ -9,8 +9,6 @@ import streamlit as st
 from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
 from views.expense_view import (modulo_egresos)
-
-# 1. Importar estilos globales de tu archivo modular
 from components.styles import  CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
 from config import CSS_TARJETAS_KPI
 
@@ -209,9 +207,7 @@ def main() -> None:
             st.warning("Archivos ignorados: " + ", ".join(no_clasificados))
 
         if archivos_listos:
-            # ---------------------------------------------------------
-            # LÓGICA DE VALIDACIÓN (Invisible en el sidebar)
-            # ---------------------------------------------------------
+
             if 'estado_validacion' not in st.session_state:
                 st.session_state['estado_validacion'] = 'pendiente'
                 st.session_state['alertas_fiscales'] = []
@@ -235,9 +231,7 @@ def main() -> None:
                 st.rerun()
 
             elif st.session_state['estado_validacion'] == 'ok':
-                # ---------------------------------------------------------
-                # NUEVO: Controlamos que el toast se muestre solo una vez
-                # ---------------------------------------------------------
+
                 if not st.session_state.get('toast_mostrado', False):
                     st.toast("Archivos validados y listos", icon="✅")
                     # Apagamos el interruptor para que no vuelva a salir

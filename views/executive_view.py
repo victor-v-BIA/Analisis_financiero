@@ -36,13 +36,14 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                   file_egresos_productos=None, file_fix=None, file_razones=None) -> None:
     """Dashboard Ejecutivo (Flujo de Efectivo): cruza Ingresos y Egresos para un vistazo de riesgo y viabilidad, antes de entrar
     al detalle operativo de cada módulo."""
-    st.title("Dashboard Ejecutivo (Riesgo y Viabilidad)")
 
+    st.title("Dashboard Ejecutivo (Riesgo y Viabilidad)")
     pdf_elements = []
 
-    # ---------------------------------------------------------------
-    # Módulo 1: Facturación PPD y complementos de pago
-    # ---------------------------------------------------------------
+    # =================================================
+    # SECCIÓN 1: Facturación PPD y complementos de pago
+    # =================================================
+
     st.subheader("1. Facturación PPD y Complementos: Diferencias Anuales")
     st.caption("Años en los que los importes de los complementos fueron mayores o menores que la facturación PPD.")
 
@@ -139,9 +140,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                   "Complementos − Compras PPD", "proveedores",
                    "Mide la realidad fiscal ante el SAT. Negativo: aparenta deudas vigentes (complementos no recibidos, mala relación de UUIDs entre factura y pago, etc.). Positivo: aparenta liquidación de deudas pasadas (pagos de facturas PPD de años anteriores, facturas PUE incluidas por error en un REP, etc.).")
 
-    # ---------------------------------------------------------------
-    # Indicador 4: Flujo Neto Fiscal
-    # ---------------------------------------------------------------
+    # ==============================================================
+    # SECCIÓN 2: Flujo Neto Fiscal
+    # ==============================================================
+    
     st.divider()
     st.subheader("2. Flujo Neto Fiscal",
                  help="Mide el flujo de efectivo comprobable ante el SAT. Representa la diferencia entre los cobros (PUE + Complementos) y pagos ( PUE + Complementos + Nomina). ")
@@ -243,7 +245,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             key="note_graf_flujo"
         )
 
-    
         pdf_elements.append({
                             "type": "image", 
                             "section_title": "2. Flujo Neto Fiscal",
@@ -253,9 +254,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                         })
         
 
-    # ---------------------------------------------------------------
-    # Ciclos y Estacionalidad Operativa
-    # ---------------------------------------------------------------
+    # ==========================================================
+    # SECCIÓN 3: Ciclos y Estacionalidad Operativa
+    # ==========================================================
+
     st.divider()
     with st.container(key="exec_ciclos_titulo_pdf"):
         st.subheader("3. Ciclos y Estacionalidad Operativa",
@@ -389,9 +391,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 },
             ])
 
-    # ---------------------------------------------------------------
-    # Indicador 2: Tiempos documentados
-    # ---------------------------------------------------------------
+    # ========================================================
+    # SECCIÓN 4: Tiempos documentados
+    # ========================================================
+
     st.divider()
     st.subheader("4. Tiempos Documentados de Cobro y Pago", help=('''
         Mide los días promedio fiscales transcurridos entre la emisión de las facturas diferidas (PPD) y sus complementos de pago
@@ -494,9 +497,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     elif faltantes_plazos:
         st.info("No se muestran estas gráficas porque faltan: " + ", ".join(faltantes_plazos) + ".")
 
-    # ---------------------------------------------------------------
-    # Indicador 3: Concentración de Ingresos
-    # ---------------------------------------------------------------
+    # ===============================================================
+    # SECCIÓN 5: Concentración de Ingresos
+    # ===============================================================
+
     st.divider()
     st.subheader("5. Índice de Concentración de Ingresos (Riesgo de Dependencia)",
                  help=('''Evalúa el Riesgo de Cliente Clave (Key Client Risk). Cuantifica qué porcentaje de la facturación histórica total 
@@ -534,7 +538,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 hole=0.5, 
                 custom_data=[nombres_completos],
                 template="plotly_white",
-                color_discrete_sequence=colores_azules  # <-- paleta de azules
+                color_discrete_sequence=colores_azules
             )
             
             # 2. Configuramos el textinfo, posición y el tamaño de fuente 
@@ -627,9 +631,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     elif conc["motivo"] is not None:
         st.info(f"No se muestra esta sección: {conc['motivo']}.")
 
-    # ---------------------------------------------------------------
-    # Indicador 5 (Sección 6): Clientes sin facturación en el periodo
-    # ---------------------------------------------------------------
+    # =================================================================
+    # SECCIÓN 6: Clientes sin facturación en el periodo
+    # =================================================================
+
     st.divider()
     ayuda_sf = ("Mide la deserción comercial y la fuga de ingresos. Identifica específicamente a los clientes que transaccionaron y generaron "
                 "ingresos para la empresa durante el año inmediato anterior, pero que dejaron de facturar por completo en el año analizado.")
@@ -693,9 +698,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     "note": nota_no_fact if nota_no_fact and nota_no_fact.strip() else ""
                 })
 
-# ---------------------------------------------------------------
-    # (Sección 7). Dictamen de riesgo crediticio
-    # ---------------------------------------------------------------
+    # ===============================================================
+    # SECCIÓN 7. Dictamen de riesgo crediticio
+    # ===============================================================
+
     st.divider()
     st.header("7.Estimación de Capacidad de Pago",
               help=('''Estimación documental con los CFDI de la ventana de 5 años; no es una oferta ni una opinión crediticia. El flujo mensual es EL MISMO resumen
@@ -807,9 +813,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                       criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
                       a un crédito que se ajuste a sus necesidades."""
         })
-    # ---------------------------------------------------------------
-    # SECCIÓN 8: Operaciones en divisas
-    # ---------------------------------------------------------------
+
     st.divider()
     _seccion_divisas(file_egresos_productos, f_fix=file_fix, anios=anios_5, pdf_elements=pdf_elements)
 
@@ -854,11 +858,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     mime="application/pdf",
                     key="btn_download_pdf"
                 )
-
-
-# ==================================
-# SECCION 7
-# ==================================
 
 
 def _simulador_financiamiento(balance: dict):
@@ -970,16 +969,16 @@ def _simulador_financiamiento(balance: dict):
     return resultado_dictamen, plazo
 
 
-#===================================
-# SECCION 8
-#===================================
+#=========================================================================
+# SECCION 8: Eficiencia Cambiaria y Operaciones en Divisas
+#=========================================================================
 
 def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> None:
     """Sección «8. Eficiencia Cambiaria y Operaciones en Divisas» del Dashboard Ejecutivo, 100% automática para cualquier empresa cargada: conceptos de CFDI recibidos con
     clave 841216 (base de Productos Recibidos, ruteada desde la barra lateral; sin cargadores aquí) frente al tipo de cambio de referencia consultado por `_obtener_fix`
     (archivo FIX, Banxico SIE, Frankfurter o Yahoo Finance). El contraste es contra el tipo de cambio del DÍA de la operación (`Fecha de operación`). `anios` es la
-    ventana de ejercicios de los CFDI cargados (`anios_5`, p. ej. 2021-2025): operaciones y gráfica quedan dentro de ella (nada de meses posteriores sin facturación). Una moneda
-    a la vez (inicia en la de mayor volumen en MXN). Cuatro indicadores limpios, UNA gráfica y dos tablas: A) intermediarios actuales y B) benchmark de mercado."""
+    ventana de ejercicios de los CFDI cargados (`anios_5`, p. ej. 2021-2025): operaciones y gráfica quedan dentro de ella (nada de meses posteriores sin facturación).
+    Una moneda a la vez (inicia en la de mayor volumen en MXN). Cuatro indicadores limpios, UNA gráfica y dos tablas: A) intermediarios actuales y B) benchmark de mercado."""
     st.header("8. Eficiencia Cambiaria y Operaciones en Divisas",
               help=("Compras de divisas (conceptos de CFDI recibidos con clave 841216) comparadas contra el tipo de cambio de referencia del DÍA de la operación (Fecha de "
                     "operación; último día hábil previo si es inhábil): mide la ejecución spot del banco frente al mercado de ese mismo día. Spread = TC facturado − referencia; "
@@ -1075,16 +1074,7 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
     if pdf_elements is not None:
         pdf_elements.append({
             "type": "metrics",
-            "title": f"{moneda}",
-            # "data": [
-            #     ("Volumen total operado", f"{k['vol_divisa']:,.2f} {moneda}", f"MXN {k['vol_mxn']:,.2f} · {k['n']} operaciones"),
-            #     ("TC promedio facturado", f"{k['tc_facturado']:.4f}", f"MXN por {moneda}"),
-            #     ("TC referencia promedio", f"{k['tc_fix']:.4f}" if hay_fix else "No disponible",
-            #      "Mercado del día de cada operación" if hay_fix else "Sin conexión a la fuente de mercado"),
-            #     ("Spread y sobreprecio total",
-            #      f"{k['spread_mxn'] * 100:+.2f} ¢ ({k['spread_pct']:+.2f}%)" if hay_fix else "No disponible",
-            #      f"Sobreprecio total: MXN {k['costo_total']:,.2f}" if hay_fix else "Sin referencia de mercado"),
-            # ],
+            "title": f"{moneda}"
         })
         if aviso:
             pdf_elements.append({

@@ -421,6 +421,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     # ==================================================
     # MAQUETACION PARA EL PDF
     # ==================================================
+    
     tabla_pdf = tabla.copy()
     for col in tabla_pdf.columns:
         if col != "Concepto":

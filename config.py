@@ -2,15 +2,11 @@
 #  BLOQUE DE VARIABLES / CONSTANTES
 # ======================================
 
-
-# ----------------------------------------------------------------------------
-# 1. CARGA Y LIMPIEZA
-# ----------------------------------------------------------------------------
 import hashlib
 from pathlib import Path
 import re
 import pandas as pd
-import os
+
 COLS_FACTURAS = {
     "UUID": [],
     "Fecha y Hora": ["Fecha"],
@@ -83,16 +79,18 @@ _RFC_GENERICOS = {"XAXX010101000", "XEXX010101000"}  # público en general nacio
 # ***** COLORES PARA GRAFICOS *****
 # st.cache_data no detecta cambios dentro de leer_*; la huella del código evita resultados viejos tras editar app.py.
 CODIGO_VERSION = hashlib.md5(Path(__file__).read_bytes()).hexdigest()
-
-
-COLOR = {"PUE": "#2E86AB", "PPD": "#F18F01", "Facturado": "#6C757D", "Cobrado": "#2E9E6B",
+COLOR = {"PUE": "#2E86AB",
+         "PPD": "#F18F01",
+         "Facturado": "#6C757D",
+         "Cobrado": "#2E9E6B",
          "Por cobrar": "#C0392B"}
-COLOR_DIF_POSITIVA, COLOR_DIF_NEGATIVA, COLOR_DIF_CERO = "#28a745", "#dc3545", "#9AA0A6"   # verde / rojo / gris neutro
 
-COLOR_VELA_SUBE, COLOR_VELA_BAJA = "#16A34A", "#DC2626"          # Close > Open: verde · Close < Open: rojo
+COLOR_DIF_POSITIVA, COLOR_DIF_NEGATIVA, COLOR_DIF_CERO = "#28a745", "#dc3545", "#9AA0A6"  
+
+COLOR_VELA_SUBE, COLOR_VELA_BAJA = "#16A34A", "#DC2626"       
 VISTAS_CICLOS = ["Tendencia (Líneas)", "Volatilidad (Velas Japonesas)"]
 
-COLOR_LINEA_PROMEDIO = "rgba(160,160,160,0.95)"   # guía neutra (gris claro) que no opaca las velas
+COLOR_LINEA_PROMEDIO = "rgba(160,160,160,0.95)" 
 METRICAS_VISUALIZAR = ["Cobros", "Pagos"]
 
 
@@ -143,7 +141,8 @@ PERIODOS_EVALUACION = {"Últimos 12 meses": 12,
 
 
 # ÍNDICE DE DESEMPEÑO FINANCIERO (BASADO EN CFDI): reglas paramétricas estrictas, sin juicios de crédito bancario.
-# ----------------------------------------------------------------------------
+# =================================================================================================================
+
 MOSTRAR_INDICE_DESEMPENO = False   # interruptor temporal: el Índice de Desempeño Financiero NO se renderiza (poner True para volver a mostrarlo)
 DIAS_GRACIA_PPD = 90          # una factura PPD emitida hace menos de 90 días al corte aún no es exigible: no entra al Pilar 2
 VENTANA_MARGEN_MESES = 24     # Pilar 1: últimos 24 meses del resumen mensual de la sección 2
@@ -186,8 +185,6 @@ PALETA_AZULES_BIA = [
     "#60A5FA"   # Azul cielo
 ]
 
-
-
 # PALETA DE COLORES PARA GRAFICAS DE TOP 10
 PALETA_BUMP = ["#60A5FA",
                "#34D399", 
@@ -229,7 +226,8 @@ TEXTO_SOBRE_ING = {"#3B82F6":
                    "#1D4ED8": 
                    "#FFFFFF", 
                    "#F59E0B": 
-                   "#0B1220"}  # etiqueta legible sobre cada tono (claro -> texto oscuro)
+                   "#0B1220"}
+# etiqueta legible sobre cada tono (claro -> texto oscuro)
 
 # ==================================================
 # PANTALLA DE EGRESOS
@@ -348,7 +346,10 @@ TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de
 PCT_CAPACIDAD = 0.30
 
 
-# _______ SECCION 8________
+# ==================================
+# SECCION 8
+# ==================================
+
 # Análisis de Divisas (clave 841216): identificación de las compras de divisas y parámetros del cruce con el Tipo de Cambio FIX de Banxico
 PREFIJO_DIVISAS = "841216"                       # Clave UNSPSC: cambio de divisas y transferencia de fondos (84121600, 84121603, 84121604, 84121605...)
 SERIES_COMPRA_DIVISAS = frozenset({"BSM390DIV"})  # Serie del encabezado con la que Santander timbra sus ventas de divisas (las comisiones, 84121500, van sin esta serie)
@@ -356,9 +357,9 @@ RFCS_CASAS_CAMBIO = frozenset({"BMI9704113PA"})   # RFC de Monex: sus facturas r
 SERIES_FIX = {"SF43718": "USD", "SF46410": "EUR"}  # series del SIE de Banxico: Tipo de Cambio FIX USD/MXN y EUR/MXN
 DIAS_DESFASE_ALERTA = 5                          # alerta de auditoría: CFDI timbrado más de 5 días después de la operación
 DIAS_MAX_FFILL_FIX = 7                           # un día inhábil toma el último FIX hábil previo, hasta 7 días hacia atrás
-BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia:
-                     ("Banca Empresarial Preferente", 0.12, 0.15),                       # parámetros competitivos supuestos del mercado cambiario mexicano (no son
-                     ("Ventanilla Bancaria Tradicional", 0.25, 0.35))                    # cotizaciones: se ajustan aquí)
+BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia
+                     ("Banca Empresarial Preferente", 0.12, 0.15),                     
+                     ("Ventanilla Bancaria Tradicional", 0.25, 0.35))                    
 
 CSS_KPI_DIVISAS = """
 <style>
