@@ -4,6 +4,7 @@ pandas
 numpy
 plotly
 python-calamine
+openpyxl
 reportlab
 kaleido>=1.0.0
 pillow

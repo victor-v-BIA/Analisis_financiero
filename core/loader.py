@@ -12,6 +12,7 @@ import gc
 import hashlib
 import numpy as np
 from pathlib import Path
+from zipfile import ZipFile
 from utils import (_ArchivoMem, _nb, _norm, a_numero, a_fecha, buscar_columna)
 from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
@@ -99,6 +100,12 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         n_limpio = re.sub(r'[^a-z0-9]', '', n_original)
         return (n_limpio in COLUMNAS_UTILES) or ("iva" in n_original and "reten" not in n_original)
 
+    def leer_excel_filtrado(bytes_excel: bytes, engine: str) -> pd.DataFrame:
+        with pd.ExcelFile(io.BytesIO(bytes_excel), engine=engine) as xls:
+            df_dummy = pd.read_excel(xls, nrows=0)
+            cols_a_leer = [c for c in df_dummy.columns if es_columna_util(c)]
+            return pd.read_excel(xls, usecols=cols_a_leer)
+
     # 2. LECTURA QUIRÚRGICA
     if nombre_lower.endswith((".parquet", ".pqt")):
         import pyarrow.parquet as pq
@@ -113,10 +120,26 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
             df = pd.read_excel(xls, usecols=cols_a_leer)
             
     elif nombre_lower.endswith((".xlsx", ".xls")):
-        with pd.ExcelFile(io.BytesIO(contenido), engine="calamine") as xls:
-            df_dummy = pd.read_excel(xls, nrows=0)
-            cols_a_leer = [c for c in df_dummy.columns if es_columna_util(c)]
-            df = pd.read_excel(xls, usecols=cols_a_leer)
+        try:
+            df = leer_excel_filtrado(contenido, "calamine")
+        except ImportError as error_calamine:
+            if not nombre_lower.endswith(".xlsx"):
+                raise ImportError(
+                    "No se pudo cargar python-calamine para leer archivos .xls."
+                ) from error_calamine
+            try:
+                df = leer_excel_filtrado(contenido, "openpyxl")
+            except TypeError as error_openpyxl:
+                if "showZeroes" not in str(error_openpyxl):
+                    raise
+                normalizado = io.BytesIO()
+                with ZipFile(io.BytesIO(contenido)) as origen, ZipFile(normalizado, "w") as destino:
+                    for elemento in origen.infolist():
+                        datos = origen.read(elemento.filename)
+                        if elemento.filename.endswith(".xml"):
+                            datos = datos.replace(b"showZeroes", b"showZeros")
+                        destino.writestr(elemento, datos)
+                df = leer_excel_filtrado(normalizado.getvalue(), "openpyxl")
             
     else:
         for codificacion in ("utf-8-sig", "latin-1"):
@@ -1078,7 +1101,7 @@ def _operaciones_divisas_cache(nombre: str, _contenido, version: str) -> pd.Data
 
 def validar_congruencia_fiscal(tipos_archivo: dict, regimen_seleccionado: str) -> list[str]:
     """
-    QUÉ HACE: Analiza el primer archivo de cada categoría cargada, extrae el RFC de la empresa 
+    QUÉ HACE: Analiza una muestra utilizable de cada categoría cargada, extrae el RFC de la empresa
     y compara su longitud con el régimen seleccionado. También busca señales de mala clasificación (ej. Nómina en Egresos).
     
     POR QUÉ SE IMPLEMENTA: Para evitar que el usuario procese por error archivos de una Persona Moral 
@@ -1090,6 +1113,7 @@ def validar_congruencia_fiscal(tipos_archivo: dict, regimen_seleccionado: str) -
     
     advertencias = []
     archivos_verificados = 0
+    errores_lectura = []
     
     # MAPEO ESTRATÉGICO: 
     # En facturas emitidas, la empresa es el "Emisor". En recibidas, la empresa es el "Receptor".
@@ -1102,60 +1126,58 @@ def validar_congruencia_fiscal(tipos_archivo: dict, regimen_seleccionado: str) -
     for tipo, archivos in tipos_archivo.items():
         if not archivos or tipo not in reglas_busqueda:
             continue
-            
-        # Tomamos solo el primer archivo de la lista como "Muestra" para no saturar la RAM ni el tiempo de carga
-        archivo = archivos[0] 
         col_objetivo = reglas_busqueda[tipo]
-        
-        try:
-            # 1. Extracción perezosa de bytes
-            bytes_data = archivo.descargar() if hasattr(archivo, 'descargar') else (archivo.getvalue() if hasattr(archivo, 'getvalue') else archivo)
-            
-            # 2. Leemos la muestra usando el lector
-            df = leer_archivo(archivo.name if hasattr(archivo, 'name') else 'muestra', bytes_data)
-            
-            # 3. Normalizamos los nombres de las columnas (quitamos espacios y mayúsculas) para encontrar el RFC
-            cols_norm = {re.sub(r'[^a-z0-9]', '', str(c).lower()): c for c in df.columns}
-            
-            # 4. REGLA DE ORO DEL SAT: 12 caracteres = Moral, 13 caracteres = Física
-            if col_objetivo in cols_norm:
-                col_real = cols_norm[col_objetivo]
-                # Limpiamos el texto y sacamos los RFCs únicos
-                rfcs = df[col_real].dropna().astype(str).str.strip().unique()
-                
-                if len(rfcs) > 0:
-                    rfc_empresa = rfcs[0] # Tomamos el RFC predominante
-                    longitud = len(rfc_empresa)
-                    
-                    regimen_detectado = None
-                    if longitud == 12:
-                        regimen_detectado = "Persona Moral"
-                    elif longitud == 13:
-                        regimen_detectado = "Persona Física"
-                        
-                    archivos_verificados += 1
-                    
-                    # Si el archivo delata un régimen distinto al que el usuario pulsó en la pantalla 1:
-                    if regimen_detectado and regimen_detectado != regimen_seleccionado:
-                        advertencias.append(
-                            f"**{archivo.name}**: El RFC ({rfc_empresa}) indica que es de **{regimen_detectado}**, "
-                            f"pero elegiste **{regimen_seleccionado}**."
-                        )
-            
-            # 5. SEÑAL ADICIONAL: Si un archivo cayó en Egresos pero tiene datos de Nómina
+        for archivo in archivos:
+            nombre_archivo = archivo.name if hasattr(archivo, "name") else "muestra"
+            try:
+                bytes_data = (
+                    archivo.descargar()
+                    if hasattr(archivo, "descargar")
+                    else archivo.getvalue()
+                    if hasattr(archivo, "getvalue")
+                    else archivo
+                )
+                df = leer_archivo(nombre_archivo, bytes_data)
+            except (ImportError, OSError, ValueError, TypeError, KeyError, pd.errors.ParserError) as error:
+                errores_lectura.append(
+                    f"**{nombre_archivo}**: No se pudo leer para verificar el régimen ({error})."
+                )
+                continue
+
+            cols_norm = {
+                re.sub(r"[^a-z0-9]", "", _norm(str(col))): col
+                for col in df.columns
+            }
             if tipo == "egresos_facturas" and "fechadecertificacion" in cols_norm:
-                advertencias.append(f"**{archivo.name}**: Se clasificó en Egresos, pero contiene formato de Nómina.")
-            
-            # 6. Destruimos la muestra de la RAM inmediatamente
+                advertencias.append(
+                    f"**{nombre_archivo}**: Se clasificó en Egresos, pero contiene formato de Nómina."
+                )
+
+            col_real = cols_norm.get(col_objetivo)
+            if col_real is None:
+                del df
+                gc.collect()
+                continue
+
+            rfcs = df[col_real].dropna().astype(str).str.strip()
+            rfc_empresa = next((rfc for rfc in rfcs.unique() if len(rfc) in (12, 13)), None)
             del df
             gc.collect()
-            
-        except Exception:
-            # Si el archivo está corrupto o vacío, lo ignoramos para no romper la app
-            pass
-            
-    # Si los archivos son tan atípicos que no pudimos leer ni un solo RFC:
+            if rfc_empresa is None:
+                continue
+
+            archivos_verificados += 1
+            regimen_detectado = "Persona Moral" if len(rfc_empresa) == 12 else "Persona Física"
+            if regimen_detectado != regimen_seleccionado:
+                advertencias.append(
+                    f"**{nombre_archivo}**: El RFC ({rfc_empresa}) indica que es de **{regimen_detectado}**, "
+                    f"pero elegiste **{regimen_seleccionado}**."
+                )
+            break
+
+    # Si no fue posible leer archivos ni localizar un RFC en las columnas esperadas, se explica por qué.
     if archivos_verificados == 0:
+        advertencias.extend(errores_lectura)
         advertencias.append("Los datos no bastan para verificar automáticamente el régimen.")
         
     return advertencias
