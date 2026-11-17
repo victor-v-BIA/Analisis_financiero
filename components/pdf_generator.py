@@ -6,8 +6,40 @@ from PIL import Image as PILImage
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, KeepTogether
+from reportlab.pdfbase import pdfmetrics
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, KeepTogether, Flowable
 from reportlab.pdfgen import canvas
+
+
+class StatusBadge(Flowable):
+    _PALETA = {
+        "Óptimo": ("#047857", "#E7F7EE", "#86D8A7", "#16A34A"),
+        "Vigilancia": ("#B45309", "#FFF3E0", "#FDBA74", "#D97706"),
+        "Crítico": ("#B91C1C", "#FEECEC", "#FCA5A5", "#DC2626"),
+        "Atípico": ("#1D4ED8", "#EFF6FF", "#93C5FD", "#2563EB"),
+    }
+
+    def __init__(self, status: str):
+        super().__init__()
+        self.status = status
+        self.foreground, self.background, self.border, self.dot = self._PALETA[status]
+        self.font_size = 7
+        self.height = 15
+        self.width = pdfmetrics.stringWidth(status, "Helvetica-Bold", self.font_size) + 22
+
+    def draw(self):
+        self.canv.saveState()
+        self.canv.setFillColor(colors.HexColor(self.background))
+        self.canv.setStrokeColor(colors.HexColor(self.border))
+        self.canv.setLineWidth(0.5)
+        self.canv.roundRect(0, 0, self.width, self.height, self.height / 2, stroke=1, fill=1)
+        self.canv.setFillColor(colors.HexColor(self.dot))
+        self.canv.circle(7, self.height / 2, 2, stroke=0, fill=1)
+        self.canv.setFillColor(colors.HexColor(self.foreground))
+        self.canv.setFont("Helvetica-Bold", self.font_size)
+        self.canv.drawString(12, (self.height - self.font_size) / 2 + 1, self.status)
+        self.canv.restoreState()
+
 
 class NumberedCanvas(canvas.Canvas):
     """
@@ -299,7 +331,13 @@ def generate_modular_pdf(
                     row_cells = []
                     for c in cols:
                         val = str(row[c]) if pd.notnull(row[c]) else ""
-                        if num_cols == 1:
+                        if (
+                            el.get("status_badges")
+                            and c.startswith("Semáforo ")
+                            and val in StatusBadge._PALETA
+                        ):
+                            row_cells.append(StatusBadge(val))
+                        elif num_cols == 1:
                             row_cells.append(Paragraph(val, td_style_single))
                         else:
                             align_style = td_style_left if c in ["Razón Social", "Cliente", "Concepto"] else td_style_center

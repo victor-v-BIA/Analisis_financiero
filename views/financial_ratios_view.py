@@ -69,6 +69,7 @@ def _seccion_razones(f_razones, pdf_elements=None) -> None:
             "type": "table",
             "title": "Matriz histórica con semáforo por pilar",
             "df": matriz_pdf,
+            "status_badges": True,
         })
 
     st.caption(
@@ -117,7 +118,7 @@ def _seccion_razones(f_razones, pdf_elements=None) -> None:
             st.info("El archivo no contiene endeudamiento ni márgenes para graficar.")
 
     comentario_salud = st.text_area(
-        "Comentario para Salud Financiera y Razones Financieras",
+        "Insight para Salud Financiera y Razones Financieras",
         max_chars=600,
         placeholder="Escribe un comentario (máx. 600 caracteres)...",
         key="note_secc9",

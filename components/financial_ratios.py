@@ -67,11 +67,11 @@ _RAZONES_DESCRIPCION = {
     "total_asset_turnover": "Ventas generadas por cada unidad de activos.",
 }
 
-_RAZONES_ESTADOS = {
-    "Óptimo": ("green", "🟢"),
-    "Vigilancia": ("orange", "🟠"),
-    "Crítico": ("red", "🔴"),
-    "Atípico": ("blue", "🔵"),
+_RAZONES_PDF_COLORES = {
+    "Óptimo": "#16A34A",
+    "Vigilancia": "#D97706",
+    "Crítico": "#DC2626",
+    "Atípico": "#2563EB",
 }
 _RAZONES_CLASES = {
     "Óptimo": "optimo",
@@ -252,7 +252,13 @@ def _html_matriz_razones(
                         f'<td class="razon-valor {clase}" title="{tooltip}">'
                         f'<span class="razon-dot"></span>{escape(texto)}</td>'
                     )
-                fila_pdf[str(anio)] = f"{_RAZONES_ESTADOS[nivel][1]} {texto}" if nivel else texto
+                if nivel is None:
+                    fila_pdf[str(anio)] = escape(texto)
+                else:
+                    color_pdf = _RAZONES_PDF_COLORES[nivel]
+                    fila_pdf[str(anio)] = (
+                        f'<font color="{color_pdf}">&#8226;</font> {escape(texto)}'
+                    )
 
             estado_ultimo = _nivel_razon(razones, metrica, anio_ultimo)
             if estado_ultimo is None:
