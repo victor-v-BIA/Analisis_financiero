@@ -43,12 +43,7 @@ def _layout_eco(fig: go.Figure, anios_str: list[str], titulo_y: str) -> go.Figur
     return fig
 
 
-def render_grafica(
-    fig: go.Figure,
-    key: str,
-    incluir_notas: bool = True,
-    width: str = "stretch",
-) -> None:
+def render_grafica(fig: go.Figure, key: str, width: str = "stretch",) -> None:
     """Renderiza una gráfica Plotly interactiva y, opcionalmente, sus notas ejecutivas."""
     fig.update_layout(autosize=True)
     st.plotly_chart(fig, width=width, key=f"plot_{key}")
@@ -145,14 +140,10 @@ def _grafica_diferencia_cobros_pagos(periodos, cobros, pagos, diferencia, nombre
     return fig
 
 
-
 # Ciclos y Estacionalidad Operativa
-def _grafica_ciclos_lineas(series_anio: dict, anios: list[int],
-                            metricas: list[str] | None = None) -> go.Figure:
+def _grafica_ciclos_lineas(series_anio: dict, anios: list[int], metricas: list[str] | None = None) -> go.Figure:
     """Flujo mensual de los años seleccionados. El color identifica el ejercicio fiscal; si se muestran ambas métricas,
-    Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""
-    
-    
+    Cobros usa línea continua y Pagos discontinua. La leyenda agrupa los trazos por año y el hover identifica la métrica."""    
     metricas = METRICAS_VISUALIZAR if metricas is None else list(metricas)
     fig = go.Figure()
     anios = sorted(int(a) for a in anios)
@@ -316,6 +307,7 @@ def _grafica_pilares_score(pilares: list[dict]) -> go.Figure:
     fig.update_xaxes(range=[0, 150])
     return fig
 
+
 def _grafica_ingresos_gastos(anios_str: list[str], ing: list, gas: list) -> go.Figure:
     fig = go.Figure()
     for nombre, vals, color in (("Ingresos (MDP)", ing, "#2563EB"), ("Gastos (MDP)", gas, "#DC2626")):
@@ -363,12 +355,7 @@ def _fig_bump_top10(df: pd.DataFrame, monto_calc: str) -> go.Figure:
 (`lines+markers`, marcadores circulares), eje X = Ene-Dic, eje Y en millones (`$20M`), sin cuadrícula vertical, guías horizontales tenues y
 leyenda horizontal inferior. `rotulo` = texto del monto en el hover y en el título del eje Y."""
 
-def _fig_lineas_por_anio(
-    tabla: pd.DataFrame,
-    rotulo: str,
-    ocultar_ceros: bool = False,
-) -> go.Figure:
-
+def _fig_lineas_por_anio(tabla: pd.DataFrame, rotulo: str,ocultar_ceros: bool = False,) -> go.Figure:
     fig = go.Figure()
     anios = [
         anio for anio in tabla.columns
@@ -383,9 +370,7 @@ def _fig_lineas_por_anio(
         fig.add_trace(go.Scatter(
             x=MESES_ES, y=y, name=str(int(anio)), mode="lines+markers",
             connectgaps=not ocultar_ceros,
-            line=dict(color=color, width=2, shape="spline",
-                    smoothing=0.5    
-                ),
+            line=dict(color=color, width=2, shape="spline", smoothing=0.5),
             marker=dict(symbol="circle", size=7, color=color), customdata=[[str(int(anio)), _mxn_2d(v) if v is not None else "Sin movimientos"] for v in y],
             hovertemplate="<b>Año %{customdata[0]}</b><br>Mes: %{x}<br>" + rotulo + ": %{customdata[1]}<extra></extra>"))
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=MESES_ES, showgrid=False, zeroline=False, title_text=None, automargin=True)
@@ -395,11 +380,7 @@ def _fig_lineas_por_anio(
     return fig
 
 
-def _fig_ingresos_facturados(
-    d: pd.DataFrame,
-    col_monto: str,
-    nomina_mensual: pd.Series | None = None,
-) -> go.Figure:
+def _fig_ingresos_facturados(d: pd.DataFrame, col_monto: str, nomina_mensual: pd.Series | None = None,) -> go.Figure:
     """Una línea por Año con facturación mensual y, cuando existe, nómina mensual sumada."""
     mensual = _serie_mensual_por_anio(d, col_monto)
     if nomina_mensual is not None:
@@ -411,7 +392,6 @@ def _fig_ingresos_facturados(
         nomina = nomina.pivot_table(index="Mes", columns="Año", values="Monto", aggfunc="sum")
         mensual = mensual.add(nomina, fill_value=0.0).reindex(range(1, 13))
     return _fig_lineas_por_anio(mensual, col_monto)
-
 
 
 def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | None = None) -> go.Figure:
@@ -464,15 +444,8 @@ def _fig_pie_metodo_cobro(r: dict, realizado: str = "cobrado", paleta: dict | No
     return fig
    
 
-def _html_resumen_metodo_cobro(
-    r: dict,
-    col_monto: str,
-    lado: str = "ingresos",
-    paleta: dict | None = None,
-    rotular_base: bool = True,
-    incluir_detalle_ppd: bool = True,
-    formato_pdf: bool = False,
-) -> str:
+def _html_resumen_metodo_cobro(r: dict,col_monto: str,lado: str = "ingresos",paleta: dict | None = None,rotular_base: bool = True,
+                               incluir_detalle_ppd: bool = True, formato_pdf: bool = False,) -> str:
     """Tabla lateral (HTML): Monto total en la cabecera y debajo PUE, PPD Total (con sus dos viñetas, pendiente y cobrado), cada uno con monto y %
     sobre el total. Montos como 'MXN 1,234.00' (sin '$', que Streamlit podría interpretar como fórmula). `formato_pdf` genera etiquetas ReportLab;
     `incluir_detalle_ppd=False` omite el desglose de pagos cuando no se dispone de esa información."""
@@ -570,22 +543,18 @@ def _fig_pie_nomina_gastos(r: dict, gastos_label: str = "Gastos") -> go.Figure:
         textinfo="percent", 
         textposition="inside",
         marker=dict(colors=[COLOR_GASTOS, COLOR_NOMINA], line=dict(width=0, color='rgba(0,0,0,0)')),
-        
         # Asignamos la lista de colores al texto según el orden de los valores
-        textfont=dict(
-            color=colores_texto,
-            size=18
-        ), 
+        textfont=dict(color=colores_texto,size=18), 
         customdata=[_mxn_2d(v) for v in valores],
-        hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"
-    ))
+        hovertemplate="<b>%{label}</b><br>Monto: %{customdata}<br>Participación: %{percent}<extra></extra>"))
+    
     fig.update_layout(
         height=320, 
         showlegend=False, 
         margin=dict(l=90, r=10, t=30, b=10),
         paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
+        plot_bgcolor="rgba(0,0,0,0)")
+    
     return fig
 
 
@@ -637,16 +606,11 @@ def _fig_egresos_tiempo(mensual: pd.DataFrame) -> go.Figure:
             y=-0.35,               # Posición vertical por debajo del eje X (puedes ajustarlo si lo quieres más arriba o abajo)
             xanchor="center",      # Centrada horizontalmente
             x=0.5
-        )
-    )
+        ))
     return fig
 
 
-def _fig_facturacion_tiempo(
-    d: pd.DataFrame,
-    col_monto: str,
-    nomina_mensual: pd.Series | None = None,
-) -> go.Figure:
+def _fig_facturacion_tiempo(d: pd.DataFrame,col_monto: str,nomina_mensual: pd.Series | None = None,) -> go.Figure:
     """Facturación emitida en el tiempo: barras apiladas por mes (`px.bar`, barmode='stack'), PUE (`Monto_PUE`) y PPD (`Monto_PPD_Cobrado +
     Monto_PPD_Pendiente`); optionally includes payroll income as a separate monthly series."""
     g = d.assign(PPD=d["Monto_PPD_Cobrado"] + d["Monto_PPD_Pendiente"]).groupby("Periodo", as_index=False)[["Monto_PUE", "PPD"]].sum().sort_values("Periodo")
@@ -728,12 +692,7 @@ def _fig_pie_metodo_pago(res: dict, paleta: dict | None = None) -> go.Figure:
     return fig
 
 
-def _html_resumen_metodo_pago(
-    res: dict,
-    paleta: dict | None = None,
-    incluir_detalle_ppd: bool = True,
-    formato_pdf: bool = False,
-) -> str:
+def _html_resumen_metodo_pago(res: dict,paleta: dict | None = None,incluir_detalle_ppd: bool = True,formato_pdf: bool = False,) -> str:
     """Tabla lateral de Método de pago de gastos: Monto total (facturación recibida = PUE + PPD) en la cabecera, Egresos PUE, Egresos PPD y, si la
     diferencia es >= 0, sus viñetas PPD pendiente / PPD pagado; si es negativa, los Complementos y la Diferencia PPD (firmada) como importes separados.
     `formato_pdf` usa etiquetas compatibles con ReportLab y `incluir_detalle_ppd=False` omite el desglose si no hay base PAGO."""
@@ -801,8 +760,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,
         hovertemplate=("<b>%{x}</b><br>INPC: %{y:.1f}<br>Ingresos: %{customdata[0]:.1f}"
-                       "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")
-    ))
+                       "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")))
     
     # Curva de Ingresos DPC (Base 100)
     fig.add_trace(go.Scatter(
@@ -826,8 +784,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         line=dict(color='rgba(255,255,255,0)'),
         hoverinfo="skip",
         showlegend=False,
-        name="Shaded Gap"
-    ))
+        name="Shaded Gap"))
 
     fig.update_layout(
         template="plotly_white",
@@ -836,8 +793,7 @@ def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
         margin=dict(l=90, r=40, t=60, b=40), # Margen superior un poco más amplio por las etiquetas
         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
         xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
-    )
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"))
     return fig
 
 
@@ -938,6 +894,7 @@ def _html_tabla_benchmark(b: pd.DataFrame) -> str:
     encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i else f"<th>{esc(c)}</th>" for i, c in enumerate(cols)) + "</tr></thead>"
     return (f'{CSS_SIN_FACTURACION}<div class="sf-wrap" style="max-height:{38 + 35 * (len(b) + 1)}px"><table class="sf-tabla">{colgroup}{encabezado}'
             f"<tbody>{''.join(filas)}</tbody></table></div>")
+
 
 def _html_kpis_divisas(tarjetas: list) -> str:
     """Fila de indicadores limpios (tarjetas claras que heredan el tema, sin cajas oscuras): lista de (título, valor, nota). En una sola línea de HTML."""

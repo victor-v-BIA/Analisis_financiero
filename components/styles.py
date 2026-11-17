@@ -5,9 +5,9 @@
 
 CSS_FUENTE_GLOBAL = """
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap');
         html, body, [class*="css"] {
-            font-family: 'Open Sans', sans-serif !important;
+            font-family: 'Google Sans', sans-serif !important;
         }
     </style>
 """
