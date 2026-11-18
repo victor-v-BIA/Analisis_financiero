@@ -121,7 +121,6 @@ def main() -> None:
         st.markdown("---")
         
         metodo_carga = st.toggle("Empresa con múltiples archivos (Usar Google Drive)", value=False)
-        st.caption("Opcional: nombra el archivo histórico de Banxico con «FIX» o «Banxico» para usarlo como primera referencia cambiaria.")
         
         tipos_archivo = {
             "ingresos_facturas": [], "ingresos_pago": [], "egresos_facturas": [],

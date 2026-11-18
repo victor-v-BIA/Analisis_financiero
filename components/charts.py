@@ -12,6 +12,7 @@ import plotly.express as px
 from utils import (_mxn_2d, _importe_abreviado_2d,
                    _abrev_monto, _nombre_abreviado,
                    _abrev_signo, _formatear_mxn )
+
 from core.finance_logic import (_dictamen_indice, _normalizar_por_rfc,
                                 _serie_mensual_por_anio, _ranking_anual)
 

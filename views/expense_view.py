@@ -40,7 +40,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     de la lectura de Facturas Recibidas.
     """
     st.title("Facturación Recibida y Egresos")
-
+    
     if file_egresos_facturas is None:
         st.info("Para iniciar el análisis de Egresos, arrastra tu base de Facturación Recibida en la zona "
                 "de carga.")
@@ -82,7 +82,6 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                    f"Documento = 'Factura' y la ventana de análisis {anios_5[0] if anios_5 else ''}–"
                    f"{anios_5[-1] if anios_5 else ''}).")
         st.stop()
-
     vista_modulo = st.radio("Vista", VISTAS_MODULO, horizontal=True, key="egr_vista_modulo", label_visibility="collapsed")
     econ = vista_modulo == "Vista Económica"   # Vista Económica: filtro de ejercicios + desglose + 4 gráficas
     ejercicios = barra_control(
@@ -462,7 +461,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             p1, t1 = st.columns([1, 1])
             with p1:
                 with st.container(key="egr_nomina_vs_gastos_pdf", width="stretch"):
-                    render_grafica(fig_nom_gastos, key="egr_nomina_vs_gastos", incluir_notas=False)
+                    render_grafica(fig_nom_gastos, key="egr_nomina_vs_gastos")
             with t1:
                 st.markdown(_html_resumen_nomina_gastos(res_nom, gastos_label), unsafe_allow_html=True)
             if not nomina_disponible:
@@ -489,7 +488,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             p2, t2 = st.columns([1, 1])
             with p2:
                 with st.container(key="egr_metodo_pago_pdf", width="stretch"):
-                    render_grafica(fig_metodo_pago, key="egr_metodo_pago", incluir_notas=False)
+                    render_grafica(fig_metodo_pago, key="egr_metodo_pago")
             with t2:
                 if comp_df is not None:
                     st.markdown(_html_resumen_metodo_pago(res), unsafe_allow_html=True)

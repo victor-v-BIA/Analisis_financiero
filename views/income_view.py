@@ -131,7 +131,7 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     fig_neta = _figura_ingresos_egresos(
         periodos, ingresos_devengados, egresos_devengados, forzar_egresos_negativos=True)
     st.markdown("**Facturación Neta Mensual**")
-    render_grafica(fig_neta, key="ing_fig_neta", incluir_notas=False, width="stretch")
+    render_grafica(fig_neta, key="ing_fig_neta",  width="stretch")
     pdf_elements.append({
         "type": "image",
         "section_title": "5. Facturación Neta y Flujo Fiscal",
@@ -191,7 +191,7 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     fig_flujo = _figura_ingresos_egresos(
         periodos, ingresos_flujo, egresos_flujo,
         mostrar_diferencia=True)
-    render_grafica(fig_flujo, key="ing_fig_flujo", incluir_notas=False, width="stretch")
+    render_grafica(fig_flujo, key="ing_fig_flujo",  width="stretch")
     pdf_elements.append({
         "type": "image",
         "title": ("Flujo Fiscal Mensual" if flujo_completo
@@ -255,7 +255,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
 
     rfc_empresa = facturas["RFC_Emisor"].iloc[0]
     nombre_empresa = facturas["Nombre_Emisor"].iloc[0]
-    st.markdown(f"### Empresa en Análisis: **{nombre_empresa}** ({rfc_empresa})")
+    st.markdown(f"### Empresa: **{nombre_empresa}** ({rfc_empresa})")
 
     vista_modulo = st.radio("Vista", VISTAS_MODULO, horizontal=True, key="ing_vista_modulo", label_visibility="collapsed")
     econ = vista_modulo == "Vista Económica"
@@ -788,7 +788,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         c_pie, c_tabla = st.columns([1, 1], gap="medium")
         fig_pie = _fig_pie_metodo_cobro(resumen)
         with c_pie:
-            render_grafica(fig_pie, key="ing_metodo_cobro", incluir_notas=False)
+            render_grafica(fig_pie, key="ing_metodo_cobro")
         with c_tabla:
             st.markdown(_html_resumen_metodo_cobro(resumen, col_monto, rotular_base=False), unsafe_allow_html=True)
         
@@ -915,7 +915,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         fig_pie = _fig_pie_metodo_cobro(resumen, realizado="facturado")
         c_pie, c_tabla = st.columns([1, 1], gap="medium")
         with c_pie:
-            render_grafica(fig_pie, key="ing_metodo_cobro", incluir_notas=False)
+            render_grafica(fig_pie, key="ing_metodo_cobro")
         with c_tabla:
             st.markdown(
                 _html_resumen_metodo_cobro(
