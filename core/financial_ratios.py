@@ -169,10 +169,7 @@ def _normalizar_tabla_razones(tabla: pd.DataFrame) -> pd.DataFrame:
     if not datos:
         raise ValueError("No se reconocieron razones financieras en la columna «Categoría».")
 
-    anios_utiles = [
-        anio for anio in sorted(columnas_anio)
-        if any(pd.notna(valores.get(anio)) for metrica, valores in datos.items() if metrica != "equity")
-    ]
+    anios_utiles = sorted(columnas_anio)[-5:]
     if not anios_utiles:
         raise ValueError("Las columnas de ejercicios no contienen valores utilizables.")
 
@@ -227,10 +224,6 @@ def _valor_razon(razones: pd.DataFrame, metrica: str, anio: int) -> float:
     if metrica not in razones.index or anio not in razones.columns:
         return float("nan")
     valor = razones.at[metrica, anio]
-    if metrica == "return_on_equity" and "equity" in razones.index:
-        capital = razones.at["equity", anio]
-        if pd.notna(capital) and capital <= 0:
-            return float("nan")
     return float(valor) if pd.notna(valor) else float("nan")
 
 
@@ -268,6 +261,113 @@ def _nivel_razon(razones: pd.DataFrame, metrica: str, anio: int) -> str | None:
         if circulante is not None and orden[nivel] > orden[circulante]:
             return circulante
     return nivel
+
+
+def _lectura_razon(razones: pd.DataFrame, metrica: str, anio: int) -> str | None:
+    """Devuelve la etiqueta descriptiva solicitada para una razón en un ejercicio."""
+    valor = _valor_razon(razones, metrica, anio)
+    if pd.isna(valor):
+        return None
+
+    if metrica in ("current_ratio", "quick_ratio"):
+        if valor >= 1.20 and valor <= 2.50:
+            return "Cobertura suficiente"
+        if 1.00 <= valor < 1.20:
+            return "Cobertura ajustada"
+        if valor < 1.00:
+            return "Cobertura insuficiente"
+        return "Liquidez excedente"
+
+    if metrica == "total_debt_ratio":
+        if valor < 0.30:
+            return "Bajo"
+        if valor <= 0.55:
+            return "Moderado"
+        if valor <= 0.75:
+            return "Elevado"
+        if valor <= 1.00:
+            return "Muy elevado"
+        return "Capital contable negativo"
+
+    if metrica == "debt_equity_ratio":
+        if "equity" in razones.index:
+            capital = razones.at["equity", anio]
+            if pd.notna(capital) and capital <= 0:
+                return "No interpretable"
+        if valor < 0.43:
+            return "Bajo"
+        if valor <= 1.22:
+            return "Moderado"
+        if valor <= 3.00:
+            return "Elevado"
+        return "Muy elevado"
+
+    if metrica == "gross_profit_margin":
+        return "Atípico" if valor >= 0.95 else None
+
+    if metrica == "return_on_sales":
+        return "Utilidad" if valor >= 0 else "Pérdida"
+
+    if metrica == "return_on_equity":
+        if "equity" in razones.index:
+            capital = razones.at["equity", anio]
+            if pd.notna(capital) and capital <= 0:
+                return "No interpretable"
+        return "Utilidad" if valor >= 0 else "Pérdida"
+
+    return None
+
+
+def _ejercicio_previo_con_informacion(
+    razones: pd.DataFrame,
+    metrica: str,
+    anio_actual: int,
+) -> int | None:
+    anios = [
+        int(str(anio))
+        for anio in razones.columns
+        if str(anio).isdigit() and int(str(anio)) < int(anio_actual)
+    ]
+    for anio in reversed(anios):
+        if pd.notna(_valor_razon(razones, metrica, anio)):
+            return anio
+    return None
+
+
+def _tendencia_razon(
+    razones: pd.DataFrame,
+    metrica: str,
+    anio_actual: int,
+) -> tuple[int | None, str | None]:
+    """Devuelve (ejercicio previo, tendencia) según la dirección propia de la razón."""
+    actual = _valor_razon(razones, metrica, anio_actual)
+    previo = _ejercicio_previo_con_informacion(razones, metrica, anio_actual)
+    if pd.isna(actual) or previo is None:
+        return previo, None
+
+    anterior = _valor_razon(razones, metrica, previo)
+    if pd.isna(anterior):
+        return previo, None
+
+    if metrica in _RAZONES_PORCENTAJE:
+        diferencia = actual - anterior
+        estable = abs(diferencia) < 0.02
+    else:
+        estable = abs(actual - anterior) / abs(anterior) < 0.05 if anterior != 0 else actual == anterior
+
+    if estable:
+        return previo, "Estable"
+
+    subio = actual > anterior
+    mejora = subio if metrica in {
+        "current_ratio",
+        "quick_ratio",
+        "gross_profit_margin",
+        "return_on_sales",
+        "return_on_equity",
+        "total_asset_turnover",
+    } else not subio
+    return previo, "Mejora" if mejora else "Deterioro"
 
 
 def _formato_limite_razon(metrica: str, valor: float) -> str:

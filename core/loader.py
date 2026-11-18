@@ -18,7 +18,8 @@ from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
                     COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
                     RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,
-                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, _COLUMNAS_OPERACIONES_DIVISAS)
+                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, _COLUMNAS_OPERACIONES_DIVISAS,COLS_EMITIDOS_PRODUCTOS,
+                    COLS_EMITIDOS_PRODUCTOS_OPC,ETIQUETA_CLAVE_GENERICA,CLASE_GENERICA_SAT)
 
 
 
@@ -89,7 +90,7 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "fechadepago", "fechapago", "documentorelacionado", "uuidrelacionado",
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
-        "ivatrasladado", "uuiddr", "subtotal", "montomxn", "descripcion",
+        "ivatrasladado", "tasaimpuestostrasladados", "importebase", "uuiddr", "subtotal", "montomxn", "descripcion",
         "cantidad", "valorunitario", "unidad", "unidaddemedida", "numeroorden", "numerodeorden",
         "numorden", "nodeorden", "orden", "ordencompra", "ordendecompra",
         "folio", "fechadeoperacion", "claveunidad", "moneda"
@@ -1183,3 +1184,200 @@ def validar_congruencia_fiscal(tipos_archivo: dict, regimen_seleccionado: str) -
     return advertencias
 
 
+def parsear_actividades_csf(texto: str) -> list[dict]:
+    """Tabla «Actividades Económicas» (Orden · Actividad Económica · Porcentaje · Fecha Inicio · Fecha Fin) del texto de una Constancia de Situación Fiscal -> lista de
+    {'Actividad Económica', 'Porcentaje (%)', 'Fecha de inicio'}. Une los renglones partidos de un nombre largo y omite el encabezado y los «Página [n] de [m]». [] si no hay tabla."""
+    m = re.search(r"Actividades\s+Econ[oó]micas\s*:?", texto, flags=re.I)
+    if not m:
+        return []
+    cuerpo = texto[m.end():]
+    fin = re.search(r"\n\s*(?:Reg[ií]menes|Obligaciones)\s*:?", cuerpo, flags=re.I)
+    cuerpo = cuerpo[:fin.start()] if fin else cuerpo
+    filas, buf = [], ""
+    for linea in cuerpo.splitlines():
+        t = linea.strip()
+        if not t or re.match(r"P[aá]gina\s*\[?\d+\]?\s*de\s*\[?\d+\]?", t, flags=re.I) or re.match(r"Orden\s+Actividad", t, flags=re.I):
+            continue
+        buf = t if re.match(r"^\d{1,2}\s+\S", t) else (f"{buf} {t}" if buf else "")
+        r = re.match(r"^\d{1,2}\s+(.+?)\s+(\d{1,3}(?:[.,]\d+)?)\s+(\d{2}/\d{2}/\d{4})(?:\s+\d{2}/\d{2}/\d{4})?$", buf)
+        if r:
+            filas.append({"Actividad Económica": r.group(1).strip(), "Porcentaje (%)": float(r.group(2).replace(",", ".")), "Fecha de inicio": r.group(3)})
+            buf = ""
+    return filas
+
+@st.cache_data(show_spinner="Leyendo la Constancia de Situación Fiscal…")
+def _constancia_cache(contenido: bytes, version: str) -> list[dict]:
+    """PDF de la Constancia de Situación Fiscal -> actividades económicas (`parsear_actividades_csf`). ImportError si falta `pypdf`."""
+    from pypdf import PdfReader
+    return parsear_actividades_csf("\n".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(contenido)).pages))
+
+
+def _file_uploader_persistente(etiqueta: str, tipos: list[str], clave: str) -> _ArchivoMem | None:
+    version_key = f"{clave}_uploader_version"
+    archivo_key = f"{clave}_archivo_guardado"
+    version = int(st.session_state.get(version_key, 0))
+    archivo_subido = st.file_uploader(etiqueta, type=tipos, key=f"{clave}_uploader_{version}")
+    if archivo_subido is not None:
+        st.session_state[archivo_key] = (archivo_subido.name, archivo_subido.getvalue())
+
+    guardado = st.session_state.get(archivo_key)
+    if guardado is None:
+        return None
+
+    columna_archivo, columna_quitar = st.columns([5, 1])
+    columna_archivo.caption(f"Archivo guardado en esta sesión: {guardado[0]}")
+    if columna_quitar.button("Quitar", key=f"{clave}_quitar"):
+        st.session_state.pop(archivo_key, None)
+        st.session_state[version_key] = version + 1
+        st.rerun()
+
+    return _ArchivoMem(*guardado)
+
+
+def _bloque_constancia_sat() -> pd.DataFrame:
+    """Bloque 1 de la sección 10: cargador persistente del PDF de la Constancia de Situación Fiscal (sin tabla visible ni captura manual). Lee internamente su tabla «Actividades Económicas» y
+    devuelve un DataFrame (`Actividad Económica`, `Porcentaje (%)`, `Fecha de inicio`) que alimenta la dona «Distribución de Actividades Económicas Declaradas»; sin PDF, o si no se pudo leer, la tabla
+    sale vacía (la dona trae «Sin actividades declaradas»). Un PDF ilegible o sin la tabla se avisa con un `st.warning`."""
+    pdf = _file_uploader_persistente("Sube la Constancia de Situación Fiscal (PDF)", ["pdf"], "csf_pdf")
+    filas = []
+    if pdf is not None:
+        try:
+            filas = _constancia_cache(pdf.getvalue(), CODIGO_VERSION)
+        except ImportError:
+            st.warning("Falta la biblioteca `pypdf` para leer el PDF (pip install pypdf).")
+        except Exception as e:                                       # PDF dañado, cifrado o escaneado
+            st.warning(f"No se pudo leer «{pdf.name}»: {e}.")
+        else:
+            if not filas:
+                st.warning(f"No se encontró la tabla «Actividades Económicas» en «{pdf.name}».")
+    return pd.DataFrame({"Actividad Económica": pd.Series([f["Actividad Económica"] for f in filas], dtype="object"),
+                         "Porcentaje (%)": pd.Series([f["Porcentaje (%)"] for f in filas], dtype="float"),
+                         "Fecha de inicio": pd.Series([f["Fecha de inicio"] for f in filas], dtype="object")})
+
+
+def _normalizar_clave_sat(serie: pd.Series) -> pd.Series:
+    """Clave de producto/servicio como texto de 8 dígitos: sin decimales «.0» de Excel y con ceros a la izquierda (1010101 -> 01010101)."""
+    return serie.astype(str).str.strip().str.replace(r"\.0$", "", regex=True).str.zfill(8)
+
+
+
+def tasa_impuesto_sat(serie: pd.Series) -> pd.Series:
+    """`Tasa Impuestos Trasladados` como fracción: numérica, nulos o ilegibles = 0.0 y, si el valor viene en formato porcentual (> 1, p. ej. 16 o «16%»), entre 100."""
+    t = a_numero(serie.astype(str).str.replace("%", "", regex=False)).fillna(0.0)
+    return t.where(t <= 1, t / 100)
+
+
+def monto_con_iva_partida(d: pd.DataFrame) -> tuple[pd.Series, str]:
+    """Calcula el monto de cada partida con IVA, sin redondear antes de sumar:
+    `Importe + (Importe Base.fillna(0) × tasa)` si existe la base, `Importe × (1 + tasa)` si no existe; sin tasa, conserva `Importe`."""
+    if "Tasa Impuestos Trasladados" not in d.columns:
+        return d["Importe"].astype(float), "sin_tasa"
+    tasa = tasa_impuesto_sat(d["Tasa Impuestos Trasladados"])
+    if "Importe Base" in d.columns:
+        return d["Importe"] + a_numero(d["Importe Base"]).fillna(0.0) * tasa, "importe_base"
+    return d["Importe"] * (1 + tasa), "importe"
+
+
+def emitidos_productos_sat(df: pd.DataFrame) -> pd.DataFrame:
+    """Base `CFDIs Emitidos Productos` (texto crudo) -> partidas ACTIVAS de tipo FACTURA (sin canceladas ni notas de crédito) con `Importe` (SubTotal sin IVA de la partida) numérico,
+    `Monto` (el monto con IVA calculado por partida: la cifra que usa la sección 10; `attrs['regla_iva']` indica la regla), `Clave` de 8 dígitos, `Clase` (sus primeros 6 dígitos),
+    `Fecha` y `Anio`. Descarta lo que no tenga fecha, importe o clave de 8 dígitos legibles
+    (`attrs['descartadas']`). KeyError con las columnas faltantes si no es esa base."""
+    df = resolver_columnas(df, COLS_EMITIDOS_PRODUCTOS, COLS_EMITIDOS_PRODUCTOS_OPC)
+    vigente = (df["Estatus"].astype(str).str.strip().str.casefold() == "activo") & (df["Tipo Documento"].astype(str).str.strip().str.upper() == "FACTURA")
+    d = df[vigente].copy()
+    d["Fecha"], d["Importe"], d["Clave"] = a_fecha(d["Fecha"]), a_numero(d["Importe"]), _normalizar_clave_sat(d["Clave"])
+    ilegible = d["Fecha"].isna() | d["Importe"].isna() | ~d["Clave"].str.fullmatch(r"\d{8}")
+    d = d[~ilegible].copy()
+    if "Descripcion" not in d.columns:
+        d["Descripcion"] = ""
+    d["Anio"] = d["Fecha"].dt.year.astype(int)
+    d["Clase"] = d["Clave"].str[:6]
+    d["Monto"], regla = monto_con_iva_partida(d)
+    d.attrs["descartadas"], d.attrs["regla_iva"] = int(ilegible.sum()), regla
+    return d.reset_index(drop=True)
+
+
+
+@st.cache_data(show_spinner="Leyendo los productos emitidos…")
+def _emitidos_productos_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
+    return emitidos_productos_sat(leer_archivo(nombre, contenido))
+
+@st.cache_data(show_spinner="Leyendo el catálogo oficial del SAT…")
+def _leer_catalogo_sat(ruta: str, firma: int, version: str) -> dict:
+    """Hoja `c_ClaveProdServ` (encabezado en la fila 5: `skiprows=4`) -> {'claves': {clave_8: Descripción}, 'archivo': nombre}. `firma` (fecha de modificación del archivo) invalida la
+    caché si se reemplaza el catálogo. KeyError si la hoja no trae las columnas esperadas."""
+    df = pd.read_excel(ruta, sheet_name="c_ClaveProdServ", skiprows=4, dtype=str, engine="calamine")
+    col_clave, col_desc = buscar_columna(df.columns, "c_ClaveProdServ"), buscar_columna(df.columns, "Descripcion")
+    if col_clave is None or col_desc is None:
+        raise KeyError(f"La hoja c_ClaveProdServ no trae las columnas c_ClaveProdServ y Descripción. Columnas encontradas: {list(df.columns)}")
+    claves = _normalizar_clave_sat(df[col_clave])
+    valida = claves.str.fullmatch(r"\d{8}")
+    return {"claves": dict(zip(claves[valida], df.loc[valida, col_desc].fillna("").astype(str).str.strip())), "archivo": Path(ruta).name}
+
+
+
+def _ruta_catalogo_sat() -> Path | None:
+    """Busca el catálogo SAT primero en `data/` y luego en la raíz y carpeta del módulo."""
+    base = Path(__file__).resolve().parent
+    carpetas = (base.parent / "data", base.parent, base)
+    nombres = ("catCFDI_V_4_20261106.xls", "catCFDI_V_4_20261106.xlsx")
+    for nombre in nombres:
+        for carpeta in carpetas:
+            ruta = carpeta / nombre
+            if ruta.is_file():
+                return ruta
+    for carpeta in carpetas:
+        otros = sorted((p for p in carpeta.glob("catCFDI*.xls*") if p.is_file()), key=lambda p: p.name, reverse=True)
+        if otros:
+            return otros[0]
+    return None
+
+def cargar_catalogo_sat() -> dict | None:
+    """Catálogo SAT de la carpeta del proyecto (en caché); None si no está o no se puede leer."""
+    ruta = _ruta_catalogo_sat()
+    if ruta is None:
+        return None
+    try:
+        return _leer_catalogo_sat(str(ruta), ruta.stat().st_mtime_ns, CODIGO_VERSION)
+    except (KeyError, ValueError, OSError):
+        return None
+
+def descripciones_clase_sat(d: pd.DataFrame, catalogo: dict | None) -> dict:
+    """{Clase de 6 dígitos: descripción oficial}. La descripción de una clase es la de la fila `Clase + "00"` del catálogo; si no existe (p. ej. 851215), el respaldo es la descripción
+    de la clave de 8 dígitos de mayor Monto de esa clase; 010101 es «No existe en el catálogo». Sin catálogo: «Sin catálogo»."""
+    claves = (catalogo or {}).get("claves", {})
+    if not claves:
+        return {c: (ETIQUETA_CLAVE_GENERICA if c == CLASE_GENERICA_SAT else "Sin catálogo") for c in d["Clase"].unique()}
+    rep = (d.groupby(["Clase", "Clave"])["Monto"].sum().reset_index().sort_values(["Clase", "Monto", "Clave"], ascending=[True, False, True])
+             .drop_duplicates("Clase").set_index("Clase")["Clave"])
+    salida = {}
+    for clase, clave in rep.items():
+        salida[clase] = (ETIQUETA_CLAVE_GENERICA if clase == CLASE_GENERICA_SAT else claves.get(clase + "00") or claves.get(clave) or "Clave no encontrada en el catálogo")
+    return salida
+
+def descripciones_clase_sat(d: pd.DataFrame, catalogo: dict | None) -> dict:
+    """{Clase de 6 dígitos: descripción oficial}. La descripción de una clase es la de la fila `Clase + "00"` del catálogo; si no existe (p. ej. 851215), el respaldo es la descripción
+    de la clave de 8 dígitos de mayor Monto de esa clase; 010101 es «No existe en el catálogo». Sin catálogo: «Sin catálogo»."""
+    claves = (catalogo or {}).get("claves", {})
+    if not claves:
+        return {c: (ETIQUETA_CLAVE_GENERICA if c == CLASE_GENERICA_SAT else "Sin catálogo") for c in d["Clase"].unique()}
+    rep = (d.groupby(["Clase", "Clave"])["Monto"].sum().reset_index().sort_values(["Clase", "Monto", "Clave"], ascending=[True, False, True])
+             .drop_duplicates("Clase").set_index("Clase")["Clave"])
+    salida = {}
+    for clase, clave in rep.items():
+        salida[clase] = (ETIQUETA_CLAVE_GENERICA if clase == CLASE_GENERICA_SAT else claves.get(clase + "00") or claves.get(clave) or "Clave no encontrada en el catálogo")
+    return salida
+
+def actividades_declaradas_csf(actividades) -> list[tuple[str, float]]:
+    """[(actividad, porcentaje)] de la tabla de la Constancia (DataFrame con `Actividad Económica` y `Porcentaje (%)`, o None), de mayor a menor porcentaje. Se omiten los renglones sin
+    actividad, sin porcentaje legible o con 0%."""
+    filas = []
+    if actividades is not None:
+        for _, r in actividades.iterrows():
+            v = r.get("Actividad Económica")
+            nombre = "" if v is None or pd.isna(v) else str(v).strip()
+            pct = pd.to_numeric(r.get("Porcentaje (%)"), errors="coerce")
+            if nombre and pd.notna(pct) and pct > 0:
+                filas.append((nombre, float(pct)))
+    return sorted(filas, key=lambda f: -f[1])

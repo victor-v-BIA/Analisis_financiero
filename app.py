@@ -264,19 +264,18 @@ def main() -> None:
                               ["Dashboard Ejecutivo (Riesgo y Viabilidad)", "Ingresos (Auditoría Operativa)",
                                "Egresos (Auditoría Operativa)"])
         else:
-            modulo = None
+            modulo = "Dashboard Ejecutivo (Riesgo y Viabilidad)"
 
     # ==================================================
     # ZONA CENTRAL (Esperando carga o mostrando gráficos)
     # ==================================================
     if not hay_archivos_ruteados:
-        st.success(f"Has seleccionado **{st.session_state['regimen']}**. Utiliza la barra lateral para subir o sincronizar tus reportes y comenzar.")
-        st.stop()
+        st.info("Puedes cargar «CFDIs Emitidos Productos» directamente en la sección 10 del Dashboard Ejecutivo, sin subir otros archivos.")
 
     # ---------------------------------------------------------
     # BARRERA CENTRAL DE ERROR
     # ---------------------------------------------------------
-    if st.session_state.get('estado_validacion') == 'error':
+    if hay_archivos_ruteados and st.session_state.get('estado_validacion') == 'error':
         st.error("Ve a la barra lateral y haz clic en **'Cambiar Tipo de Contribuyente'** o **'Limpiar Diagnóstico'** para corregir la carga.")
         
         for alerta in st.session_state.get('alertas_fiscales', []):

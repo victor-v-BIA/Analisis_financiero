@@ -2,6 +2,7 @@
 
 from html import escape
 
+import pandas as pd
 import streamlit as st
 
 from components.financial_ratios import (
@@ -11,21 +12,16 @@ from components.financial_ratios import (
     _html_tarjetas_razones,
 )
 from config import CODIGO_VERSION
-from core.financial_ratios import _RAZONES_CODE_VERSION, _razones_cache, criterios_razon
+from core.financial_ratios import _RAZONES_CODE_VERSION, _razones_cache
 from core.loader import _datos_archivo_cache
 
 
 def _seccion_razones(f_razones, pdf_elements=None) -> None:
     st.header(
-        "9. Salud Financiera y Razones Financieras",
-        help=(
-            "Razones financieras de las declaraciones anuales del SAT. Cada razón se evalúa contra su propio "
-            "rango de referencia en cuatro niveles (óptimo, vigilancia, crítico y atípico): un valor positivo "
-            "no es necesariamente favorable."
-        ),
+        "9. Posición Financiera: Liquidez, Endeudamiento y Rentabilidad",
     )
     if pdf_elements is not None:
-        pdf_elements.append({"type": "heading", "text": "9. Salud Financiera y Razones Financieras"})
+        pdf_elements.append({"type": "heading", "text": "9. Posición Financiera: Liquidez, Endeudamiento y Rentabilidad"})
     if f_razones is None:
         mensaje = (
             "Para mostrar esta sección, carga un archivo llamado «financial-ratios», "
@@ -53,29 +49,43 @@ def _seccion_razones(f_razones, pdf_elements=None) -> None:
         return
 
     anios = list(razones.columns)
-    ultimo, previo = anios[-1], anios[-2] if len(anios) > 1 else None
-    st.caption(f"Archivo: {nombre} · Periodo disponible: {anios[0]}–{ultimo}")
+    ultimo = next(
+        (
+            anio
+            for anio in reversed(anios)
+            if any(
+                metrica in razones.index and pd.notna(razones.at[metrica, anio])
+                for metrica in (
+                    "current_ratio",
+                    "quick_ratio",
+                    "total_debt_ratio",
+                    "debt_equity_ratio",
+                    "gross_profit_margin",
+                    "return_on_sales",
+                    "return_on_equity",
+                    "total_asset_turnover",
+                )
+            )
+        ),
+        anios[-1],
+    )
+    previo = next((anio for anio in reversed(anios) if anio < ultimo), None)
 
     tarjetas_html, pdf_kpis = _html_tarjetas_razones(razones, ultimo, previo)
     st.markdown(tarjetas_html, unsafe_allow_html=True)
     if pdf_elements is not None:
         pdf_elements.append({"type": "metrics", "title": f"Indicadores — {ultimo}", "data": pdf_kpis})
 
-    st.markdown("**Matriz histórica con semáforo por pilar**")
+    st.markdown("**Evolución de razones financieras de los últimos cinco ejercicios fiscales**")
     matriz_html, matriz_pdf = _html_matriz_razones(razones, anios)
     st.markdown(matriz_html, unsafe_allow_html=True)
     if pdf_elements is not None and not matriz_pdf.empty:
         pdf_elements.append({
             "type": "table",
-            "title": "Matriz histórica con semáforo por pilar",
+            "title": "Evolución de razones financieras de los últimos cinco ejercicios fiscales",
             "df": matriz_pdf,
             "status_badges": True,
         })
-
-    st.caption(
-        f"Umbrales de referencia — Liquidez: {criterios_razon('current_ratio')} · "
-        f"Endeudamiento: {criterios_razon('total_debt_ratio')}"
-    )
 
     disponibles_liquidez = any(
         metrica in razones.index for metrica in ("current_ratio", "quick_ratio")
@@ -88,6 +98,15 @@ def _seccion_razones(f_razones, pdf_elements=None) -> None:
     if disponibles_liquidez:
         fig_liquidez = _fig_liquidez_razones(razones)
         with col_liquidez:
+            st.markdown(
+                '<div style="text-align:center;font-weight:600;margin-bottom:.35rem">'
+                'Liquidez de Corto Plazo vs. Umbral Mínimo '
+                '<span title="Indica si la empresa puede pagar sus deudas de corto plazo con los recursos '
+                'que tiene disponibles en ese mismo plazo. Arriba de la línea punteada (1.00x) le alcanza '
+                'para pagar; abajo, no le alcanza. La prueba ácida es la medida más estricta porque no cuenta '
+                'los inventarios.">ⓘ</span></div>',
+                unsafe_allow_html=True,
+            )
             st.plotly_chart(fig_liquidez, width="stretch", key="razones_fig_liquidez")
         if pdf_elements is not None:
             pdf_elements.append({
@@ -98,7 +117,12 @@ def _seccion_razones(f_razones, pdf_elements=None) -> None:
     else:
         with col_liquidez:
             st.info("El archivo no contiene razones de liquidez.")
-
+    comentario_salud = st.text_area(
+            "Insight para Salud Financiera y Razones Financieras",
+            max_chars=600,
+            placeholder="Escribe un comentario (máx. 600 caracteres)...",
+            key="note_secc9",
+        )
     fig_estructura = None
     if disponibles_estructura:
         fig_estructura = _fig_estructura_razones(razones)
@@ -106,23 +130,26 @@ def _seccion_razones(f_razones, pdf_elements=None) -> None:
             if fig_estructura is None:
                 st.info("No hay valores no atípicos para graficar en estructura patrimonial y márgenes.")
             else:
+                st.markdown(
+                    '<div style="text-align:center;font-weight:600;margin-bottom:.35rem">'
+                    'Estructura Patrimonial vs. Márgenes Declarados % '
+                    '<span title="Indica qué parte de lo que tiene la empresa está financiada con deuda y cuánto '
+                    'le queda de cada peso que vende, antes y después de todos sus gastos (margen bruto y margen '
+                    'neto). Sirve para ver si la deuda se traduce en mejores resultados o si la empresa debe más '
+                    'sin ganar más. El margen bruto no se muestra en los ejercicios donde es atípico.">ⓘ</span></div>',
+                    unsafe_allow_html=True,
+                )
                 st.plotly_chart(fig_estructura, width="stretch", key="razones_fig_estructura")
         if pdf_elements is not None and fig_estructura is not None:
             pdf_elements.append({
                 "type": "image",
                 "title": "Estructura patrimonial vs Márgenes Declarados %",
                 "fig": fig_estructura,
+                "note":comentario_salud
             })
     else:
         with col_estructura:
             st.info("El archivo no contiene endeudamiento ni márgenes para graficar.")
 
-    comentario_salud = st.text_area(
-        "Insight para Salud Financiera y Razones Financieras",
-        max_chars=600,
-        placeholder="Escribe un comentario (máx. 600 caracteres)...",
-        key="note_secc9",
-    )
-    if pdf_elements is not None and comentario_salud.strip():
-        comentario_pdf = escape(comentario_salud.strip()).replace("\n", "<br/>")
-        pdf_elements.append({"type": "callout", "text": f"<b>Comentario:</b> {comentario_pdf}"})
+    
+    

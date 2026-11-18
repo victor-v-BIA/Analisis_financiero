@@ -7,7 +7,10 @@ import plotly.express as px
 
 from core.financial_ratios import (
     _RAZONES_PORCENTAJE,
+    _ejercicio_previo_con_informacion,
+    _lectura_razon,
     _nivel_razon,
+    _tendencia_razon,
     _valor_razon,
     criterios_razon,
 )
@@ -102,6 +105,37 @@ def _cambio_razon(metrica: str, actual: float, previo: float) -> str | None:
     return f"{cambio * 100:+.1f} pp" if metrica in _RAZONES_PORCENTAJE else f"{cambio:+.2f}x"
 
 
+def _ultimo_ejercicio_con_informacion(razones: pd.DataFrame, metrica: str) -> int | None:
+    for anio in reversed(list(razones.columns)):
+        if pd.notna(_valor_razon(razones, metrica, anio)):
+            return anio
+    return None
+
+
+def _texto_tendencia(tendencia: str | None) -> str:
+    if tendencia == "Mejora":
+        return "↑ Mejora"
+    if tendencia == "Deterioro":
+        return "↓ Deterioro"
+    if tendencia == "Estable":
+        return "→ Estable"
+    return ""
+
+
+def _color_razon(metrica: str, lectura: str | None) -> str:
+    if lectura == "Cobertura suficiente" or lectura == "Bajo" or lectura == "Utilidad":
+        return "#16A34A"
+    if lectura in ("Cobertura ajustada", "Moderado", "Elevado"):
+        return "#D97706"
+    if lectura in ("Cobertura insuficiente", "Muy elevado", "Pérdida"):
+        return "#DC2626"
+    if lectura == "Liquidez excedente" or lectura == "Atípico":
+        return "#2563EB"
+    if lectura == "Capital contable negativo" or lectura == "No interpretable":
+        return "#6B7280"
+    return "#9CA3AF"
+
+
 def _html_tarjetas_razones(
     razones: pd.DataFrame,
     ultimo: int,
@@ -119,16 +153,9 @@ def _html_tarjetas_razones(
         .razones-kpi-main{display:flex;align-items:center;gap:9px;margin:.25rem 0}
         .razones-kpi-value{color:#111827;font-size:1.55rem;font-weight:700;line-height:1.8rem}
         .razones-kpi-status{display:inline-flex;align-items:center;gap:5px;padding:.13rem .5rem;border:1px solid;
-            border-radius:1rem;font-size:.72rem;font-weight:600;white-space:nowrap}
-        .razones-kpi-status-dot{width:9px;height:9px;border-radius:50%}
-        .razones-kpi-status.optimo{color:#047857;background:#E7F7EE;border-color:#86D8A7}
-        .razones-kpi-status.optimo .razones-kpi-status-dot{background:#16A34A}
-        .razones-kpi-status.vigilancia{color:#B45309;background:#FFF3E0;border-color:#FDBA74}
-        .razones-kpi-status.vigilancia .razones-kpi-status-dot{background:#D97706}
-        .razones-kpi-status.critico{color:#B91C1C;background:#FEECEC;border-color:#FCA5A5}
-        .razones-kpi-status.critico .razones-kpi-status-dot{background:#DC2626}
-        .razones-kpi-status.atipico{color:#1D4ED8;background:#EFF6FF;border-color:#93C5FD}
-        .razones-kpi-status.atipico .razones-kpi-status-dot{background:#2563EB}
+            border-radius:1rem;font-size:.72rem;font-weight:600;white-space:nowrap;
+            color:#4B5563;background:#E5E7EB;border-color:#CBD5E1}
+        .razones-kpi-status-dot{display:inline-block;width:.48rem;height:.48rem;border-radius:50%}
         .razones-kpi-delta{color:#6B7280;font-size:.74rem;line-height:1.1rem}
         .razones-kpi-description{color:#6B7280;font-size:.72rem;line-height:1rem;margin-top:.18rem}
         @media(max-width:700px){.razones-kpi-grid{grid-template-columns:1fr}}
@@ -138,31 +165,33 @@ def _html_tarjetas_razones(
     ]
     datos_pdf = []
     for metrica, titulo, descripcion in _RAZONES_KPI_CARDS:
-        valor = _valor_razon(razones, metrica, ultimo)
-        nivel = _nivel_razon(razones, metrica, ultimo)
-        previo_valor = _valor_razon(razones, metrica, previo) if previo is not None else float("nan")
-        cambio = _cambio_razon(metrica, valor, previo_valor)
-        if cambio is not None and previo is not None:
-            flecha = "▲" if valor > previo_valor else "▼" if valor < previo_valor else "•"
-            texto_cambio = f"{flecha} {cambio} vs {previo}"
+        anio_metrica = _ultimo_ejercicio_con_informacion(razones, metrica)
+        valor = _valor_razon(razones, metrica, anio_metrica) if anio_metrica is not None else float("nan")
+        lectura = _lectura_razon(razones, metrica, anio_metrica) if anio_metrica is not None else None
+        previo, tendencia = _tendencia_razon(razones, metrica, anio_metrica) if anio_metrica is not None else (None, None)
+        texto_tendencia = _texto_tendencia(tendencia)
+        if previo is not None:
+            texto_cambio = f"vs {previo}" + (f" · {_texto_tendencia(tendencia)}" if texto_tendencia else "")
         else:
             texto_cambio = "Sin ejercicio previo comparable"
 
         if metrica == "total_debt_ratio":
-            pasivo_capital = _valor_razon(razones, "debt_equity_ratio", ultimo)
+            pasivo_capital = _valor_razon(razones, "debt_equity_ratio", anio_metrica) if anio_metrica is not None else float("nan")
             if pd.notna(pasivo_capital):
                 descripcion = f"{descripcion} · {_formato_razon('debt_equity_ratio', pasivo_capital)} Pasivo/Capital"
 
-        if nivel is None:
-            estado_html = '<span class="razones-kpi-status">Estado no disponible</span>'
-            estado_pdf = "Estado no disponible"
+        if lectura is None:
+            estado_html = '<span class="razones-kpi-status">Sin lectura descriptiva</span>'
+            estado_pdf = "Sin lectura descriptiva"
         else:
-            clase = _RAZONES_CLASES[nivel]
+            detalle = f"{lectura}{(' · ' + texto_tendencia) if texto_tendencia else ''}"
+            color_estado = _color_razon(metrica, lectura)
             estado_html = (
-                f'<span class="razones-kpi-status {clase}"><span class="razones-kpi-status-dot"></span>'
-                f'{escape(nivel)}</span>'
+                '<span class="razones-kpi-status">'
+                f'<span class="razones-kpi-status-dot" style="background:{color_estado}"></span>'
+                f'{escape(detalle)}</span>'
             )
-            estado_pdf = nivel
+            estado_pdf = f'<font color="{color_estado}">&#8226;</font> {escape(detalle)}'
 
         html.append(
             '<article class="razones-kpi-card">'
@@ -185,8 +214,15 @@ def _html_matriz_razones(
     razones: pd.DataFrame,
     anios: list[int],
 ) -> tuple[str, pd.DataFrame]:
-    anio_ultimo = anios[-1]
-    columnas = ["Razón", *(str(anio) for anio in anios), f"Semáforo {anio_ultimo}"]
+    anio_ultimo = next(
+        (
+            anio
+            for anio in reversed(anios)
+            if any(pd.notna(_valor_razon(razones, metrica, anio)) for metrica in razones.index)
+        ),
+        anios[-1],
+    )
+    columnas = ["Razón", *(str(anio) for anio in anios), f"Lectura {anio_ultimo}"]
     html = [
         """
         <style>
@@ -199,18 +235,13 @@ def _html_matriz_razones(
         .razones-tabla .razon-anio,.razones-tabla .razon-valor{text-align:right;white-space:nowrap}
         .razones-tabla .razon-estado{text-align:center;white-space:nowrap}
         .razones-tabla .razon-pilar td{background:rgba(128,128,128,.09);font-weight:700}
-        .razones-tabla .razon-dot,.razones-tabla .razon-badge-dot{display:inline-block;width:.48rem;height:.48rem;
+        .razones-tabla .razon-dot{display:inline-block;width:.48rem;height:.48rem;
             border-radius:50%;margin-right:.35rem;vertical-align:middle}
-        .razones-tabla .optimo .razon-dot,.razones-tabla .optimo .razon-badge-dot{background:#16a34a}
-        .razones-tabla .vigilancia .razon-dot,.razones-tabla .vigilancia .razon-badge-dot{background:#d97706}
-        .razones-tabla .critico .razon-dot,.razones-tabla .critico .razon-badge-dot{background:#dc2626}
-        .razones-tabla .atipico .razon-dot,.razones-tabla .atipico .razon-badge-dot{background:#2563eb}
         .razones-tabla .razon-badge{display:inline-block;border:1px solid;border-radius:1rem;
-            padding:.12rem .58rem;font-size:.76rem;font-weight:600}
-        .razones-tabla .optimo.razon-badge{color:#047857;background:#e7f7ee;border-color:#86d8a7}
-        .razones-tabla .vigilancia.razon-badge{color:#b45309;background:#fff3e0;border-color:#fdba74}
-        .razones-tabla .critico.razon-badge{color:#b91c1c;background:#feecec;border-color:#fca5a5}
-        .razones-tabla .atipico.razon-badge{color:#1d4ed8;background:#eff6ff;border-color:#93c5fd}
+            padding:.12rem .58rem;font-size:.76rem;font-weight:600;
+            color:#4B5563;background:#E5E7EB;border-color:#CBD5E1}
+        .razones-tabla .razon-badge-dot{display:inline-block;width:.48rem;height:.48rem;
+            border-radius:50%;margin-right:.35rem;vertical-align:middle}
         </style>
         <div class="razones-tabla-wrap"><table class="razones-tabla"><thead><tr>
         """
@@ -221,7 +252,17 @@ def _html_matriz_razones(
             else "razon-estado" if indice == len(columnas) - 1
             else ""
         )
-        html.append(f'<th class="{clase}">{escape(columna)}</th>')
+        if columna.startswith("Lectura"):
+            encabezado = (
+                f'{escape(columna)} <span title="Lectura descriptiva del último ejercicio con información, '
+                'con base en rangos generales de referencia y su variación contra el ejercicio anterior. '
+                'Los rangos pueden variar según el giro de la empresa. Liquidez: suficiente 1.20x–2.50x, '
+                'ajustada 1.00x–1.20x, insuficiente &lt;1.00x. Endeudamiento: bajo &lt;30%, moderado '
+                '30%–55%, elevado 55%–75%, muy elevado &gt;75%.">ⓘ</span>'
+            )
+        else:
+            encabezado = escape(columna)
+        html.append(f'<th class="{clase}">{encabezado}</th>')
     html.append("</tr></thead><tbody>")
 
     filas_pdf = []
@@ -233,7 +274,7 @@ def _html_matriz_razones(
         filas_pdf.append({
             "Razón": f"<b>{escape(pilar)}</b>",
             **{str(anio): "" for anio in anios},
-            f"Semáforo {anio_ultimo}": "",
+            f"Lectura {anio_ultimo}": "",
         })
         for metrica in disponibles:
             tooltip = escape(f"{_RAZONES_DESCRIPCION[metrica]} {criterios_razon(metrica)}")
@@ -241,36 +282,67 @@ def _html_matriz_razones(
             fila_pdf = {"Razón": _RAZONES_MATRIZ_LABELS[metrica]}
             for anio in anios:
                 valor = _valor_razon(razones, metrica, anio)
-                nivel = _nivel_razon(razones, metrica, anio)
-                if nivel is None:
-                    texto = "—"
-                    fila_html.append(f'<td class="razon-valor">{texto}</td>')
-                else:
-                    clase = _RAZONES_CLASES[nivel]
-                    texto = _formato_razon(metrica, valor)
+                if pd.isna(valor):
+                    texto = "s/i"
                     fila_html.append(
-                        f'<td class="razon-valor {clase}" title="{tooltip}">'
-                        f'<span class="razon-dot"></span>{escape(texto)}</td>'
+                        '<td class="razon-valor" '
+                        'title="Sin información disponible para este ejercicio">s/i</td>'
                     )
-                if nivel is None:
-                    fila_pdf[str(anio)] = escape(texto)
                 else:
-                    color_pdf = _RAZONES_PDF_COLORES[nivel]
+                    texto = _formato_razon(metrica, valor)
+                    anio_metrica = anio
+                    lectura_anio = _lectura_razon(razones, metrica, anio_metrica)
+                    color_anio = _color_razon(metrica, lectura_anio)
+                    fila_html.append(
+                        f'<td class="razon-valor" title="{tooltip}">'
+                        f'<span class="razon-dot" style="background:{color_anio}"></span>{escape(texto)}</td>'
+                    )
+                if pd.isna(valor):
+                    fila_pdf[str(anio)] = "s/i"
+                else:
                     fila_pdf[str(anio)] = (
-                        f'<font color="{color_pdf}">&#8226;</font> {escape(texto)}'
+                        f'<font color="{_color_razon(metrica, lectura_anio)}">&#8226;</font> {escape(texto)}'
                     )
 
-            estado_ultimo = _nivel_razon(razones, metrica, anio_ultimo)
-            if estado_ultimo is None:
-                fila_html.append('<td class="razon-estado">—</td>')
-                fila_pdf[f"Semáforo {anio_ultimo}"] = "n/d"
+            anio_metrica = _ultimo_ejercicio_con_informacion(razones, metrica)
+            lectura = _lectura_razon(razones, metrica, anio_metrica) if anio_metrica is not None else None
+            previo, tendencia = _tendencia_razon(razones, metrica, anio_metrica) if anio_metrica is not None else (None, None)
+            texto_tendencia = _texto_tendencia(tendencia)
+            if metrica in ("gross_profit_margin", "total_asset_turnover") and lectura is None:
+                detalle = texto_tendencia
             else:
-                clase = _RAZONES_CLASES[estado_ultimo]
-                fila_html.append(
-                    f'<td class="razon-estado"><span class="razon-badge {clase}">'
-                    f'<span class="razon-badge-dot"></span>{escape(estado_ultimo)}</span></td>'
+                detalle = lectura or ""
+                if texto_tendencia:
+                    detalle = f"{detalle} · {texto_tendencia}" if detalle else texto_tendencia
+
+            if metrica == "gross_profit_margin" and lectura == "Atípico":
+                detalle = (
+                    '<span title="Un margen bruto cercano al 100% indica que casi no se reportó costo de ventas '
+                    'frente a los ingresos. Es común en empresas de servicios o cuando el costo se registra como '
+                    'gasto de operación, por lo que este margen no es comparable con años donde sí se reporta costo '
+                    'de ventas.">Atípico ⓘ</span>'
                 )
-                fila_pdf[f"Semáforo {anio_ultimo}"] = estado_ultimo
+                if texto_tendencia:
+                    detalle = f"{detalle} · {texto_tendencia}"
+
+            if not detalle:
+                fila_html.append('<td class="razon-estado">s/i</td>')
+                fila_pdf[f"Lectura {anio_ultimo}"] = "s/i"
+            else:
+                color_lectura = _color_razon(metrica, lectura)
+                fila_html.append(
+                    f'<td class="razon-estado"><span class="razon-badge">'
+                    f'<span class="razon-badge-dot" style="background:{color_lectura}"></span>'
+                    f'{detalle}</span></td>'
+                )
+                texto_pdf = (
+                    detalle.replace('<span title="', "")
+                    .replace("</span>", "")
+                    .replace("ⓘ", "")
+                )
+                fila_pdf[f"Lectura {anio_ultimo}"] = (
+                    f'<font color="{color_lectura}">&#8226;</font> {escape(texto_pdf.strip())}'
+                )
             fila_html.append("</tr>")
             html.extend(fila_html)
             filas_pdf.append(fila_pdf)
@@ -315,7 +387,7 @@ def _fig_liquidez_razones(razones: pd.DataFrame):
         line={"color": "#EF4444", "dash": "dot", "width": 1.5},
     )
     fig.update_layout(
-        title={"text": "Liquidez de Corto Plazo vs. Umbral Mínimo", "x": 0.5, "xanchor": "center"},
+        title=None,
         xaxis={
             "title": None,
             "tickmode": "array",
@@ -350,7 +422,8 @@ def _fig_estructura_razones(razones: pd.DataFrame):
             continue
         for anio in razones.columns:
             valor = _valor_razon(razones, metrica, anio)
-            if pd.notna(valor) and _nivel_razon(razones, metrica, anio) != "Atípico":
+            lectura = _lectura_razon(razones, metrica, anio)
+            if pd.notna(valor) and lectura != "Atípico":
                 filas.append({
                     "Ejercicio": anio,
                     "Razón": _RAZONES_LABELS[metrica],
@@ -380,7 +453,7 @@ def _fig_estructura_razones(razones: pd.DataFrame):
         elif traza.name == "Margen Neto (ROS)":
             traza.textposition = "top right"
     fig.update_layout(
-        title={"text": "Estructura Patrimonial vs. Márgenes Declarados %", "x": 0.5, "xanchor": "center"},
+        title=None,
         xaxis={
             "title": None,
             "tickmode": "array",

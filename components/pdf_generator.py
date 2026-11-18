@@ -333,7 +333,7 @@ def generate_modular_pdf(
                         val = str(row[c]) if pd.notnull(row[c]) else ""
                         if (
                             el.get("status_badges")
-                            and c.startswith("Semáforo ")
+                            and c.startswith("Lectura ")
                             and val in StatusBadge._PALETA
                         ):
                             row_cells.append(StatusBadge(val))
@@ -390,6 +390,10 @@ def generate_modular_pdf(
                     ]))
                 
                 table_block.append(t)
+                footnote_text = el.get("footnote", "").strip()
+                if footnote_text:
+                    table_block.append(Spacer(1, 6))
+                    table_block.append(Paragraph(escape(footnote_text), note_style))
                 note_text = el.get("note", "").strip()
                 if note_text:
                     table_block.append(Spacer(1, 10))

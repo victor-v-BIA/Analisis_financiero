@@ -13,19 +13,21 @@ from utils import (_nb, _nombre_abreviado, _limpiar_y_formatear, _mxn, _formatea
 
 from core.loader import (_datos_archivo_cache, anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
-                         _resumen_sf_cache,_res_sf_cache,_operaciones_divisas_cache)
+                         _resumen_sf_cache,_res_sf_cache,_operaciones_divisas_cache,
+                         _bloque_constancia_sat, _emitidos_productos_cache,cargar_catalogo_sat,descripciones_clase_sat,
+                         _file_uploader_persistente)
 from views.financial_ratios_view import _seccion_razones
 
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
                     METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES,
                     PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
-                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,PALETA_AZULES_BIA)
+                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,PALETA_AZULES_BIA,TOP_FILAS_CLASE_SAT,NOTA_METODOLOGICA_CLASE_SAT)
 
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
                                 _layout_plotly,_html_tabla_sin_facturacion,
                                 render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,
-                                _html_tabla_benchmark, _html_kpis_divisas)
+                                _html_tabla_benchmark, _html_kpis_divisas,fig_donut_declarado,fig_donut_facturado,_html_tabla_clase_sat)
 
 from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,_flujo_bruto_mensual,
                                 _ohlc_mensual,_promedios_mensuales_historicos,_series_anuales_por_mes,_tabla_clientes_sin_facturacion,
@@ -823,6 +825,9 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     st.divider()
     _seccion_razones(file_razones, pdf_elements=pdf_elements)
 
+    st.divider()
+    _seccion_clave_sat(pdf_elements=pdf_elements)
+
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA DE REPORTES EN PDF
     # ---------------------------------------------------------------
@@ -1185,3 +1190,153 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
                 "type": "callout",
                 "text": "El benchmark de mercado no está disponible porque no se obtuvo tipo de cambio de referencia.",
             })
+
+
+# ==========================
+# SECCION 10
+# ==========================
+
+def tabla_clase_sat(d: pd.DataFrame, descripciones: dict | None = None, top: int = TOP_FILAS_CLASE_SAT) -> pd.DataFrame:
+    """Matriz acumulada por Clase SAT (6 dígitos) de las partidas de `d` (el periodo ya filtrado). Columnas: `Clase`, `Descripcion` (oficial), `Total` (monto con IVA), `Pct` (sobre el total de
+    `d`) y `Tipo` ('fila' | 'resto' | 'total'). Filas de mayor a menor Total: las `top` primeras, el `Resto de Clases` agrupado y al final la fila `Total` (100%)."""
+    descripciones = descripciones or {}
+    cols = ["Clase", "Descripcion", "Total", "Pct", "Tipo"]
+    if d.empty:
+        return pd.DataFrame(columns=cols)
+    g = d.groupby("Clase")["Monto"].sum().reset_index().sort_values(["Monto", "Clase"], ascending=[False, True]).reset_index(drop=True)
+    total = float(g["Monto"].sum())
+    pct = lambda v: v / total * 100 if total else float("nan")
+    filas = [{"Clase": r["Clase"], "Descripcion": descripciones.get(r["Clase"], "Sin catálogo"), "Total": float(r["Monto"]), "Pct": pct(float(r["Monto"])), "Tipo": "fila"}
+             for _, r in g.head(top).iterrows()]
+    if len(g) > top:
+        resto = float(g["Monto"].iloc[top:].sum())
+        filas.append({"Clase": "Resto de Clases", "Descripcion": f"{len(g) - top:,} clases más", "Total": resto, "Pct": pct(resto), "Tipo": "resto"})
+    filas.append({"Clase": "Total", "Descripcion": "", "Total": total, "Pct": pct(total), "Tipo": "total"})
+    return pd.DataFrame(filas, columns=cols)
+
+
+def _filtrar_actividades_csf_por_anio(
+    actividades: pd.DataFrame, anios_seleccionados: list[int], anios_disponibles: list[int]
+) -> pd.DataFrame:
+    """Filtra por año de inicio en selecciones parciales; con todos los años, conserva todas las actividades."""
+    if set(anios_seleccionados) == set(anios_disponibles):
+        return actividades
+    anios_inicio = pd.to_datetime(
+        actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce"
+    ).dt.year
+    return actividades.loc[anios_inicio.isin(anios_seleccionados)].copy()
+
+
+def _sufijo_periodo_clase_sat(
+    anios_seleccionados: list[int], anios_disponibles: list[int]
+) -> str:
+    if set(anios_seleccionados) == set(anios_disponibles):
+        return " - Acumulado"
+    return " - " + ", ".join(str(anio) for anio in sorted(anios_seleccionados))
+
+
+def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
+    """Sección «10. Perfil Fiscal Declarado y Estructura de Ingresos Facturados» del Dashboard Ejecutivo, a todo el ancho y con datos 100% objetivos (sin clasificar ni juzgar). En este orden:
+    los cargadores de la base de conceptos emitidos y el PDF de la Constancia de Situación Fiscal (sin tabla visible), el filtro de años (`st.pills`, varios a la vez), 2 anillos (`st.columns(2)`: «Distribución de Actividades Económicas Declaradas» y «Distribución Real Facturada (CFDIs)») y la matriz de 4 columnas por
+    Clase SAT. El anillo declarado filtra por año de inicio en selecciones parciales y muestra todas las actividades cuando se seleccionan todos los años. El filtro recalcula el anillo facturado y la tabla;
+    el anillo facturado sale siempre que haya CFDI, aunque no haya Constancia (en ese caso, o si aún no se sube el PDF, el anillo izquierdo solo trae «Sin actividades declaradas»). Se usan todos los años válidos del archivo cargado.
+    Los títulos de las gráficas indican los años seleccionados o «- acumulado»; con `pdf_elements`, se anexan al PDF ambas gráficas, la tabla, su nota metodológica y el insight."""
+    titulo_seccion = "10. Perfil Fiscal Declarado y Estructura de Ingresos Facturados"
+    st.header(titulo_seccion,
+              help=("Pone lo declarado en la Constancia de Situación Fiscal (CSF) frente a lo facturado, agrupado por Clase SAT (los 6 primeros dígitos de la clave de producto o servicio, según el "
+                    "catálogo oficial del SAT). La clave genérica 010101 («No existe en el catálogo») no identifica qué se vendió. El filtro de años aplica a actividades CSF por año de inicio cuando la selección es parcial; "
+                    "al seleccionar todos los años, muestra todas las actividades. También recalcula el anillo facturado y la tabla. Solo partidas "
+                    "Activas de tipo Factura. El monto por partida incluye el IVA trasladado según Importe, Importe Base y Tasa Impuestos Trasladados; no usa el Total repetido por renglón."))
+    if pdf_elements is not None:
+        pdf_elements.append({"type": "heading", "text": titulo_seccion})
+    f_emitidos_productos = _file_uploader_persistente(
+        "Sube la base «CFDIs Emitidos Productos» (Excel/CSV/XLSB/Parquet)",
+        ["csv", "xlsx", "xls", "xlsb", "parquet", "pqt"],
+        "clase_sat_emitidos_productos",
+    )
+    actividades = _bloque_constancia_sat()
+    if f_emitidos_productos is None:
+        mensaje = "Carga la base «CFDIs Emitidos Productos» para analizar la facturación por clave SAT."
+        st.info(mensaje)
+        if pdf_elements is not None:
+            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+        return
+    try:
+        d = _emitidos_productos_cache(f_emitidos_productos.name, f_emitidos_productos.getvalue(), CODIGO_VERSION)
+    except KeyError as e:
+        mensaje = f"Información insuficiente: «{f_emitidos_productos.name}» no trae las columnas esperadas de conceptos de CFDI emitidos. {e.args[0]}"
+        st.info(mensaje)
+        if pdf_elements is not None:
+            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+        return
+    if d.empty:
+        mensaje = f"La base «{f_emitidos_productos.name}» no trae partidas Activas de tipo Factura."
+        st.info(mensaje)
+        if pdf_elements is not None:
+            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+        return
+    catalogo = cargar_catalogo_sat()
+    if catalogo is None:
+        st.warning("No se encontró el catálogo oficial del SAT (catCFDI_V_4_….xls, hoja c_ClaveProdServ) en la carpeta data/ del proyecto: las descripciones oficiales no están disponibles.")
+    descripciones = descripciones_clase_sat(d, catalogo)                        # con todos los años: la descripción de una clase no cambia con el filtro
+    disponibles = sorted(int(a) for a in d["Anio"].unique())
+    elegidos = st.pills("Años", disponibles, selection_mode="multi", default=disponibles, key=f"clase_sat_anios_{'_'.join(map(str, disponibles))}")
+    if not elegidos:
+        mensaje = "Selecciona al menos un año para ver el resumen y la matriz."
+        st.info(mensaje)
+        if pdf_elements is not None:
+            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+        return
+    anios_seleccionados = [int(a) for a in elegidos]
+    d_sel = d[d["Anio"].isin(anios_seleccionados)]
+    actividades_grafica = _filtrar_actividades_csf_por_anio(
+        actividades, anios_seleccionados, disponibles
+    )
+    sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
+    fig_declarado = fig_donut_declarado(actividades_grafica)
+    fig_facturado = fig_donut_facturado(d_sel, descripciones)
+    for figura in (fig_declarado, fig_facturado):
+        figura.update_layout(title_text=f"{figura.layout.title.text}{sufijo_periodo}")
+    fig_col1, fig_col2 = st.columns(2)
+    with fig_col1:
+        st.plotly_chart(fig_declarado, width="stretch", key="clase_sat_donut_declarado")
+    with fig_col2:
+        st.plotly_chart(fig_facturado, width="stretch", key="clase_sat_donut_facturado")
+    st.markdown("#### Detalle de Facturación por Clase SAT")
+    tabla = tabla_clase_sat(d_sel, descripciones)
+    st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
+    st.caption(NOTA_METODOLOGICA_CLASE_SAT)
+    comentario = st.text_area(
+        "Insight para la Sección 10",
+        max_chars=600,
+        placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
+        key="clase_sat_insight",
+    )
+
+    if pdf_elements is not None:
+        tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
+            "Clase": "Clase SAT",
+            "Descripcion": "Descripción oficial SAT",
+            "Total": "Total facturado (MXN)",
+            "Pct": "% del total",
+        })
+        tabla_pdf["Descripción oficial SAT"] = tabla_pdf["Descripción oficial SAT"].map(
+            lambda valor: escape(str(valor))
+        )
+        tabla_pdf["Total facturado (MXN)"] = tabla_pdf["Total facturado (MXN)"].map(
+            lambda valor: f"${valor:,.0f}"
+        )
+        tabla_pdf["% del total"] = tabla_pdf["% del total"].map(lambda valor: f"{valor:.2f}%")
+        pdf_elements.extend([
+            {"type": "image", "fig": fig_declarado, "preserve_textfont_size": True},
+            {"type": "image", "fig": fig_facturado, "preserve_textfont_size": True},
+            {
+                "type": "table",
+                "title": "Detalle de Facturación por Clase SAT",
+                "df": tabla_pdf,
+                "column_widths_pct": [12, 54, 22, 12],
+                "note": comentario.strip() if comentario and comentario.strip() else "",
+            },
+            {"type": "callout", "text": escape(NOTA_METODOLOGICA_CLASE_SAT)},
+        ])
+        
