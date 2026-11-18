@@ -484,7 +484,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                     file_name="Reporte_Ingresos_Vista_Financiera.pdf",
                     mime="application/pdf",
                     key="btn_download_pdf_fin",
-                    type="primary"
+                  
                 )
 
 
@@ -728,7 +728,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                     file_name=nombre_archivo_pdf,
                     mime="application/pdf",
                     key=f"btn_download_pdf_eco_{lado}",
-                    type="primary"
+                    
                 )
 
 

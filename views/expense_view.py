@@ -339,7 +339,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                     file_name="Reporte_Egresos_Vista_Financiera.pdf",
                     mime="application/pdf",
                     key="btn_pdf_egresos_financiera",
-                    type="primary"
+                    
                 )
 
 
