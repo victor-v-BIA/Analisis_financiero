@@ -13,8 +13,7 @@ from utils import (_mxn_2d, _importe_abreviado_2d,
                    _abrev_monto, _nombre_abreviado,
                    _abrev_signo, _formatear_mxn )
 
-from core.finance_logic import (_dictamen_indice, _normalizar_por_rfc,
-                                _serie_mensual_por_anio, _ranking_anual)
+from core.finance_logic import (_serie_mensual_por_anio, _ranking_anual)
 
 from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     METRICAS_VISUALIZAR,MESES_ES,
@@ -277,38 +276,6 @@ def _grafica_diferencia_anual(anual: pd.DataFrame, nombre_serie: str) -> go.Figu
     return fig
 
 
-def _grafica_gauge_score(indice: float, color: str) -> go.Figure:
-    """Velocímetro del índice (0–100) con franjas por dictamen: menos de 50 Débil, 50 a 70 Moderado, 70 a 85 Adecuado, 85 o más Sólido."""
-    franjas = [(0, 50, "rgba(239,68,68,0.28)"), (50, 70, "rgba(245,158,11,0.28)"), (70, 85, "rgba(56,189,248,0.28)"), (85, 100, "rgba(16,185,129,0.28)")]
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=round(indice, 1), number=dict(suffix=" / 100", font=dict(size=34)),
-        title=dict(text="Índice de desempeño documental", font=dict(size=14)),
-        gauge=dict(axis=dict(range=[0, 100], tickvals=[0, 50, 70, 85, 100]), bar=dict(color=color, thickness=0.28),
-                   steps=[dict(range=[a, b], color=c) for a, b, c in franjas],
-                   threshold=dict(line=dict(color="#F8FAFC", width=3), thickness=0.8, value=round(indice, 1)))))
-    fig.update_layout(height=270, margin=dict(l=45, r=25, t=50, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-    return fig
-
-
-def _grafica_pilares_score(pilares: list[dict]) -> go.Figure:
-    """Barras horizontales (`orientation='h'`) con el puntaje de cada pilar (0–100). 'No aplica' y 'Datos insuficientes' se rotulan como tales (barra vacía, nunca un cero
-    disfrazado); el tooltip trae el indicador real y la regla exacta de puntos."""
-    nombres = [p["nombre"] for p in pilares]
-    valores = [p["s"] if p["estado"] == "ok" else 0 for p in pilares]
-    colores = [(_dictamen_indice(p["s"])[1] if p["estado"] == "ok" else "#9AA0A6") for p in pilares]
-    textos = [(f"{p['s']:.0f}/100 · {p['pts']:.1f}/{p['peso']} pts" if p["estado"] == "ok" else "No aplica" if p["estado"] == "no_aplica" else "Datos insuficientes")
-              for p in pilares]
-    fig = go.Figure(go.Bar(
-        y=nombres, x=valores, orientation="h", marker_color=colores, text=textos, textposition="outside", cliponaxis=False,
-        customdata=[[p["real"], p["regla"], p["peso"]] for p in pilares],
-        hovertemplate="<b>%{y}</b> (peso %{customdata[2]} pts)<br>%{customdata[0]}<br><i>Regla:</i> %{customdata[1]}<extra></extra>"))
-    fig = _layout_plotly(fig, y_titulo="", altura=300)
-    fig.update_layout(margin=dict(l=90, r=10, t=30, b=10), hovermode="closest", showlegend=False, xaxis_title="Puntaje del pilar (0–100)")
-    fig.update_yaxes(type="category", categoryorder="array", categoryarray=nombres, autorange="reversed")
-    fig.update_xaxes(range=[0, 150])
-    return fig
-
-
 def _grafica_ingresos_gastos(anios_str: list[str], ing: list, gas: list) -> go.Figure:
     fig = go.Figure()
     for nombre, vals, color in (("Ingresos (MDP)", ing, "#2563EB"), ("Gastos (MDP)", gas, "#DC2626")):
@@ -318,36 +285,6 @@ def _grafica_ingresos_gastos(anios_str: list[str], ing: list, gas: list) -> go.F
     fig.update_layout(barmode="group")
     fig = _layout_eco(fig, anios_str, "Millones MXN")
     fig.update_yaxes(range=[0, (max(ing + gas + [0.0]) * 1.2) or 1])
-    return fig
-
-
-def _fig_bump_top10(df: pd.DataFrame, monto_calc: str) -> go.Figure:
-    """Bump Chart de los 10 mayores clientes del periodo: eje X = Año, eje Y = Rango 1-10 por año (`autorange='reversed'`: el 1 arriba) según la
-    suma de `monto_calc` ('Subtotal' o 'Total'); una línea `spline` con marcadores por cliente y su monto como texto junto al marcador. Los
-    clientes se unifican por RFC (`_normalizar_por_rfc`: una sola `Razon_Social_Limpia` por RFC) ANTES de agrupar por Año, para que un cliente
-    con varias variantes de Razón Social sea UNA sola línea continua. El Top 10 es el histórico (suma de todos los años del df) y el rango se
-    calcula entre esos 10; un año sin facturación del cliente queda como hueco."""
-    d = _normalizar_por_rfc(df)
-    top10 = d.groupby("Razon_Social_Limpia")[monto_calc].sum().sort_values(ascending=False).head(10).index.tolist()
-    g = d[d["Razon_Social_Limpia"].isin(top10)].groupby(["Razon_Social_Limpia", "Año"], as_index=False)[monto_calc].sum()
-    g = g[g[monto_calc] > 0]
-    g["Rango"] = g.groupby("Año")[monto_calc].rank(method="first", ascending=False).astype(int)             # ranking 1-10 por año
-    anios = [str(a) for a in sorted(g["Año"].unique())]
-    fig = go.Figure()
-    for color, razon in zip(PALETA_BUMP, top10):
-        dd = g[g["Razon_Social_Limpia"] == razon].sort_values("Año")
-        if dd.empty:
-            continue
-        fig.add_trace(go.Scatter(
-            x=[str(a) for a in dd["Año"]], y=dd["Rango"], name=_nombre_abreviado(razon), mode="lines+markers+text", line_shape="spline",
-            line=dict(color=color, width=3), marker=dict(size=10, color=color), text=[_abrev_signo(v) for v in dd[monto_calc]],
-            textposition="top center", textfont=dict(size=10, color=color),
-            customdata=[[razon, int(r), _mxn_2d(v)] for r, v in zip(dd["Rango"], dd[monto_calc])],
-            hovertemplate="<b>%{customdata[0]}</b><br>Año: %{x}<br>Rango: %{customdata[1]}<br>" + monto_calc + ": %{customdata[2]}<extra></extra>"))
-    fig.update_xaxes(type="category", categoryorder="array", categoryarray=anios, showgrid=False, zeroline=False)
-    fig.update_yaxes(autorange="reversed", tickmode="array", tickvals=list(range(1, 11)), showgrid=False, zeroline=False, title_text="Rango")
-    fig.update_layout(height=460, margin=dict(l=90, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      hovermode="closest", legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.01), legend_title_text=None)
     return fig
 
 
