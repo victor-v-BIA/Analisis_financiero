@@ -466,7 +466,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
 
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
-        if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin"):
+        if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin", type="primary"):
             with st.spinner("Generando reporte financiero en PDF..."):
                 final_elements = [
                     {"type": "heading", "text": "Detalle del reporte"},
@@ -483,7 +483,8 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                     data=pdf_bytes,
                     file_name="Reporte_Ingresos_Vista_Financiera.pdf",
                     mime="application/pdf",
-                    key="btn_download_pdf_fin"
+                    key="btn_download_pdf_fin",
+                    type="primary"
                 )
 
 
@@ -703,7 +704,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
  
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas de contexto macroeconómico e indicadores.")
-        if st.button("Generar PDF Vista Económica", key=f"btn_generar_pdf_eco_{lado}"):
+        if st.button("Generar PDF Vista Económica", key=f"btn_generar_pdf_eco_{lado}", type="primary"):
             with st.spinner("Generando reporte económico en PDF..."):
                 final_elements = []
                 final_elements.extend(pdf_elements)
@@ -726,7 +727,8 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                     data=pdf_bytes,
                     file_name=nombre_archivo_pdf,
                     mime="application/pdf",
-                    key=f"btn_download_pdf_eco_{lado}"
+                    key=f"btn_download_pdf_eco_{lado}",
+                    type="primary"
                 )
 
 

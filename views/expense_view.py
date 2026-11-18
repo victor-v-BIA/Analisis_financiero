@@ -326,7 +326,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, conclusiones, tablas y desglose de este módulo.")
     if pdf_elements:
-        if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_egresos_financiera"):
+        if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_egresos_financiera", type="primary"):
             with st.spinner("Generando reporte financiero en PDF..."):
                 pdf_data = generate_modular_pdf(
                     title="Reporte de Auditoría Operativa de Egresos",
@@ -338,7 +338,8 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                     data=pdf_data,
                     file_name="Reporte_Egresos_Vista_Financiera.pdf",
                     mime="application/pdf",
-                    key="btn_pdf_egresos_financiera"
+                    key="btn_pdf_egresos_financiera",
+                    type="primary"
                 )
 
 

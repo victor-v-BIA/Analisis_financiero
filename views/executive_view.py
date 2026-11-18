@@ -839,7 +839,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         if dictamen_res is not None:
             cons_viabilidad = "VIABLE" if dictamen_res["conservador"] and dictamen_res["conservador"]["es_viable"] else "NO VIABLE"
 
-        if st.button("Generar Reporte PDF", key="btn_generar_pdf"):
+        if st.button("Generar Reporte PDF", key="btn_generar_pdf", type="primary"):
             with st.spinner("Construyendo estructura modular y maquetando PDF..."):
                 
                 elementos_finales = []       
@@ -856,7 +856,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     data=pdf_data,
                     file_name="Reporte_Ejecutivo_Detallado.pdf",
                     mime="application/pdf",
-                    key="btn_download_pdf"
+                    key="btn_download_pdf",
+                    type="secondary"
                 )
 
 
