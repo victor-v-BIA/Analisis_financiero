@@ -178,8 +178,8 @@ CLASE_GENERICA_SAT = "010101"
 ETIQUETA_CLAVE_GENERICA = "Clave genérica (Sin clasificación específica)"        # descripción de 010101 en la TABLA (en lugar de «No existe en el catálogo»)
 ETIQUETA_DONA_CLAVE_GENERICA = "Sin clasificación específica"                     # descripción de 010101 en la leyenda y el tooltip de la DONA derecha, con su prefijo «010101 · » (sin «Clave genérica»)
 TOP_FILAS_CLASE_SAT = 12            # filas de la matriz antes de «Resto de Clases»
-NOTA_METODOLOGICA_CLASE_SAT = ("Nota: El monto se calcula por partida, sin redondeo: Importe + (Importe Base × tasa), o Importe × (1 + tasa) si no hay base; sin tasa se conserva Importe. "
-                               "No se usan totales de factura repetidos por renglón ni se realiza conversión cambiaria; se asume MXN. Las claves se agrupan por sus primeros 6 dígitos.")
+NOTA_METODOLOGICA_CLASE_SAT = ("Nota: Las claves se agrupan a nivel Clase SAT (primeros 6 dígitos), el mínimo exigido por la Guía de llenado del Anexo 20. Se presenta la descripción oficial de cada "
+                               "Clase, y no el concepto libre de las facturas, para evitar ambigüedades de redacción.")
 COLORES_DECLARADO_CSF = ("#0F766E", "#14B8A6", "#5EEAD4", "#115E59", "#2DD4BF", "#99F6E4", "#134E4A", "#0D9488", "#CCFBF1", "#0891B2")     # tonos azul verdoso: las actividades de la Constancia
 COLORES_CLASES_SAT = ("#1E3A8A", "#2563EB", "#3B82F6", "#60A5FA", "#93C5FD")                      # azules: las Top 5 clases específicas de lo facturado
 COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                                   # pizarra: «Otras clases»; gris: 010101
