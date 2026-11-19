@@ -7,6 +7,10 @@ from pathlib import Path
 import re
 import pandas as pd
 
+# ================================================
+# VARIABLES PARA LOADER.PY
+# ================================================
+
 COLS_FACTURAS = {
     "UUID": [],
     "Fecha y Hora": ["Fecha"],
@@ -27,7 +31,17 @@ COLS_COMPLEMENTOS = {
 # de Ingresos, confirmada contra archivos de origen reales-.
 COL_FECHA_REP = {"Fecha de Pago": ["Fecha Pago"]}
 COLS_COMPLEMENTOS_OPCIONALES = {"RFC Emisor": [], "Estatus": [], "UUID DR": ["Documento Relacionado", "UUID Relacionado"]}
-                                                                          
+
+
+# Horizonte temporal ESTÁNDAR: toda base cargada es un bloque de 5 años consecutivos (hoy 2021–2025
+ANIOS_VENTANA = 5
+
+_MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
+
+# ============================================
+# VARIABLES PARA EXPENSE_VIEW.PY
+# ============================================
+
 # Validación explícita de columnas de Facturas Recibidas -Egresos- (hard stop temprano, antes de intentar
 # ningún cálculo): por concepto, no por nombre exacto -tolerante a acentos/mayúsculas/variantes vía _norm(),
 # igual que resolver_columnas()-. Los Complementos de Pago de Egresos NO pasan por aquí: modulo_egresos lee y
@@ -40,43 +54,20 @@ COLUMNAS_FACTURAS_EGR_REQUERIDAS = {
     "Tipo Documento": ["Tipo de documento", "Tipo de Comprobante"],
 }
 
-# Horizonte temporal ESTÁNDAR: toda base cargada es un bloque de 5 años consecutivos (hoy 2021–2025; mañana 2022–2026,
-# 2023–2027, ...). `obtener_anios_analisis` lo deduce del año máximo de emisión y toda la app trabaja SOLO con esos 5 años
-# (`anios_5`): fuera de la ventana no se agrupa ni se grafica nada, y un año sin movimientos aparece en 0.0.
-ANIOS_VENTANA = 5
-
+# Tambien se usa en income_view.py
 AYUDA_TOTAL = ("Estos montos consideran el Total de la factura (incluyendo IVA e impuestos correspondientes), "
                "no los subtotales.")
 
-# Dashboard Ejecutivo, Indicador "Tiempos documentados de cobro y pago": banda de referencia para la brecha
-# Cobro-Pago en Flujo de Efectivo. Es un criterio interno configurable, no un estándar regulatorio ni
-# bancario -ajustar libremente según el apetito de análisis del usuario-.
-BANDA_BRECHA_DIAS = 5
-
-# Dashboard Ejecutivo, Indicador "Índice de Concentración de Ingresos": bandas descriptivas de concentración
-# del Top 1 cliente. También son criterios internos configurables, no un umbral bancario ni una calificación
-# automática de salud financiera.
-BANDA_CONCENTRACION_BAJA = 15.0
-BANDA_CONCENTRACION_ALTA = 30.0
-
-
-# ----------------------------------------------------------------------------
-# 2. LÓGICA FINANCIERA
-# ----------------------------------------------------------------------------
 
 NOMBRE_FECHA = "Fecha de Pago"
+
+# ============================================
+# VARIABLES PARA EXECUTIVE_VIEW.PY
+# ============================================
+
 MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-_MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
-                "octubre", "noviembre", "diciembre"]
-_CONECTORES_MINUSCULA = {"de", "del", "la", "las", "los", "y", "en", "a", "al"}
-_RFC_GENERICOS = {"XAXX010101000", "XEXX010101000"}  # público en general nacional / extranjero genérico
 
-
-# ----------------------------------------------------------------------------
-# 3. INTERFAZ / DASHBOARD Ciclos y Estacionalidad Operativa
-# ----------------------------------------------------------------------------
-
-# ***** COLORES PARA GRAFICOS *****
+# ***** COLORES PARA GRAFICOS -  DASHBOARD Ciclos y Estacionalidad Operativa*****
 # st.cache_data no detecta cambios dentro de leer_*; la huella del código evita resultados viejos tras editar app.py.
 CODIGO_VERSION = hashlib.md5(Path(__file__).read_bytes()).hexdigest()
 COLOR = {"PUE": "#2E86AB",
@@ -92,7 +83,6 @@ VISTAS_CICLOS = ["Tendencia (Líneas)", "Volatilidad (Velas Japonesas)"]
 
 COLOR_LINEA_PROMEDIO = "rgba(160,160,160,0.95)" 
 METRICAS_VISUALIZAR = ["Cobros", "Pagos"]
-
 
 # ----------- Clientes sin facturación en el periodo---------
 ANCHOS_SIN_FACTURACION = (30, 17, 13, 23, 17)   # % inicial: Cliente | RFC | Última factura | Facturado [año] (MXN) | Participación (%)
@@ -127,9 +117,87 @@ CSS_DETALLE_ANUAL = (
     # columnas que contienen esta tabla)-.
     'div[data-testid="stColumn"]:has(.ppd-detalle-wrap){min-width:300px}</style>')
 
-# ==================================================
-# DICTAMEN CREDITICIO
-# ==================================================
+
+# Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
+PALETA_AZULES_BIA = [
+    "#0F2E85",  # Azul marino muy oscuro
+    "#4160B4",  # Azul marino muy oscuro
+    "#8FA5E0",  # Azul rey profundo
+    "#2563EB",  # Azul vivo principal
+    "#3B82F6",  # Azul claro brillante pero sólido
+    "#60A5FA" ,  # Azul cielo
+    "#5D92CE"
+]
+
+# VARIABLES PARA EL MODULO 7 DEL DASHBOARD EJECUTIVO
+
+
+# Evaluación INDEPENDIENTE de cada escenario: proporción del flujo del mes frente al mejor mes de la ventana -> viabilidad y porcentaje del flujo libre.
+PROPORCION_MINIMA = 0.05        # flujo del mes < 5 % del mejor mes: flujo marginal, no viable
+CREDITO_MINIMO = 50_000.0       # línea comercial mínima (MXN): si al 30 % el crédito queda por debajo, el escenario no es viable
+PCT_CAPACIDAD = 0.30            # porcentaje ESTANDARIZADO del flujo libre que se compromete en todo escenario viable (mes bajo, intermedio o mejor mes)
+PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES = 36, 12, 60
+MARGEN_COMERCIAL_DEFECTO = 5.0  # puntos porcentuales que el banco suma a la TIIE (editable)
+VENTANA_DICTAMEN_MESES = 24     # el dictamen evalúa estrictamente los últimos 24 meses históricos disponibles
+TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de Banxico (corte al 25/09/2026); el analista la actualiza a mano según el mercado del momento
+
+# SECCION 8
+
+# Análisis de Divisas (clave 841216): identificación de las compras de divisas y parámetros del cruce con el Tipo de Cambio FIX de Banxico
+PREFIJO_DIVISAS = "841216"                       # Clave UNSPSC: cambio de divisas y transferencia de fondos (84121600, 84121603, 84121604, 84121605...)
+SERIES_COMPRA_DIVISAS = frozenset({"BSM390DIV"})  # Serie del encabezado con la que Santander timbra sus ventas de divisas (las comisiones, 84121500, van sin esta serie)
+RFCS_CASAS_CAMBIO = frozenset({"BMI9704113PA"})   # RFC de Monex: sus facturas recibidas son operaciones cambiarias
+SERIES_FIX = {"SF43718": "USD", "SF46410": "EUR"}  # series del SIE de Banxico: Tipo de Cambio FIX USD/MXN y EUR/MXN
+DIAS_DESFASE_ALERTA = 5                          # alerta de auditoría: CFDI timbrado más de 5 días después de la operación
+DIAS_MAX_FFILL_FIX = 7                           # un día inhábil toma el último FIX hábil previo, hasta 7 días hacia atrás
+BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia
+                     ("Banca Empresarial Preferente", 0.12, 0.15),                     
+                     ("Ventanilla Bancaria Tradicional", 0.25, 0.35))                    
+
+CSS_KPI_DIVISAS = """
+<style>
+.div-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:.4rem 0 .6rem 0; }
+.div-kpi { border:1px solid rgba(128,128,128,.35); background:rgba(128,128,128,.07); border-radius:10px; padding:.7rem .9rem; }
+.div-kpi .t { font-size:.8rem; opacity:.75; }
+.div-kpi .v { font-size:1.3rem; font-weight:700; line-height:1.3; }
+.div-kpi .s { font-size:.78rem; opacity:.7; }
+@media (max-width: 900px) { .div-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+</style>
+"""
+
+_COLUMNAS_OPERACIONES_DIVISAS = [
+    "Clave", "Descripcion", "Divisa", "Fecha_Operacion", "Fecha_CFDI", "Cantidad",
+    "Monto_Divisa", "TC_Facturado", "Importe_MXN", "RFC_Emisor", "Institucion",
+    "Num_Orden", "Orden_Duplicada", "Desfase_Alerta",
+]
+
+
+# SECCION 10
+CLAVE_GENERICA_SAT = "01010101"
+CLASE_GENERICA_SAT = "010101"
+ETIQUETA_CLAVE_GENERICA = "Clave genérica (Sin clasificación específica)"        # descripción de 010101 en la TABLA (en lugar de «No existe en el catálogo»)
+ETIQUETA_DONA_CLAVE_GENERICA = "Sin clasificación específica"                     # descripción de 010101 en la leyenda y el tooltip de la DONA derecha, con su prefijo «010101 · » (sin «Clave genérica»)
+TOP_FILAS_CLASE_SAT = 12            # filas de la matriz antes de «Resto de Clases»
+NOTA_METODOLOGICA_CLASE_SAT = ("Nota: El monto se calcula por partida, sin redondeo: Importe + (Importe Base × tasa), o Importe × (1 + tasa) si no hay base; sin tasa se conserva Importe. "
+                               "No se usan totales de factura repetidos por renglón ni se realiza conversión cambiaria; se asume MXN. Las claves se agrupan por sus primeros 6 dígitos.")
+COLORES_DECLARADO_CSF = ("#0F766E", "#14B8A6", "#5EEAD4", "#115E59", "#2DD4BF", "#99F6E4", "#134E4A", "#0D9488", "#CCFBF1", "#0891B2")     # tonos azul verdoso: las actividades de la Constancia
+COLORES_CLASES_SAT = ("#1E3A8A", "#2563EB", "#3B82F6", "#60A5FA", "#93C5FD")                      # azules: las Top 5 clases específicas de lo facturado
+COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                                   # pizarra: «Otras clases»; gris: 010101
+TOP_DONA_CLASES_SAT = 5                                                                           # clases que la dona derecha muestra antes de agrupar «Otras clases (N)»
+
+
+COLS_EMITIDOS_PRODUCTOS = {"Clave": [], "Fecha": [], "Estatus": [], "Tipo Documento": [], "Importe": []}
+COLS_EMITIDOS_PRODUCTOS_OPC = {"Descripcion": [], "Razon Social Receptor": [], "RFC Receptor": [], "Cantidad": [], "Importe Base": [], "Tasa Impuestos Trasladados": []}
+
+
+# ============================================
+# VARIABLES PARA FINANCE_LOGIC.PY
+# ============================================
+
+_MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+                "octubre", "noviembre", "diciembre"]
+
+_RFC_GENERICOS = {"XAXX010101000", "XEXX010101000"}  # público en general nacional / extranjero genérico
 
 TASA_REFERENCIA_ANUAL = 16.0   # tasa fija del dictamen: TIIE + margen comercial estimado (% anual); no es un input del usuario
 MARGEN_SEGURIDAD_PCT = 30.0    # % del Flujo Neto MÍNIMO del periodo que se destina a la mensualidad (margen conservador)
@@ -138,12 +206,8 @@ PERIODOS_EVALUACION = {"Últimos 12 meses": 12,
                        "Últimos 24 meses": 24,
                        "Historial completo": None}
 
-
-
 # ÍNDICE DE DESEMPEÑO FINANCIERO (BASADO EN CFDI): reglas paramétricas estrictas, sin juicios de crédito bancario.
-# =================================================================================================================
 
-MOSTRAR_INDICE_DESEMPENO = False   # interruptor temporal: el Índice de Desempeño Financiero NO se renderiza (poner True para volver a mostrarlo)
 DIAS_GRACIA_PPD = 90          # una factura PPD emitida hace menos de 90 días al corte aún no es exigible: no entra al Pilar 2
 VENTANA_MARGEN_MESES = 24     # Pilar 1: últimos 24 meses del resumen mensual de la sección 2
 MIN_MESES_MARGEN = 12         # menos de 12 meses con registros: datos insuficientes
@@ -162,29 +226,21 @@ BANDAS_DICTAMEN = ((85.0, "Desempeño Documental Sólido", "#10B981"), (70.0, "D
                    (50.0, "Desempeño Documental Moderado", "#F59E0B"), (0.0, "Desempeño Documental Débil", "#EF4444"))
 SIN_DICTAMEN = ("Datos insuficientes para dictaminar", "#9AA0A6")
 
+# ============================================
+# VARIABLES PARA UTILS.PY
+# ============================================
+_CONECTORES_MINUSCULA = {"de", "del", "la", "las", "los", "y", "en", "a", "al"}
+
 
 # ==================================================
-# INGRESOS (FINANCIERA Y ECONOMICA)
+# VARIABLES PARA INCOME_VIEW.PY (FINANCIERA Y ECONOMICA)
 # ==================================================
 
 # VISTA ECONÓMICA (Ingresos / Egresos): ingresos y gastos de la empresa frente a ITAEE / INPP (INEGI).
-
 VISTAS_MODULO = ["Vista Financiera", "Vista Económica"]
 MENSAJE_CARGA_ECONOMICA = "Carga la base económica correspondiente (ITAEE / INPP / TIIE) para generar el comparativo sectorial."
 ETIQUETA_SELECTOR_SERIE = "Selecciona el sector / serie a comparar:"
-_MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
 
-
-# Lista fija de tonos azules de oscuro a medio (sin llegar a blanco)
-PALETA_AZULES_BIA = [
-    "#0F2E85",  # Azul marino muy oscuro
-    "#4160B4",  # Azul marino muy oscuro
-    "#8FA5E0",  # Azul rey profundo
-    "#2563EB",  # Azul vivo principal
-    "#3B82F6",  # Azul claro brillante pero sólido
-    "#60A5FA" ,  # Azul cielo
-    "#5D92CE"
-]
 
 # PALETA DE COLORES PARA GRAFICAS DE TOP 10
 PALETA_BUMP = ["#60A5FA",
@@ -218,20 +274,29 @@ PALETA_ING = {"pue": "#3B82F6",
               "ppd": "#7DD3FC", 
               "pendiente": "#2563EB"} # azul medio · azul claro · azul profundo
 
-TEXTO_SOBRE_ING = {"#3B82F6": 
-                   "#FFFFFF", 
-                   "#7DD3FC": 
-                   "#0B1220", 
-                   "#2563EB": 
-                   "#FFFFFF", 
-                   "#1D4ED8": 
-                   "#FFFFFF", 
-                   "#F59E0B": 
-                   "#0B1220"}
-# etiqueta legible sobre cada tono (claro -> texto oscuro)
+TEXTO_SOBRE_ING = {"#3B82F6": "#FFFFFF", "#7DD3FC": "#0B1220", 
+                   "#2563EB": "#FFFFFF", "#1D4ED8": "#FFFFFF", "#F59E0B": "#0B1220"}
+
+CSS_VISTA_ECONOMICA = """
+<style>
+.eco-insight { background:#111827; border:1px solid rgba(148,163,184,.25); border-left:4px solid #3B82F6; border-radius:8px;
+               padding:.65rem .9rem; margin:.35rem 0 1rem 0; font-size:.88rem; line-height:1.35; color:#E5E7EB; }
+.eco-insight b { color:#93C5FD; }
+.eco-insight.eco-tiie { background:#2E1065; border-left-color:#A855F7; }
+.eco-insight.eco-tiie b { color:#D8B4FE; }
+</style>
+"""
+
+REP_VACIO = pd.DataFrame({
+    "UUID": pd.Series(dtype=str), "RFC_Emisor": pd.Series(dtype=str),
+    "Fecha_Cobro": pd.Series(dtype="datetime64[ns]"),
+    "Saldo_Inicial": pd.Series(dtype=float), "Saldo_Final": pd.Series(dtype=float),
+    "Cobro_Efectivo": pd.Series(dtype=float),
+})
+
 
 # ==================================================
-# PANTALLA DE EGRESOS
+# VARIABLES PARA EXPENSE_VIEW.PY
 # ==================================================
 
 # Categorías de Egresos, con el mismo nombre y color en barras, sectores, leyendas, tooltips e indicadores
@@ -240,9 +305,11 @@ COLOR_EGR_PUE, COLOR_EGR_PPD, COLOR_NOMINA = "#3B82F6", "#7DD3FC", "#F59E0B" # a
 COLOR_GASTOS = "#7DD3FC" # «Gastos (Proveedores)» en Nómina vs. Gastos: azul claro
 
 
-# ======================================
+# ==================================================
+# VARIABLES PARA APP.PY
+# ==================================================
+
 #  BLOQUE DE ESTILOS CSS
-# ======================================
 
 CSS_TARJETAS_KPI = """
 <style>
@@ -299,21 +366,9 @@ button[data-testid="stBaseButton-pills"] { border-radius: 6px !important; }
 </style>
 """
 
-CSS_VISTA_ECONOMICA = """
-<style>
-.eco-insight { background:#111827; border:1px solid rgba(148,163,184,.25); border-left:4px solid #3B82F6; border-radius:8px;
-               padding:.65rem .9rem; margin:.35rem 0 1rem 0; font-size:.88rem; line-height:1.35; color:#E5E7EB; }
-.eco-insight b { color:#93C5FD; }
-.eco-insight.eco-tiie { background:#2E1065; border-left-color:#A855F7; }
-.eco-insight.eco-tiie b { color:#D8B4FE; }
-</style>
-"""
-REP_VACIO = pd.DataFrame({
-    "UUID": pd.Series(dtype=str), "RFC_Emisor": pd.Series(dtype=str),
-    "Fecha_Cobro": pd.Series(dtype="datetime64[ns]"),
-    "Saldo_Inicial": pd.Series(dtype=float), "Saldo_Final": pd.Series(dtype=float),
-    "Cobro_Efectivo": pd.Series(dtype=float),
-})
+# ==================================================
+# VARIABLES PARA UTILS.PY
+# ==================================================
 
 _SUFIJOS_CORPORATIVOS = re.compile(
     r",?\s*\b(S\.?A\.?P\.?I\.?\s*DE\s*C\.?V\.?|S\.?\s*DE\s*R\.?L\.?\s*DE\s*C\.?V\.?|S\.?A\.?\s*DE\s*C\.?V\.?"
@@ -329,70 +384,7 @@ RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
 RUTA_INPC_DEFAULT = "data/INPC_base.csv"
 
 # ==================================================
-# VARIABLES PARA EL MODULO 7 DEL DASHBOARD EJECUTIVO
+# VARIABLES PARA FINANCE_LOGIC.PY
 # ==================================================
- 
-
-# Evaluación INDEPENDIENTE de cada escenario: proporción del flujo del mes frente al mejor mes de la ventana -> viabilidad y porcentaje del flujo libre.
-PROPORCION_MINIMA = 0.05        # flujo del mes < 5 % del mejor mes: flujo marginal, no viable
-CREDITO_MINIMO = 50_000.0       # línea comercial mínima (MXN): si al 30 % el crédito queda por debajo, el escenario no es viable
-PCT_CAPACIDAD = 0.30            # porcentaje ESTANDARIZADO del flujo libre que se compromete en todo escenario viable (mes bajo, intermedio o mejor mes)
-PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES = 36, 12, 60
-MARGEN_COMERCIAL_DEFECTO = 5.0  # puntos porcentuales que el banco suma a la TIIE (editable)
-VENTANA_DICTAMEN_MESES = 24     # el dictamen evalúa estrictamente los últimos 24 meses históricos disponibles
-TIIE_DEFECTO = 6.79             # último dato conocido de la TIIE a 28 días de Banxico (corte al 25/09/2026); el analista la actualiza a mano según el mercado del momento
-
-
-# Variable para finance_logic.py (escenario de credito)
 PCT_CAPACIDAD = 0.30
 
-
-# ==================================
-# SECCION 8
-# ==================================
-
-# Análisis de Divisas (clave 841216): identificación de las compras de divisas y parámetros del cruce con el Tipo de Cambio FIX de Banxico
-PREFIJO_DIVISAS = "841216"                       # Clave UNSPSC: cambio de divisas y transferencia de fondos (84121600, 84121603, 84121604, 84121605...)
-SERIES_COMPRA_DIVISAS = frozenset({"BSM390DIV"})  # Serie del encabezado con la que Santander timbra sus ventas de divisas (las comisiones, 84121500, van sin esta serie)
-RFCS_CASAS_CAMBIO = frozenset({"BMI9704113PA"})   # RFC de Monex: sus facturas recibidas son operaciones cambiarias
-SERIES_FIX = {"SF43718": "USD", "SF46410": "EUR"}  # series del SIE de Banxico: Tipo de Cambio FIX USD/MXN y EUR/MXN
-DIAS_DESFASE_ALERTA = 5                          # alerta de auditoría: CFDI timbrado más de 5 días después de la operación
-DIAS_MAX_FFILL_FIX = 7                           # un día inhábil toma el último FIX hábil previo, hasta 7 días hacia atrás
-BENCHMARK_MERCADO = (("Mesa de Dinero Corporativa", 0.05, 0.08),    # (nivel, spread mínimo, spread máximo) en pesos por unidad de divisa sobre la referencia
-                     ("Banca Empresarial Preferente", 0.12, 0.15),                     
-                     ("Ventanilla Bancaria Tradicional", 0.25, 0.35))                    
-
-CSS_KPI_DIVISAS = """
-<style>
-.div-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:.4rem 0 .6rem 0; }
-.div-kpi { border:1px solid rgba(128,128,128,.35); background:rgba(128,128,128,.07); border-radius:10px; padding:.7rem .9rem; }
-.div-kpi .t { font-size:.8rem; opacity:.75; }
-.div-kpi .v { font-size:1.3rem; font-weight:700; line-height:1.3; }
-.div-kpi .s { font-size:.78rem; opacity:.7; }
-@media (max-width: 900px) { .div-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-</style>
-"""
-
-_COLUMNAS_OPERACIONES_DIVISAS = [
-    "Clave", "Descripcion", "Divisa", "Fecha_Operacion", "Fecha_CFDI", "Cantidad",
-    "Monto_Divisa", "TC_Facturado", "Importe_MXN", "RFC_Emisor", "Institucion",
-    "Num_Orden", "Orden_Duplicada", "Desfase_Alerta",
-]
-
-
-# SECCION 10
-CLAVE_GENERICA_SAT = "01010101"
-CLASE_GENERICA_SAT = "010101"
-ETIQUETA_CLAVE_GENERICA = "Clave genérica (Sin clasificación específica)"        # descripción de 010101 en la TABLA (en lugar de «No existe en el catálogo»)
-ETIQUETA_DONA_CLAVE_GENERICA = "Sin clasificación específica"                     # descripción de 010101 en la leyenda y el tooltip de la DONA derecha, con su prefijo «010101 · » (sin «Clave genérica»)
-TOP_FILAS_CLASE_SAT = 12            # filas de la matriz antes de «Resto de Clases»
-NOTA_METODOLOGICA_CLASE_SAT = ("Nota: El monto se calcula por partida, sin redondeo: Importe + (Importe Base × tasa), o Importe × (1 + tasa) si no hay base; sin tasa se conserva Importe. "
-                               "No se usan totales de factura repetidos por renglón ni se realiza conversión cambiaria; se asume MXN. Las claves se agrupan por sus primeros 6 dígitos.")
-COLORES_DECLARADO_CSF = ("#0F766E", "#14B8A6", "#5EEAD4", "#115E59", "#2DD4BF", "#99F6E4", "#134E4A", "#0D9488", "#CCFBF1", "#0891B2")     # tonos azul verdoso: las actividades de la Constancia
-COLORES_CLASES_SAT = ("#1E3A8A", "#2563EB", "#3B82F6", "#60A5FA", "#93C5FD")                      # azules: las Top 5 clases específicas de lo facturado
-COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                                   # pizarra: «Otras clases»; gris: 010101
-TOP_DONA_CLASES_SAT = 5                                                                           # clases que la dona derecha muestra antes de agrupar «Otras clases (N)»
-
-
-COLS_EMITIDOS_PRODUCTOS = {"Clave": [], "Fecha": [], "Estatus": [], "Tipo Documento": [], "Importe": []}
-COLS_EMITIDOS_PRODUCTOS_OPC = {"Descripcion": [], "Razon Social Receptor": [], "RFC Receptor": [], "Cantidad": [], "Importe Base": [], "Tasa Impuestos Trasladados": []}

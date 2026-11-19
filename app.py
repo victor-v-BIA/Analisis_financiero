@@ -269,8 +269,6 @@ def main() -> None:
     # ==================================================
     # ZONA CENTRAL (Esperando carga o mostrando gráficos)
     # ==================================================
-    if not hay_archivos_ruteados:
-        st.info("Puedes cargar «CFDIs Emitidos Productos» directamente en la sección 10 del Dashboard Ejecutivo, sin subir otros archivos.")
 
     # ---------------------------------------------------------
     # BARRERA CENTRAL DE ERROR
@@ -283,6 +281,9 @@ def main() -> None:
         # Detenemos la aplicación aquí. El enrutamiento y las gráficas jamás se ejecutarán.
         st.stop()
 
+    if not hay_archivos_ruteados:
+        st.success("Bienvenido al Analizador Financiero. Por favor, carga tus reportes en la barra lateral para comenzar.")
+        st.stop()
 
 
     # ENRUTAMIENTO FINAL
