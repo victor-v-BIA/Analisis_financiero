@@ -16,9 +16,9 @@ from zipfile import ZipFile
 from utils import (_ArchivoMem, _nb, _norm, a_numero, a_fecha, buscar_columna)
 from config import (CODIGO_VERSION, COLS_FACTURAS,
                     COLS_COMPLEMENTOS,COLS_COMPLEMENTOS_OPCIONALES,
-                    COL_FECHA_REP,ANIOS_VENTANA, _MES_ABREV, DIAS_GRACIA_PPD,
+                    COL_FECHA_REP,ANIOS_VENTANA, MES_ABREV, DIAS_GRACIA_PPD,
                     RUTA_ITAEE_DEFAULT, RUTA_INPP_DEFAULT, RUTA_INPC_DEFAULT,
-                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, _COLUMNAS_OPERACIONES_DIVISAS,COLS_EMITIDOS_PRODUCTOS,
+                    PREFIJO_DIVISAS, DIAS_DESFASE_ALERTA, COLUMNAS_OPERACIONES_DIVISAS,COLS_EMITIDOS_PRODUCTOS,
                     COLS_EMITIDOS_PRODUCTOS_OPC,ETIQUETA_CLAVE_GENERICA,CLASE_GENERICA_SAT)
 
 
@@ -584,10 +584,10 @@ def _leer_inpp(df: pd.DataFrame) -> dict | None:
         return None
     cuerpo = df.iloc[fila_cod + 1:]
     fechas = cuerpo.iloc[:, 0].fillna("").astype(str).str.strip().str.extract(r"^([A-Za-zñÑ]{3})\w*\.?\s+(\d{4})$")
-    valido = fechas[0].notna() & fechas[0].str.lower().isin(_MES_ABREV)
+    valido = fechas[0].notna() & fechas[0].str.lower().isin(MES_ABREV)
     if int(valido.sum()) < 3:
         return None
-    mes = fechas.loc[valido, 0].str.lower().map(_MES_ABREV)
+    mes = fechas.loc[valido, 0].str.lower().map(MES_ABREV)
     anio = fechas.loc[valido, 1].astype(int)
     orden = (anio * 100 + mes).sort_values().index
     fila_tit = next((i for i in range(len(df)) if primera.iloc[i].lower().startswith("t") and "tulo" in primera.iloc[i].lower()), None)
@@ -625,7 +625,7 @@ def _leer_inpc(df: pd.DataFrame) -> dict | None:
         if coincidencia is None:
             continue
         mes_txt, anio_txt = coincidencia.groups()
-        mes = _MES_ABREV.get(mes_txt[:3])
+        mes = MES_ABREV.get(mes_txt[:3])
         if mes is None:
             continue
         anio = int(anio_txt)
@@ -686,20 +686,6 @@ def _leer_tabla_fecha_valor(df: pd.DataFrame) -> dict | None:
     return None
 
 
-@st.cache_data(show_spinner="Leyendo base...")
-def _procesar_archivo_economico(nombre: str, contenido: bytes, version: str) -> dict:
-    """Clasifica por contenido un archivo económico como ITAEE, INPP, INPC o TIIE.
-    Devuelve {'tipo': str | None, 'series': {nombre de la serie: {año: valor}}}."""
-    for df in _hojas_crudas(nombre, contenido):
-        for tipo, lector in (("itaee", _leer_itaee), ("inpp", _leer_inpp), ("inpc", _leer_inpc),
-                             ("tiie", _leer_tabla_fecha_valor)):
-            try:
-                series = lector(df)
-            except Exception:
-                series = None
-            if series:
-                return {"tipo": tipo, "series": series}
-    return {"tipo": None, "series": {}}
 
 
 def _cargar_bases_economicas(lado: str) -> dict:
@@ -748,6 +734,22 @@ def _cargar_bases_economicas(lado: str) -> dict:
 # ============================================
 # FUNCIONES CON @st.cache_data
 # ============================================
+
+@st.cache_data(show_spinner="Leyendo base...")
+def _procesar_archivo_economico(nombre: str, contenido: bytes, version: str) -> dict:
+    """Clasifica por contenido un archivo económico como ITAEE, INPP, INPC o TIIE.
+    Devuelve {'tipo': str | None, 'series': {nombre de la serie: {año: valor}}}."""
+    for df in _hojas_crudas(nombre, contenido):
+        for tipo, lector in (("itaee", _leer_itaee), ("inpp", _leer_inpp), ("inpc", _leer_inpc),
+                             ("tiie", _leer_tabla_fecha_valor)):
+            try:
+                series = lector(df)
+            except Exception:
+                series = None
+            if series:
+                return {"tipo": tipo, "series": series}
+    return {"tipo": None, "series": {}}
+
 @st.cache_data(show_spinner="Procesando facturas…", max_entries=2)
 def _facturas_cache_procesar(nombre: str, _contenido, version: str, huella_contenido: str):
     return leer_facturas(nombre, _contenido)
@@ -1011,7 +1013,7 @@ def _operaciones_divisas_cache(nombre: str, _contenido, version: str) -> pd.Data
     """Devuelve conceptos 841216 USD/EUR normalizados; marca duplicados solo con orden explícita y filas idénticas."""
     df = leer_archivo(nombre, _contenido)
     if isinstance(df, pd.DataFrame) and df.empty and not len(df.columns):
-        return pd.DataFrame(columns=_COLUMNAS_OPERACIONES_DIVISAS)
+        return pd.DataFrame(columns=COLUMNAS_OPERACIONES_DIVISAS)
 
     requeridas = {
         "Clave": [],
@@ -1033,7 +1035,7 @@ def _operaciones_divisas_cache(nombre: str, _contenido, version: str) -> pd.Data
     clave = df["Clave"].fillna("").astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
     df = df.loc[clave.str.startswith(PREFIJO_DIVISAS, na=False)].copy()
     if df.empty:
-        return pd.DataFrame(columns=_COLUMNAS_OPERACIONES_DIVISAS)
+        return pd.DataFrame(columns=COLUMNAS_OPERACIONES_DIVISAS)
 
     descripcion = df["Descripcion"].fillna("").astype(str)
     texto_divisa = descripcion.copy()
@@ -1317,7 +1319,6 @@ def emitidos_productos_sat(df: pd.DataFrame) -> pd.DataFrame:
     d["Monto"], regla = monto_con_iva_partida(d)
     d.attrs["descartadas"], d.attrs["regla_iva"] = int(ilegible.sum()), regla
     return d.reset_index(drop=True)
-
 
 
 @st.cache_data(show_spinner="Leyendo los productos emitidos…")

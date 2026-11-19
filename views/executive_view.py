@@ -19,8 +19,7 @@ from core.loader import (_datos_archivo_cache, anios_5_archivos, _anual_ppd_cach
 from views.financial_ratios_view import _seccion_razones
 
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
-                    METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES,
-                    PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
+                    METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
                     MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,
                     PALETA_AZULES_BIA,TOP_FILAS_CLASE_SAT,NOTA_METODOLOGICA_CLASE_SAT)
 

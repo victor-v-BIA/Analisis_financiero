@@ -8,8 +8,28 @@ import re
 import pandas as pd
 
 # ================================================
+#  VARIABLES GLOBALES
+# ================================================
+
+# Vistas, gráficas y lógica financiera
+MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+# st.cache_data no detecta cambios dentro de leer_*; la huella del código evita resultados viejos tras editar app.py.
+CODIGO_VERSION = hashlib.md5(Path(__file__).read_bytes()).hexdigest()
+
+# Comprobantes, complementos y el loader
+NOMBRE_FECHA = "Fecha de Pago"
+
+# ================================================
 # VARIABLES PARA LOADER.PY
 # ================================================
+
+# ARCHIVOS DEFAULT PARA EVITAR QUE USUARIO CARGUE LOS ARCHIVOS DE VISTA ECONOMICA
+
+RUTA_ITAEE_DEFAULT = "data/itaee_20.xlsx"
+RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
+RUTA_INPC_DEFAULT = "data/INPC_base.csv"
+
 
 COLS_FACTURAS = {
     "UUID": [],
@@ -36,7 +56,7 @@ COLS_COMPLEMENTOS_OPCIONALES = {"RFC Emisor": [], "Estatus": [], "UUID DR": ["Do
 # Horizonte temporal ESTÁNDAR: toda base cargada es un bloque de 5 años consecutivos (hoy 2021–2025
 ANIOS_VENTANA = 5
 
-_MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
+MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
 
 # ============================================
 # VARIABLES PARA EXPENSE_VIEW.PY
@@ -59,17 +79,13 @@ AYUDA_TOTAL = ("Estos montos consideran el Total de la factura (incluyendo IVA e
                "no los subtotales.")
 
 
-NOMBRE_FECHA = "Fecha de Pago"
-
 # ============================================
 # VARIABLES PARA EXECUTIVE_VIEW.PY
 # ============================================
 
-MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
 # ***** COLORES PARA GRAFICOS -  DASHBOARD Ciclos y Estacionalidad Operativa*****
-# st.cache_data no detecta cambios dentro de leer_*; la huella del código evita resultados viejos tras editar app.py.
-CODIGO_VERSION = hashlib.md5(Path(__file__).read_bytes()).hexdigest()
+
 COLOR = {"PUE": "#2E86AB",
          "PPD": "#F18F01",
          "Facturado": "#6C757D",
@@ -165,7 +181,7 @@ CSS_KPI_DIVISAS = """
 </style>
 """
 
-_COLUMNAS_OPERACIONES_DIVISAS = [
+COLUMNAS_OPERACIONES_DIVISAS = [
     "Clave", "Descripcion", "Divisa", "Fecha_Operacion", "Fecha_CFDI", "Cantidad",
     "Monto_Divisa", "TC_Facturado", "Importe_MXN", "RFC_Emisor", "Institucion",
     "Num_Orden", "Orden_Duplicada", "Desfase_Alerta",
@@ -194,14 +210,13 @@ COLS_EMITIDOS_PRODUCTOS_OPC = {"Descripcion": [], "Razon Social Receptor": [], "
 # VARIABLES PARA FINANCE_LOGIC.PY
 # ============================================
 
-_MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
                 "octubre", "noviembre", "diciembre"]
 
-_RFC_GENERICOS = {"XAXX010101000", "XEXX010101000"}  # público en general nacional / extranjero genérico
+RFC_GENERICOS = {"XAXX010101000", "XEXX010101000"}  # público en general nacional / extranjero genérico
 
 TASA_REFERENCIA_ANUAL = 16.0   # tasa fija del dictamen: TIIE + margen comercial estimado (% anual); no es un input del usuario
 MARGEN_SEGURIDAD_PCT = 30.0    # % del Flujo Neto MÍNIMO del periodo que se destina a la mensualidad (margen conservador)
-PLAZO_DEFECTO_MESES = 36
 PERIODOS_EVALUACION = {"Últimos 12 meses": 12,
                        "Últimos 24 meses": 24,
                        "Historial completo": None}
@@ -377,14 +392,4 @@ _GRUPO_FINANCIERO_FINAL = re.compile(r"\bGRUPO\s+FINANCIERO\s+\S+\s*$", re.IGNOR
 _PARENTESIS = re.compile(r"\([^)]*\)")
 
 
-# ARCHIVOS DEFAULT PARA EVITAR QUE USUARIO CARGUE LOS ARCHIVOS DE VISTA ECONOMICA
-
-RUTA_ITAEE_DEFAULT = "data/itaee_20.xlsx"
-RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
-RUTA_INPC_DEFAULT = "data/INPC_base.csv"
-
-# ==================================================
-# VARIABLES PARA FINANCE_LOGIC.PY
-# ==================================================
-PCT_CAPACIDAD = 0.30
 

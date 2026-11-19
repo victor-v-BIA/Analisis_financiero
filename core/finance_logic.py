@@ -5,13 +5,13 @@ matrices anuales, cruces PPD, plazos y cálculos de dictamen.'''
 
 import pandas as pd
 import numpy as np
-from config import (_RFC_GENERICOS )
+from config import (RFC_GENERICOS )
 from config import (CODIGO_VERSION, DIAS_GRACIA_PPD, MESES_ES, COLUMNAS_DETALLE_ANUAL
                     ,PERIODOS_EVALUACION,MARGEN_SEGURIDAD_PCT,TASA_REFERENCIA_ANUAL
                     ,BANDAS_DICTAMEN,PESOS_INDICE,REGLAS_INDICE,MIN_MESES_MARGEN,
                     VENTANA_MARGEN_MESES, MIN_ANIOS_ESTABILIDAD,
                     SIN_DICTAMEN, PCT_CAPACIDAD, PROPORCION_MINIMA,
-                    VENTANA_DICTAMEN_MESES,CREDITO_MINIMO,BENCHMARK_MERCADO)
+                    VENTANA_DICTAMEN_MESES,CREDITO_MINIMO,BENCHMARK_MERCADO,MESES_LARGO)
 
 from core.loader import (_facturas_cache,excluir_años_incompletos,
                          cargar_base,_complementos_cache, _facturas_egresos_cache,
@@ -731,11 +731,6 @@ def _balance_documental_mensual(df_fac_ing, df_pago_ing, df_fac_egr, df_pago_egr
            "fuentes_vacias": fuentes_vacias,
            "balance_total": float(mensual["Balance"].sum()), "n_excluidas_moneda": excl_ing + excl_egr}
 
-
-_MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
-                "octubre", "noviembre", "diciembre"]
-
-
 def _flujo_bruto_mensual(balance: dict) -> pd.DataFrame:
     """Ritmo operativo BRUTO por mes (Flujo de Efectivo), a partir del mismo `balance['mensual']` de la Sección 2: 'Cobros'
     (PUE + complementos de Ingresos) y 'Pagos' = Pagos Totales (proveedores PUE + complementos de Egresos + Nómina). Un
@@ -830,7 +825,7 @@ def _resumen_ciclos(prom: pd.DataFrame, ohlc_cobros: pd.DataFrame) -> dict:
     mes con la vela de cuerpo más grande de Cobros (solo si algún mes tiene cuerpo > 0, o sea al menos 2 años distintos).
     Cada clave es `None` cuando no hay datos para calcularla."""
     dif = (prom["Cobros_Promedio"] - prom["Pagos_Promedio"]).dropna()
-    nombre = lambda num: _MESES_LARGO[int(num) - 1].capitalize()
+    nombre = lambda num: MESES_LARGO[int(num) - 1].capitalize()
     holgura = riesgo = volatil = None
     if not dif.empty:
         mh, mr = dif.idxmax(), dif.idxmin()
@@ -872,8 +867,8 @@ def _comentarios_cobros_pagos(mensual: pd.DataFrame, anios_ok: list[int], anio_s
         candidatos = sorted(((m, n) for m, n in conteo.items() if n * 3 >= 2 * total_anios),
                             key=lambda mn: (-mn[1], mn[0]))
         if candidatos:
-            frases = [f"{_MESES_LARGO[m - 1].capitalize()} ({n} de {total_anios})" if len(candidatos) > 1
-                      else f"{_MESES_LARGO[m - 1].capitalize()}" for m, n in candidatos]
+            frases = [f"{MESES_LARGO[m - 1].capitalize()} ({n} de {total_anios})" if len(candidatos) > 1
+                      else f"{MESES_LARGO[m - 1].capitalize()}" for m, n in candidatos]
             if len(candidatos) == 1:
                 out["recurrencia"] = (f"{frases[0]} estuvo entre los tres meses con menor diferencia entre cobros "
                                       f"y pagos en {candidatos[0][1]} de {total_anios} años comparables ({lista_anios}). Es un "
@@ -887,7 +882,7 @@ def _comentarios_cobros_pagos(mensual: pd.DataFrame, anios_ok: list[int], anio_s
     if anio_sel not in anios_ok:
         return out
     datos = mensual[mensual.index.year == anio_sel]
-    mes_txt = lambda p: _MESES_LARGO[p.month - 1].capitalize()
+    mes_txt = lambda p: MESES_LARGO[p.month - 1].capitalize()
 
     # --- 2. Dependencia de meses puntuales ---
     positivas = datos["Balance"][datos["Balance"] > 0]
@@ -997,7 +992,7 @@ def _clientes_sin_facturacion(base: pd.DataFrame, anio_sel: int) -> dict:
         return {"disponible": False, "motivo": f"la base no tiene facturas emitidas en {anio_sel}."}
     rfc = base["RFC_Receptor"].fillna("").astype(str).str.strip().str.upper()
     rfc = rfc.where(rfc != "NAN", "")
-    identificable = (rfc != "") & ~rfc.isin(_RFC_GENERICOS)
+    identificable = (rfc != "") & ~rfc.isin(RFC_GENERICOS)
     en_prev, en_sel = anios == anio_prev, anios == anio_sel
     total_prev = float(base.loc[en_prev, "Total"].sum())
     prev_ident = base[en_prev & identificable].assign(RFC=rfc[en_prev & identificable])
