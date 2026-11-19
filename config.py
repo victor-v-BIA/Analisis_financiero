@@ -179,10 +179,11 @@ _MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul":
 PALETA_AZULES_BIA = [
     "#0F2E85",  # Azul marino muy oscuro
     "#4160B4",  # Azul marino muy oscuro
-    "#1D4ED8",  # Azul rey profundo
+    "#8FA5E0",  # Azul rey profundo
     "#2563EB",  # Azul vivo principal
     "#3B82F6",  # Azul claro brillante pero sólido
-    "#60A5FA"   # Azul cielo
+    "#60A5FA" ,  # Azul cielo
+    "#5D92CE"
 ]
 
 # PALETA DE COLORES PARA GRAFICAS DE TOP 10

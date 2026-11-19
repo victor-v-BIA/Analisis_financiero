@@ -800,6 +800,7 @@ def fig_tc_fix_vs_facturado(d: pd.DataFrame, serie_fix: pd.Series | None, moneda
     return fig
 
 
+
 def _html_tabla_intermediarios(t: pd.DataFrame, moneda: str) -> str:
     """A) Intermediarios actuales de la empresa (mismo estilo que la tabla de la sección 6): una fila por RFC Emisor / Razon Social Emisor con sus operaciones, volumen,
     concentración, TC facturado, TC de referencia, spread cobrado y costo cambiario sobre la referencia. En una sola línea de HTML; el '$' va como entidad."""
@@ -837,6 +838,7 @@ def _html_tabla_benchmark(b: pd.DataFrame) -> str:
             f"<tbody>{''.join(filas)}</tbody></table></div>")
 
 
+
 def _html_kpis_divisas(tarjetas: list) -> str:
     """Fila de indicadores limpios (tarjetas claras que heredan el tema, sin cajas oscuras): lista de (título, valor, nota). En una sola línea de HTML."""
     esc = lambda s: html.escape(str(s), quote=True)
@@ -852,8 +854,10 @@ def _diseno_donut_sat(fig: go.Figure, titulo: str, margen_inferior: int = 100) -
 
 
 def fig_donut_declarado(actividades) -> go.Figure:
-    """Gráfica izquierda, «Distribución de Actividades Económicas Declaradas»: anillo (`hole=0.5`) con las actividades y porcentajes leídos de la Constancia (de mayor a menor). Solo el % sobre las rebanadas
-    (`textinfo='percent'`, a un decimal; las chicas, afuera); el nombre de cada actividad (hasta 70 caracteres, completo en el tooltip) vive en la leyenda inferior. Sin actividades
+    """Gráfica izquierda, «Distribución de Actividades Económicas Declaradas»:
+    anillo(`hole=0.5`) con las actividades y porcentajes leídos de la Constancia (de mayor a menor).
+    Cada rebanada muestra el porcentaje declarado original, sin normalizarlo al subtotal visible;
+    la leyenda inferior muestra el nombre completo y su porcentaje. Sin actividades
     declaradas, el anillo se sustituye por el aviso «Sin actividades declaradas»."""
     titulo = "Distribución de Actividades Económicas Declaradas"
     acts = actividades_declaradas_csf(actividades)
@@ -863,17 +867,22 @@ def fig_donut_declarado(actividades) -> go.Figure:
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
         return _diseno_donut_sat(fig, titulo).update_layout(showlegend=False)
-    fig.add_trace(go.Pie(labels=[n if len(n) <= 70 else n[:69] + "…" for n, _ in acts], values=[p for _, p in acts], hole=0.5, sort=False, direction="clockwise",
-                         marker=dict(colors=[COLORES_DECLARADO_CSF[i % len(COLORES_DECLARADO_CSF)] for i in range(len(acts))], line=dict(color="white", width=1.5)), textinfo="percent",
-                         texttemplate="%{percent:.1%}", textposition="auto", insidetextorientation="horizontal", textfont=dict(size=13), name="Distribución declarada",
-                         customdata=[f"{n}: {p:g}% declarado" for n, p in acts], hovertemplate="%{customdata}<extra></extra>"))
+    fig.add_trace(go.Pie(labels=[f"{n} ({p:g}%)" for n, p in acts], values=[p for _, p in acts],
+                         hole=0.5, sort=False, direction="clockwise",
+                         marker=dict(colors=[PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(len(acts))],
+                                     line=dict(color="white", width=1.5)),text=[f"{p:g}%" for _, p in acts],
+                                     textinfo="text", texttemplate="%{text}", textposition="auto",
+                                     insidetextorientation="horizontal", textfont=dict(size=12,color="white"), name="Distribución declarada",
+                                     customdata=[f"{n}: {p:g}% declarado" for n, p in acts], hovertemplate="%{customdata}<extra></extra>"))
     return _diseno_donut_sat(fig, titulo)
+
 
 def _rotulo_clase_donut(clase: str, descripciones: dict, largo: int = 38) -> str:
     if clase == CLASE_GENERICA_SAT:
         return f"{clase} · {ETIQUETA_DONA_CLAVE_GENERICA}"
     desc = descripciones.get(clase, "Sin catálogo")
     return f"{clase} · {desc if len(desc) <= largo else desc[:largo].rstrip() + '…'}"
+
 
 def fig_donut_facturado(d: pd.DataFrame, descripciones: dict | None = None) -> go.Figure:
     """Gráfica derecha: anillo (`hole=0.5`) con las Top 5 Clases SAT de 6 dígitos por monto con IVA de las partidas de `d` (el periodo ya filtrado) y el
@@ -893,7 +902,7 @@ def fig_donut_facturado(d: pd.DataFrame, descripciones: dict | None = None) -> g
         colores.append(COLOR_OTRAS_CLASES if c == "otras" else COLOR_SIN_CLASIFICAR if c == CLASE_GENERICA_SAT else next(azul))
     fig = go.Figure(go.Pie(labels=[f"{r[1]} ({p:.1f}%)" for r, p in zip(rebanadas, pcts)], values=[v for _, _, _, v in rebanadas], hole=0.5, sort=False, direction="clockwise",
                            marker=dict(colors=colores, line=dict(color="white", width=1.5)), text=[f"{p:.1f}%" if p >= 4 else "" for p in pcts], textinfo="text", textposition="inside",
-                           insidetextorientation="horizontal", textfont=dict(size=13, color="white"), name="Facturación con IVA",
+                           insidetextorientation="horizontal", textfont=dict(size=12, color="white"), name="Facturación con IVA",
                            customdata=[f"{r[2]}: {p:.2f}% · ${r[3]:,.0f} MXN" for r, p in zip(rebanadas, pcts)], hovertemplate="%{customdata}<extra></extra>"))
     return _diseno_donut_sat(fig, "Distribución Real Facturada (CFDIs)", margen_inferior=150)
 

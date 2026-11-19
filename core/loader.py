@@ -1193,17 +1193,38 @@ def parsear_actividades_csf(texto: str) -> list[dict]:
     cuerpo = texto[m.end():]
     fin = re.search(r"\n\s*(?:Reg[ií]menes|Obligaciones)\s*:?", cuerpo, flags=re.I)
     cuerpo = cuerpo[:fin.start()] if fin else cuerpo
-    filas, buf = [], ""
-    for linea in cuerpo.splitlines():
-        t = linea.strip()
-        if not t or re.match(r"P[aá]gina\s*\[?\d+\]?\s*de\s*\[?\d+\]?", t, flags=re.I) or re.match(r"Orden\s+Actividad", t, flags=re.I):
-            continue
-        buf = t if re.match(r"^\d{1,2}\s+\S", t) else (f"{buf} {t}" if buf else "")
-        r = re.match(r"^\d{1,2}\s+(.+?)\s+(\d{1,3}(?:[.,]\d+)?)\s+(\d{2}/\d{2}/\d{4})(?:\s+\d{2}/\d{2}/\d{4})?$", buf)
-        if r:
-            filas.append({"Actividad Económica": r.group(1).strip(), "Porcentaje (%)": float(r.group(2).replace(",", ".")), "Fecha de inicio": r.group(3)})
-            buf = ""
+    lineas = [
+        t for linea in cuerpo.splitlines()
+        if (t := linea.strip())
+        and not re.match(r"P[aá]gina\s*\[?\d+\]?\s*de\s*\[?\d+\]?", t, flags=re.I)
+        and not re.match(r"Orden\s+Actividad", t, flags=re.I)
+    ]
+    inicios = [i for i, t in enumerate(lineas) if re.match(r"^\d{1,2}\s+[^\d\s]", t)]
+    filas = []
+    for j, inicio in enumerate(inicios):
+        fin_fila = inicios[j + 1] if j + 1 < len(inicios) else len(lineas)
+        bloque = " ".join(lineas[inicio:fin_fila])
+        contenido = re.sub(r"^\d{1,2}\s+", "", bloque, count=1)
+        fecha = re.search(r"\d{2}/\d{2}/\d{4}", contenido)
+        contenido_actividad = contenido[:fecha.start()] if fecha else ""
+        porcentajes = list(re.finditer(r"(?<!\S)(\d{1,3}(?:[.,]\d+)?)\s*%?(?!\S)", contenido_actividad))
+        if fecha and porcentajes:
+            porcentaje = porcentajes[-1]
+            nombre = re.sub(
+                r"\s+",
+                " ",
+                contenido_actividad[:porcentaje.start()] + contenido_actividad[porcentaje.end():],
+            ).strip()
+            filas.append({
+                "Actividad Económica": nombre,
+                "Porcentaje (%)": float(porcentaje.group(1).replace(",", ".")),
+                "Fecha de inicio": fecha.group(0),
+            })
     return filas
+
+
+VERSION_PARSEADOR_ACTIVIDADES_CSF = "2"
+
 
 @st.cache_data(show_spinner="Leyendo la Constancia de Situación Fiscal…")
 def _constancia_cache(contenido: bytes, version: str) -> list[dict]:
@@ -1242,7 +1263,7 @@ def _bloque_constancia_sat() -> pd.DataFrame:
     filas = []
     if pdf is not None:
         try:
-            filas = _constancia_cache(pdf.getvalue(), CODIGO_VERSION)
+            filas = _constancia_cache(pdf.getvalue(), f"{CODIGO_VERSION}:{VERSION_PARSEADOR_ACTIVIDADES_CSF}")
         except ImportError:
             st.warning("Falta la biblioteca `pypdf` para leer el PDF (pip install pypdf).")
         except Exception as e:                                       # PDF dañado, cifrado o escaneado

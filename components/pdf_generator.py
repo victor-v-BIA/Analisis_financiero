@@ -154,7 +154,8 @@ def create_callout_box(text, styles):
 def plotly_fig_to_reportlab_image(fig, width_pt=500, height_pt=None, preserve_textfont_size=False):
     if preserve_textfont_size:
         fig = deepcopy(fig)
-        font_scale = 0.75 * 1000 / width_pt
+
+        font_scale = 0.55 * 1000 / width_pt
         for trace in fig.data:
             if trace.type == "pie" and isinstance(trace.textfont.size, (int, float)):
                 trace.textfont.size *= font_scale

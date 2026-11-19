@@ -1218,13 +1218,15 @@ def tabla_clase_sat(d: pd.DataFrame, descripciones: dict | None = None, top: int
 def _filtrar_actividades_csf_por_anio(
     actividades: pd.DataFrame, anios_seleccionados: list[int], anios_disponibles: list[int]
 ) -> pd.DataFrame:
-    """Filtra por año de inicio en selecciones parciales; con todos los años, conserva todas las actividades."""
+    """Conserva el histórico anterior al primer año seleccionado y las actividades de los años elegidos."""
     if set(anios_seleccionados) == set(anios_disponibles):
         return actividades
     anios_inicio = pd.to_datetime(
         actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce"
     ).dt.year
-    return actividades.loc[anios_inicio.isin(anios_seleccionados)].copy()
+    historicas = anios_inicio < min(anios_seleccionados)
+    seleccionadas = anios_inicio.isin(anios_seleccionados)
+    return actividades.loc[historicas | seleccionadas].copy()
 
 
 def _sufijo_periodo_clase_sat(
@@ -1238,14 +1240,14 @@ def _sufijo_periodo_clase_sat(
 def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
     """Sección «10. Perfil Fiscal Declarado y Estructura de Ingresos Facturados» del Dashboard Ejecutivo, a todo el ancho y con datos 100% objetivos (sin clasificar ni juzgar). En este orden:
     los cargadores de la base de conceptos emitidos y el PDF de la Constancia de Situación Fiscal (sin tabla visible), el filtro de años (`st.pills`, varios a la vez), 2 anillos (`st.columns(2)`: «Distribución de Actividades Económicas Declaradas» y «Distribución Real Facturada (CFDIs)») y la matriz de 4 columnas por
-    Clase SAT. El anillo declarado filtra por año de inicio en selecciones parciales y muestra todas las actividades cuando se seleccionan todos los años. El filtro recalcula el anillo facturado y la tabla;
+    Clase SAT. El anillo declarado conserva todas las actividades anteriores al primer año seleccionado, además de las actividades de los años elegidos; al seleccionar todos los años muestra todas las actividades. El filtro recalcula el anillo facturado y la tabla;
     el anillo facturado sale siempre que haya CFDI, aunque no haya Constancia (en ese caso, o si aún no se sube el PDF, el anillo izquierdo solo trae «Sin actividades declaradas»). Se usan todos los años válidos del archivo cargado.
     Los títulos de las gráficas indican los años seleccionados o «- acumulado»; con `pdf_elements`, se anexan al PDF ambas gráficas, la tabla, su nota metodológica y el insight."""
     titulo_seccion = "10. Perfil Fiscal Declarado y Estructura de Ingresos Facturados"
     st.header(titulo_seccion,
               help=("Pone lo declarado en la Constancia de Situación Fiscal (CSF) frente a lo facturado, agrupado por Clase SAT (los 6 primeros dígitos de la clave de producto o servicio, según el "
-                    "catálogo oficial del SAT). La clave genérica 010101 («No existe en el catálogo») no identifica qué se vendió. El filtro de años aplica a actividades CSF por año de inicio cuando la selección es parcial; "
-                    "al seleccionar todos los años, muestra todas las actividades. También recalcula el anillo facturado y la tabla. Solo partidas "
+                    "catálogo oficial del SAT). La clave genérica 010101 («No existe en el catálogo») no identifica qué se vendió. El anillo de actividades conserva el histórico anterior al primer año seleccionado y las actividades de los años elegidos; "
+                    "al seleccionar todos los años, muestra todas las actividades. El filtro también recalcula el anillo facturado y la tabla. Solo partidas "
                     "Activas de tipo Factura. El monto por partida incluye el IVA trasladado según Importe, Importe Base y Tasa Impuestos Trasladados; no usa el Total repetido por renglón."))
     if pdf_elements is not None:
         pdf_elements.append({"type": "heading", "text": titulo_seccion})
