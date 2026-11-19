@@ -116,7 +116,8 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         freq="M",
     )
 
-    def sumar_por_mes(df: pd.DataFrame, fecha: str, monto: str) -> pd.Series:
+    def sumar_por_mes(df: pd.DataFrame, fecha: str,
+                      monto: str) -> pd.Series:
         fechas = df[fecha]
         periodos_df = fechas if isinstance(fechas.dtype, pd.PeriodDtype) else fechas.dt.to_period("M")
         serie = df.assign(_Periodo=periodos_df).groupby("_Periodo")[monto].sum()
@@ -132,6 +133,7 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         periodos, ingresos_devengados, egresos_devengados, forzar_egresos_negativos=True)
     st.markdown("**Facturación Neta Mensual**")
     render_grafica(fig_neta, key="ing_fig_neta",  width="stretch")
+
     pdf_elements.append({
         "type": "image",
         "section_title": "5. Facturación Neta y Flujo Fiscal",
@@ -269,8 +271,7 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         st.warning(
             "Análisis parcial: falta la base de Complementos de Clientes (PAGO - Flujo Efectivo). "
             "La facturación se mostrará, pero no se pueden determinar los cobros PPD, el saldo por cobrar "
-            "ni el flujo de efectivo."
-        )
+            "ni el flujo de efectivo.")
 
     fac = facturas[facturas["Fecha"].dt.year.isin(ejercicios)]
     rep = rep_total[rep_total["Fecha_Cobro"].dt.year.isin(ejercicios)]
@@ -430,8 +431,12 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
     st.divider()
     if econ:
         _mostrar_desglose()
-        pdf_elements.append({"type": "heading", "text": "1. Evolución de Ingresos y Egresos"})
-        pdf_elements.append({"type": "table", "title": "Desglose Año con Año Ingresos", "df": tabla_pdf})
+        pdf_elements.append({"type": "heading",
+                             "text": "1. Evolución de Ingresos y Egresos"})
+        
+        pdf_elements.append({"type": "table",
+                             "title": "Desglose Año con Año Ingresos",
+                             "df": tabla_pdf})
         st.divider()
         _vista_economica("ingresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5, pdf_elements)
         return
@@ -469,23 +474,22 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
         if st.button("Generar PDF Vista Financiera", key="btn_generar_pdf_fin", type="primary"):
             with st.spinner("Generando reporte financiero en PDF..."):
                 final_elements = [
-                    {"type": "heading", "text": "Detalle del reporte"},
+                    {"type": "heading",
+                     "text": "Detalle del reporte"},
                     {"type": "callout"},
                     *pdf_elements,
                 ]
                 pdf_bytes = generate_modular_pdf(
                     title="Reporte de Auditoría de Ingresos — Vista Financiera",
                     subtitle="Análisis extraido del modulo de ingresos",
-                    elements=final_elements
-                )
+                    elements=final_elements)
+                
                 st.download_button(
                     label="Descargar PDF Financiero",
                     data=pdf_bytes,
                     file_name="Reporte_Ingresos_Vista_Financiera.pdf",
                     mime="application/pdf",
-                    key="btn_download_pdf_fin",
-                  
-                )
+                    key="btn_download_pdf_fin",)
 
 
 def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios_5, pdf_elements: list,
@@ -656,7 +660,9 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                                 "note": nota_base100})
                 
             else:
-                nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}", max_chars=600, key="note_eco_base100")
+                nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}",
+                                            max_chars=600,
+                                            key="note_eco_base100")
 
                 pdf_elements.append({
                     "type": "image",
@@ -683,7 +689,9 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             )
             render_grafica(fig_ing, key="exec_poder_adquisitivo")
 
-            nota_poder_adq = st.text_area("Insight - Poder Adquisitivo", max_chars=600, key="note_poder_adq")
+            nota_poder_adq = st.text_area("Insight - Poder Adquisitivo",
+                                          max_chars=600,
+                                          key="note_poder_adq")
             pdf_elements.append({
                 "type": "image",
                 "section_title": "4. Comportamiento de Ingresos en el Entorno",
@@ -727,9 +735,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                     data=pdf_bytes,
                     file_name=nombre_archivo_pdf,
                     mime="application/pdf",
-                    key=f"btn_download_pdf_eco_{lado}",
-                    
-                )
+                    key=f"btn_download_pdf_eco_{lado}")
 
 
 def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_agrupados: pd.DataFrame | None = None,
@@ -761,7 +767,6 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         fig_tiempo = _fig_facturacion_tiempo(d, col_monto)
         render_grafica(fig_tiempo, key="ing_facturacion_tiempo")
         
-        
         if pdf_elements is not None:
             pdf_elements.append({
                 "type": "image",
@@ -773,7 +778,6 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         st.markdown("**Ingresos facturados**")
         fig_ing_fact = _fig_ingresos_facturados(d, col_monto, nomina_mensual=nomina_mensual)
         render_grafica(fig_ing_fact, key="ingresos_facturados")
-        
         
         if pdf_elements is not None:
             pdf_elements.append({
@@ -870,8 +874,7 @@ def _bloque_concentracion(df: pd.DataFrame, etiqueta: str = "Clientes", pagos_ag
         if complementos_periodo is None:
             st.info(
                 '''Sin la base PAGO solo se muestran importes facturados por método de pago.
-                No se determina cuánto PPD se cobró ni cuánto sigue pendiente.'''
-            )
+                No se determina cuánto PPD se cobró ni cuánto sigue pendiente.''')
         else:
             st.info(
                 '''La base PAGO no permite relacionar los complementos con cada factura. Se muestra la facturación

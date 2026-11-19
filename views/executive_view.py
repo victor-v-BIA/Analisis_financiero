@@ -21,7 +21,8 @@ from views.financial_ratios_view import _seccion_razones
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
                     METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES,
                     PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
-                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,PALETA_AZULES_BIA,TOP_FILAS_CLASE_SAT,NOTA_METODOLOGICA_CLASE_SAT)
+                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,
+                    PALETA_AZULES_BIA,TOP_FILAS_CLASE_SAT,NOTA_METODOLOGICA_CLASE_SAT)
 
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
@@ -247,15 +248,12 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             key="note_graf_flujo"
         )
 
-        pdf_elements.append({
-                            "type": "image", 
-                            "section_title": "2. Flujo Neto Fiscal",
-                            "title": f"{titulo_graf}", 
-                            "fig": fig_cp,
-                            "note": nota_flujo
-                        })
+        pdf_elements.append({"type": "image", 
+                             "section_title": "2. Flujo Neto Fiscal",
+                             "title": f"{titulo_graf}", 
+                             "fig": fig_cp,
+                             "note": nota_flujo})
         
-
     # ==========================================================
     # SECCIÓN 3: Ciclos y Estacionalidad Operativa
     # ==========================================================
@@ -356,8 +354,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     fig_tendencia = _grafica_ciclos_lineas(
                         series_pdf,
                         ejercicios_pdf,
-                        [metrica],
-                    )
+                        [metrica],)
                     elemento_tendencia = {
                         "type": "image",
                         "title": (
@@ -369,27 +366,22 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                     if i == len(METRICAS_VISUALIZAR) - 1:
                         elemento_tendencia["note"] = st.session_state.get(
                             "note_graf_ciclos_lineas_input",
-                            "",
-                        ).strip()
+                            "",).strip()
                     pdf_elements.append(elemento_tendencia)
 
             elemento_velas_c = {
                 "type": "image",
                 "title": "Cobros · Velas por Mes",
-                "fig": fig_velas_c,
-            }
+                "fig": fig_velas_c,}
+            
             if not ejercicios_pdf:
                 elemento_velas_c["section_title"] = "3. Ciclos y Estacionalidad Operativa"
             pdf_elements.extend([
                 elemento_velas_c,
-                {
-                    "type": "image",
-                    "title": "Pagos Totales · Velas por Mes",
-                    "fig": fig_velas_p,
-                    "note": st.session_state.get(
-                        "note_graf_ciclos_velas_input",
-                        "",
-                    ).strip(),
+                {"type": "image",
+                 "title": "Pagos Totales · Velas por Mes",
+                 "fig": fig_velas_p,
+                 "note": st.session_state.get("note_graf_ciclos_velas_input","",).strip(),
                 },
             ])
 
@@ -398,10 +390,10 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     # ========================================================
 
     st.divider()
-    st.subheader("4. Tiempos Documentados de Cobro y Pago", help=('''
-        Mide los días promedio fiscales transcurridos entre la emisión de las facturas diferidas (PPD) y sus complementos de pago
-        (REP) relacionados. Una brecha donde los días de pago (rojo) superan a los cobros (verde) indica que la empresa usa el dinero 
-        de sus proveedores para financiarse. Si ocurre lo contrario, la empresa asume el costo de financiar a sus clientes.'''))
+    st.subheader("4. Tiempos Documentados de Cobro y Pago", 
+                 help=(''' Mide los días promedio fiscales transcurridos entre la emisión de las facturas diferidas (PPD) y sus complementos de pago
+                 (REP) relacionados. Una brecha donde los días de pago (rojo) superan a los cobros (verde) indica que la empresa usa el dinero 
+                 de sus proveedores para financiarse. Si ocurre lo contrario, la empresa asume el costo de financiar a sus clientes.'''))
 
     # --- Vistas Histórico Anual (Y) y Detalle Mensual (M) ---
     faltantes_plazos = [
@@ -540,22 +532,19 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 hole=0.5, 
                 custom_data=[nombres_completos],
                 template="plotly_white",
-                color_discrete_sequence=colores_azules
-            )
+                color_discrete_sequence=colores_azules)
             
             # 2. Configuramos el textinfo, posición y el tamaño de fuente 
             fig_dona.update_traces(
                 textinfo="percent", 
                 textposition="inside", 
                 sort=False,
-                textfont=dict(size=15,color="white")  # <-- Tamaño de fuente configurado
-            )
+                textfont=dict(size=15,color="white") )
             
             fig_dona = _layout_plotly(fig_dona, altura=ALTURA_CONC)
             fig_dona.update_layout(
                 margin=dict(l=20, r=20, t=30, b=80),
-                legend=dict(font=dict(textcase="upper"))
-            )
+                legend=dict(font=dict(textcase="upper")))
             
             with col_dona:
                 render_grafica(fig_dona, key="exec_concentracion_clientes")
@@ -619,17 +608,17 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 "fig": fig_dona,
                 "preserve_textfont_size": True
             })
-            pdf_elements.append({"type": "table", "title": "Detalle de Concentración por Cliente", "df": tabla_conc_pdf, 
-                "note": nota_conc})
+            pdf_elements.append({"type": "table",
+                                 "title": "Detalle de Concentración por Cliente",
+                                 "df": tabla_conc_pdf, 
+                                 "note": nota_conc})
+            
             col_tabla.dataframe(
                 tabla_conc_app.style.format({
                     "Facturación Total": lambda val: _formatear_mxn(val) if pd.notnull(val) else val,
                     "%": lambda val: f"{val:,.2f}%" if pd.notnull(val) else val,
                 }),
-                hide_index=True,
-                width='stretch',
-                height=ALTURA_CONC,
-            )
+                hide_index=True,width='stretch',height=ALTURA_CONC,)
     elif conc["motivo"] is not None:
         st.info(f"No se muestra esta sección: {conc['motivo']}.")
 
@@ -642,7 +631,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
                 "ingresos para la empresa durante el año inmediato anterior, pero que dejaron de facturar por completo en el año analizado.")
 
     st.subheader("6. Clientes sin facturación en el periodo", help=ayuda_sf)
-
 
     if a_fac_ing is None:
         resumen_sf = {
@@ -725,7 +713,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         margen_val = st.session_state.get("sim_margen", 0.0)
         tasa_total = dictamen_res["tasa"]
 
-       
 
         # Funciones auxiliares seguras para extraer valores y viabilidad
         def _get_val_esc(e, tipo):
@@ -788,7 +775,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             }
         ])
 
-# 1. El título se agrega como elemento independiente porque los callouts no renderizan section_title
+        # El título se agrega como elemento independiente porque los callouts no renderizan section_title
         pdf_elements.append({
             "type": "heading",
             "text": "7. Estimación de Capacidad de Pago"
@@ -809,7 +796,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             "cell_scale": 1.15
         })
         pdf_elements.append({
-            "type": "callout", # O "paragraph" según lo que soporte tu generador
+            "type": "callout", 
             "text": """<b>Nota:</b> La capacidad de pago mostrada es una estimación basada en la información fiscal histórica de la empresa y 
                       no equivale al monto que un banco podría otorgarle, ya que cada institución aplica sus propias métricas y 
                       criterios de evaluación. Si desea obtener un financiamiento, podemos asesorarle para que pueda acceder 
@@ -874,15 +861,21 @@ def _simulador_financiamiento(balance: dict):
         
     c1, c2, c3 = st.columns(3)
     with c1:
-        plazo = int(st.number_input("Plazo del financiamiento (meses)", min_value=PLAZO_MIN_MESES, max_value=PLAZO_MAX_MESES, value=PLAZO_DEFECTO_MESES, step=1, key="sim_plazo",
-                                     help="Supuesto editable de simulación (no es un dato bancario ni sale del Excel): meses en que se pagaría el crédito."))
+        plazo = int(st.number_input("Plazo del financiamiento (meses)", min_value=PLAZO_MIN_MESES, max_value=PLAZO_MAX_MESES,
+                                    value=PLAZO_DEFECTO_MESES, step=1,
+                                    key="sim_plazo",
+                                    help="Supuesto editable de simulación (no es un dato bancario ni sale del Excel): meses en que se pagaría el crédito."))
+
     with c2:
-        tiie_actual = float(st.number_input("TIIE Actual / Base (%)", min_value=0.0, max_value=100.0, value=TIIE_DEFECTO, step=0.05, format="%.2f", key="sim_tiie",
-                                            help=f"TIIE a 28 días de Banxico. Se precarga con el último dato conocido ({TIIE_DEFECTO:.2f}%, corte al 25/09/2026); tú eres responsable de "
+        tiie_actual = float(st.number_input("TIIE Actual / Base (%)", min_value=0.0, max_value=100.0,
+                                            value=TIIE_DEFECTO, step=0.05, format="%.2f", key="sim_tiie",
+                                            help=f"TIIE a 28 días de Banxico. Se precarga con el último dato conocido ({TIIE_DEFECTO:.2f}%,corte al 25/09/2026); tú eres responsable de "
                                                                                              "actualizarla según las condiciones del mercado al momento del análisis (también sirve para simular una TIIE futura)."))
     with c3:
-        margen_comercial = float(st.number_input("Puntos adicionales sobre TIIE (%)", min_value=0.0, value=MARGEN_COMERCIAL_DEFECTO, step=0.5, format="%.2f", key="sim_margen",
-                                               help="Puntos porcentuales adicionales que cobra el banco sobre la TIIE (por ejemplo 5.0 o 10.0). Supuesto editable de simulación."))
+        margen_comercial = float(st.number_input("Puntos adicionales sobre TIIE (%)", min_value=0.0, value=MARGEN_COMERCIAL_DEFECTO,
+                                                 step=0.5, format="%.2f", key="sim_margen",
+                                               help='''Puntos porcentuales adicionales que cobra el banco sobre la TIIE (por ejemplo 5.0 o 10.0).
+                                               Supuesto editable de simulación.'''))
     
     tasa_anual = tiie_actual + margen_comercial
     esc = _escenarios_credito(_excedente_homologado(balance)["Excedente_Mensual_Homologado"], plazo, tasa_anual)
@@ -952,7 +945,7 @@ def _simulador_financiamiento(balance: dict):
                           help=f"{e['estatus_texto']}: el flujo del mes es negativo, menor al 5% del mejor mes o no respalda una línea comercial mínima.")
                 st.metric(linea_lbl, "No viable", "No se recomienda endeudamiento en este nivel de flujo", delta_color="off", delta_arrow="off", help=linea_help)
 
-    # Explicaciones metodológicas en la interfaz
+    # Explicaciones en la interfaz
     st.caption(
         '''
             ⚠️ **Nota:** La capacidad de pago mostrada es una **estimación** basada en la información fiscal histórica de la empresa y 
@@ -1051,8 +1044,6 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
     if anios:
         st.caption(f"Periodo analizado: {min(anios)}–{max(anios)} (ejercicios de los CFDI cargados)"
                    + (f"; {fuera_periodo} operaciones de divisas de otros años quedaron fuera." if fuera_periodo else "."))
-
-    
     if aviso:
         st.warning(f"Referencia de mercado incompleta: {aviso}.")
     if k["n_fix"] < k["n"]:
@@ -1169,7 +1160,6 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
                 ],
             ])
             
-            
             pdf_elements.append({
                 "type": "table",
                 "title": f"B) Comparación de mercados — {moneda}",
@@ -1177,20 +1167,16 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
                 "note":( nota_divisas if nota_divisas and nota_divisas.strip() else ""),
             })
 
-
             pdf_elements.append({
                             "type": "callout", 
                             "text": '''
                             <b>Nota:</b> Los spreads sobre el FIX (tipo de cambio de referencia)
                             de cada nivel son rangos estimados con base en las condiciones del mercado cambiario.
-                            '''
-                            })
+                            '''})
         else:
             pdf_elements.append({
                 "type": "callout",
-                "text": "El benchmark de mercado no está disponible porque no se obtuvo tipo de cambio de referencia.",
-            })
-
+                "text": "El benchmark de mercado no está disponible porque no se obtuvo tipo de cambio de referencia.",})
 
 # ==========================
 # SECCION 10
@@ -1216,8 +1202,7 @@ def tabla_clase_sat(d: pd.DataFrame, descripciones: dict | None = None, top: int
 
 
 def _filtrar_actividades_csf_por_anio(
-    actividades: pd.DataFrame, anios_seleccionados: list[int], anios_disponibles: list[int]
-) -> pd.DataFrame:
+    actividades: pd.DataFrame, anios_seleccionados: list[int], anios_disponibles: list[int]) -> pd.DataFrame:
     """Conserva el histórico anterior al primer año seleccionado y las actividades de los años elegidos."""
     if set(anios_seleccionados) == set(anios_disponibles):
         return actividades
@@ -1230,8 +1215,7 @@ def _filtrar_actividades_csf_por_anio(
 
 
 def _sufijo_periodo_clase_sat(
-    anios_seleccionados: list[int], anios_disponibles: list[int]
-) -> str:
+    anios_seleccionados: list[int], anios_disponibles: list[int]) -> str:
     if set(anios_seleccionados) == set(anios_disponibles):
         return " - Acumulado"
     return " - " + ", ".join(str(anio) for anio in sorted(anios_seleccionados))
@@ -1261,7 +1245,8 @@ def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
         mensaje = "Carga la base «CFDIs Emitidos Productos» para analizar la facturación por clave SAT."
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
     try:
         d = _emitidos_productos_cache(f_emitidos_productos.name, f_emitidos_productos.getvalue(), CODIGO_VERSION)
@@ -1269,25 +1254,28 @@ def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
         mensaje = f"Información insuficiente: «{f_emitidos_productos.name}» no trae las columnas esperadas de conceptos de CFDI emitidos. {e.args[0]}"
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
     if d.empty:
         mensaje = f"La base «{f_emitidos_productos.name}» no trae partidas Activas de tipo Factura."
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
     catalogo = cargar_catalogo_sat()
     if catalogo is None:
         st.warning("No se encontró el catálogo oficial del SAT (catCFDI_V_4_….xls, hoja c_ClaveProdServ) en la carpeta data/ del proyecto: las descripciones oficiales no están disponibles.")
-    descripciones = descripciones_clase_sat(d, catalogo)                        # con todos los años: la descripción de una clase no cambia con el filtro
+    descripciones = descripciones_clase_sat(d, catalogo)  # con todos los años: la descripción de una clase no cambia con el filtro
     disponibles = sorted(int(a) for a in d["Anio"].unique())
     elegidos = st.pills("Años", disponibles, selection_mode="multi", default=disponibles, key=f"clase_sat_anios_{'_'.join(map(str, disponibles))}")
     if not elegidos:
         mensaje = "Selecciona al menos un año para ver el resumen y la matriz."
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
     anios_seleccionados = [int(a) for a in elegidos]
     d_sel = d[d["Anio"].isin(anios_seleccionados)]

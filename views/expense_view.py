@@ -33,7 +33,6 @@ from components.charts import (_fig_egresos_tiempo,_fig_lineas_por_anio,_fig_pie
 def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_5=None,
                    file_ingresos_facturas=None, file_egresos_productos=None) -> None:
     """Módulo de Egresos: facturación recibida  + complementos pagados.
-
     Revelación progresiva: el hard stop de Facturación Recibida se evalúa ANTES de dibujar cualquier otro
     control, así que nada de este módulo aparece hasta que esa base exista. Los complementos de pago salen de la
     Base PAGO (Flujo de Efectivo) y se leen y limpian en línea (Monto MXN + su columna de fecha), independiente
@@ -49,12 +48,12 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         anios_5 = anios_5_archivos(None, file_egresos_facturas)
 
     # -- Facturas Recibidas: regla de oro, sin alterar (Estatus Vigente/Activo, Tipo Factura, sin NCR) --
-    columnas_facturas = _columnas_archivo(file_egresos_facturas.name, file_egresos_facturas.getvalue(),
-                                          CODIGO_VERSION)
+    columnas_facturas = _columnas_archivo(file_egresos_facturas.name,
+                                          file_egresos_facturas.getvalue(),CODIGO_VERSION)
     validar_columnas(columnas_facturas, COLUMNAS_FACTURAS_EGR_REQUERIDAS, "Facturas Recibidas")
     try:
-        facturas, _ = _facturas_egresos_cache(file_egresos_facturas.name, file_egresos_facturas.getvalue(),
-                                              CODIGO_VERSION)
+        facturas, _ = _facturas_egresos_cache(file_egresos_facturas.name,
+                                              file_egresos_facturas.getvalue(),CODIGO_VERSION)
         facturas, _ = excluir_años_incompletos(facturas, "Fecha", "Facturación recibida", anios_5)
         facturas, n_sin_tc = facturas_a_mxn(facturas)       # importes en moneda extranjera -> MXN antes de agregarlos
     except KeyError as e:
@@ -155,8 +154,7 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         nomina_total = 0.0
         nomina_por_año = pd.Series(dtype=float)
         st.warning(
-            '''El archivo de nómina detectado contiene **Fecha de Certificación**,  se considera exclusivamente para Persona Física.'''
-        )
+            '''El archivo de nómina detectado contiene **Fecha de Certificación**,  se considera exclusivamente para Persona Física.''')
 
     # Facturación/Pagado se calculan SOLO con Factura -las NCR se excluyen aquí y se manejan aparte-.
     fac_factura = fac[~fac["Es_NCR"]]
@@ -168,7 +166,8 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
     pct_saldo_ppd = ((saldo_ppd / fact_ppd * 100) if fact_ppd else 0.0) if complementos_disponibles else None
 
     ncr_anual_egr = ncr_por_año_egresos(fac)
-    ncr_total = ncr_anual_egr["NCR_Total"].reindex(ejercicios, fill_value=0.0).sum()    # NCR vigentes: se presentan aparte, no se descuentan del Egreso Total
+    # NCR vigentes: se presentan aparte, no se descuentan del Egreso Total
+    ncr_total = ncr_anual_egr["NCR_Total"].reindex(ejercicios, fill_value=0.0).sum()    
 
     # Saldo global (ventana de 5 años, sin filtrar por Ejercicios fiscales): Facturación PPD vigente (Total en MXN) − Complementos vigentes, con la MISMA
     # fórmula `diferencia_ppd`; sin cruce por UUID.
@@ -310,7 +309,8 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
         })
         
         st.divider()
-        _vista_economica("egresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5,
+        _vista_economica("egresos", file_ingresos_facturas,
+                         file_egresos_facturas, ejercicios, anios_5,
                          pdf_elements=pdf_elements,
                          egresos_facturas=facturas if file_egresos_productos is not None else None)
         return
@@ -331,16 +331,14 @@ def modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, anios_
                 pdf_data = generate_modular_pdf(
                     title="Reporte de Auditoría Operativa de Egresos",
                     subtitle="Vista Financiera, Operación y Egresos",
-                    elements=pdf_elements
-                )
+                    elements=pdf_elements)
+
                 st.download_button(
                     label="Descargar Reporte PDF (Vista Financiera)",
                     data=pdf_data,
                     file_name="Reporte_Egresos_Vista_Financiera.pdf",
                     mime="application/pdf",
-                    key="btn_pdf_egresos_financiera",
-                    
-                )
+                    key="btn_pdf_egresos_financiera",)
 
 
 def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd.DataFrame | None, ejercicios, desglose=None, tabla_pdf=None, pdf_elements=None) -> None:
@@ -378,12 +376,10 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
         total_complementos = 0.0
         st.info(
             '''Los pagos PPD no están disponibles sin la base PAGO. La gráfica de egresos muestra los importes
-            PUE y, solo si hay nómina con Fecha Pago, esa nómina; no representa el egreso total.'''
-        )
+            PUE y, solo si hay nómina con Fecha Pago, esa nómina; no representa el egreso total.''')
     res = resumen_egresos(pue_t, ppd_t, total_complementos, float(nom["Monto"].sum()))
     series_mensuales = {
-        NOMBRE_EGR_PUE: df_prov[es_pue].groupby("Periodo")[col_monto].sum(),
-    }
+        NOMBRE_EGR_PUE: df_prov[es_pue].groupby("Periodo")[col_monto].sum(),}
     if nomina_disponible:
         series_mensuales[NOMBRE_NOMINA] = nom.groupby("Periodo")["Monto"].sum()
     if comp_df is not None:
@@ -428,19 +424,16 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             "title": ("Egresos Facturados" if comp_df is not None and nomina_disponible
                       else "Egresos en el Tiempo"),
             "fig": fig_tiempo,
-            "custom_height": 240
-        })
+            "custom_height": 240})
 
     st.divider()
     st.markdown("**Egresos facturados por año**" )
     fig_fact_mes = _fig_lineas_por_anio(
         tabla_mes,
         "Egreso total" if comp_df is not None and nomina_disponible else "Egreso identificado",
-        ocultar_ceros=True,
-    )
+        ocultar_ceros=True,)
     with st.container(key="egr_facturado_por_mes_pdf", width="stretch"):
         render_grafica(fig_fact_mes, key="egr_facturado_por_mes")
-
 
     if pdf_elements is not None:
         pdf_elements.append({
@@ -522,6 +515,7 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
             {"Concepto": f"<font color='#7dd3fc'>●</font> <b><font color='#1F2937'>{gastos_label if nomina_formato_ingresos or comp_df is not None else 'Gastos Operativos'}</font></b><br/><font color='#4B5563'>MXN {gastos_val:,.2f} · {pct_gastos:.1f}%</font>"},
             {"Concepto": f"<font color='{COLOR_NOMINA}'>●</font> <b><font color='#1F2937'>Nómina Total{' ' if not nomina_disponible else ''}</font></b><br/><font color='#4B5563'>MXN {nomina_val:,.2f} · {pct_nomina:.1f}%</font>"}
         ])[["Concepto"]]
+
         pdf_elements.append({
             "type": "table",
             "title": "Resumen — Nómina vs. Gastos",
@@ -535,8 +529,8 @@ def _bloque_egresos(df_prov: pd.DataFrame, nomina_raw: pd.DataFrame, comp_df: pd
                 "type": "image",
                 "title": "Facturación Recibida Por Método de Pago",
                 "fig": fig_metodo_pago,
-                "preserve_textfont_size": True,
-            })
+                "preserve_textfont_size": True,})
+            
             pdf_elements.append({
                 "type": "table",
                 "title": "Facturación por Método PUE/PPD (pagos PPD no disponibles)",
