@@ -812,7 +812,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     _seccion_razones(file_razones, pdf_elements=pdf_elements)
 
     st.divider()
-    _seccion_clave_sat(pdf_elements=pdf_elements)
+    _seccion_clave_sat(anios_5=anios_5, pdf_elements=pdf_elements)
 
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA DE REPORTES EN PDF
@@ -1220,7 +1220,19 @@ def _sufijo_periodo_clase_sat(
     return " - " + ", ".join(str(anio) for anio in sorted(anios_seleccionados))
 
 
-def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
+def _algun_anio_actividad_en_periodo(
+    actividades: pd.DataFrame, anios_periodo: list[int] | tuple) -> bool:
+    """Indica si al menos una actividad tiene una fecha de inicio dentro de la ventana de análisis."""
+    if actividades is None or actividades.empty or not anios_periodo:
+        return False
+    fechas = pd.to_datetime(
+        actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce"
+    )
+    periodo = {int(anio) for anio in anios_periodo}
+    return bool(periodo) and fechas.dt.year.isin(periodo).any()
+
+
+def _seccion_clave_sat(anios_5: list[int] | tuple = (), pdf_elements: list | None = None) -> None:
     """Sección «10. Perfil Fiscal Declarado y Estructura de Ingresos Facturados» del Dashboard Ejecutivo, a todo el ancho y con datos 100% objetivos (sin clasificar ni juzgar). En este orden:
     los cargadores de la base de conceptos emitidos y el PDF de la Constancia de Situación Fiscal (sin tabla visible), el filtro de años (`st.pills`, varios a la vez), 2 anillos (`st.columns(2)`: «Distribución de Actividades Económicas Declaradas» y «Distribución Real Facturada (CFDIs)») y la matriz de 4 columnas por
     Clase SAT. El anillo declarado conserva todas las actividades anteriores al primer año seleccionado, además de las actividades de los años elegidos; al seleccionar todos los años muestra todas las actividades. El filtro recalcula el anillo facturado y la tabla;
@@ -1295,6 +1307,17 @@ def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
     tabla = tabla_clase_sat(d_sel, descripciones)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
     st.caption(NOTA_METODOLOGICA_CLASE_SAT)
+    
+    nota_dos_texto = '''2.- La gráfica Distribución de Actividades Económicas Declaradas muestra las actividades y
+    porcentajes registrados en la Constancia de Situación Fiscal actual.
+    Si la empresa registró una nueva actividad dentro del periodo analizado,
+    los años anteriores a ese registro podrían no sumar 100%, ya que se desconoce
+    cómo estaban distribuidas las actividades antes del cambio.'''
+
+    mostrar_nota_dos = _algun_anio_actividad_en_periodo(actividades, anios_5)
+    if mostrar_nota_dos:
+        st.caption(nota_dos_texto)
+
     comentario = st.text_area(
         "Insight para la Sección 10",
         max_chars=600,
@@ -1326,6 +1349,19 @@ def _seccion_clave_sat(pdf_elements: list | None = None) -> None:
                 "column_widths_pct": [12, 54, 22, 12],
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             },
-            {"type": "callout", "text": escape(NOTA_METODOLOGICA_CLASE_SAT)},
         ])
+        if mostrar_nota_dos:
+            pdf_elements.append({
+                "type": "callout",
+                "text": """<b>Nota</b> """ +(
+                    escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")
+                    + "<br/><br/>"
+                    + escape(nota_dos_texto).replace("\n", "<br/>")
+                ),
+            })
+        else:
+            pdf_elements.append({
+                "type": "callout",
+                "text": escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>"),
+            })
         

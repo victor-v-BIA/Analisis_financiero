@@ -857,23 +857,40 @@ def fig_donut_declarado(actividades) -> go.Figure:
     """Gráfica izquierda, «Distribución de Actividades Económicas Declaradas»:
     anillo(`hole=0.5`) con las actividades y porcentajes leídos de la Constancia (de mayor a menor).
     Cada rebanada muestra el porcentaje declarado original, sin normalizarlo al subtotal visible;
-    la leyenda inferior muestra el nombre completo y su porcentaje. Sin actividades
+    la leyenda inferior muestra la actividad, su mes/año de inicio y su porcentaje; los nombres largos
+    se truncan con puntos suspensivos antes de agregar fecha y porcentaje. Sin actividades
     declaradas, el anillo se sustituye por el aviso «Sin actividades declaradas»."""
     titulo = "Distribución de Actividades Económicas Declaradas"
-    acts = actividades_declaradas_csf(actividades)
+    acts = []
+    if actividades is not None:
+        for _, r in actividades.iterrows():
+            nombre = r.get("Actividad Económica")
+            nombre = "" if nombre is None or pd.isna(nombre) else str(nombre).strip()
+            pct = pd.to_numeric(r.get("Porcentaje (%)"), errors="coerce")
+            fecha = pd.to_datetime(r.get("Fecha de inicio"), format="%d/%m/%Y", errors="coerce")
+            if nombre and pd.notna(pct) and pct > 0:
+                acts.append((nombre, float(pct), fecha))
+    acts.sort(key=lambda item: -item[1])
     fig = go.Figure()
     if not acts:
         fig.add_annotation(text="Sin actividades declaradas", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(size=14))
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
         return _diseno_donut_sat(fig, titulo).update_layout(showlegend=False)
-    fig.add_trace(go.Pie(labels=[f"{n} ({p:g}%)" for n, p in acts], values=[p for _, p in acts],
+    rotulos = []
+    fechas = []
+    for nombre, pct, fecha in acts:
+        nombre_corto = nombre if len(nombre) <= 38 else nombre[:38].rstrip() + "…"
+        mes_anio = fecha.strftime("%m/%Y") if pd.notna(fecha) else "Sin fecha"
+        rotulos.append(f"{nombre_corto} · {mes_anio} · {pct:g}%")
+        fechas.append(mes_anio)
+    fig.add_trace(go.Pie(labels=rotulos, values=[p for _, p, _ in acts],
                          hole=0.5, sort=False, direction="clockwise",
                          marker=dict(colors=[PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(len(acts))],
-                                     line=dict(color="white", width=1.5)),text=[f"{p:g}%" for _, p in acts],
+                                     line=dict(color="white", width=1.5)),text=[f"{p:g}%" for _, p, _ in acts],
                                      textinfo="text", texttemplate="%{text}", textposition="auto",
                                      insidetextorientation="horizontal", textfont=dict(size=12,color="white"), name="Distribución declarada",
-                                     customdata=[f"{n}: {p:g}% declarado" for n, p in acts], hovertemplate="%{customdata}<extra></extra>"))
+                                     customdata=[f"{n}: {fecha}: {p:g}% declarado" for (n, p, _), fecha in zip(acts, fechas)], hovertemplate="%{customdata}<extra></extra>"))
     return _diseno_donut_sat(fig, titulo)
 
 
