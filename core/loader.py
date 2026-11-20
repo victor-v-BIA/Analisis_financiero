@@ -93,7 +93,8 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "ivatrasladado", "tasaimpuestostrasladados", "importebase", "uuiddr", "subtotal", "montomxn", "descripcion",
         "cantidad", "valorunitario", "unidad", "unidaddemedida", "numeroorden", "numerodeorden",
         "numorden", "nodeorden", "orden", "ordencompra", "ordendecompra",
-        "folio", "fechadeoperacion", "claveunidad", "moneda"
+        "folio", "fechadeoperacion", "claveunidad", "codigosat", "descuento",
+        "impuestostrasladados", "impuestosretenidos", "tipodecambiodof"
     }
     
     def es_columna_util(col_name):
@@ -1329,6 +1330,123 @@ def emitidos_productos_sat(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(show_spinner="Leyendo los productos emitidos…")
 def _emitidos_productos_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
     return emitidos_productos_sat(leer_archivo(nombre, contenido))
+
+
+def egresos_productos_sat(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza CFDIs recibidos por partida y calcula el total neto en MXN."""
+    columna_clave = buscar_columna(df.columns, "Codigo SAT") or buscar_columna(
+        df.columns, "Clave"
+    )
+    columnas = {
+        "Fecha": buscar_columna(df.columns, "Fecha"),
+        "Importe": buscar_columna(df.columns, "Importe"),
+        "Descuento": buscar_columna(df.columns, "Descuento"),
+        "Moneda": buscar_columna(df.columns, "Moneda"),
+        "Tipo de Cambio": buscar_columna(df.columns, "Tipo de Cambio"),
+        "Tipo de Cambio DOF": buscar_columna(df.columns, "Tipo de Cambio DOF"),
+        "Impuestos Trasladados": buscar_columna(df.columns, "Impuestos Trasladados"),
+        "Impuestos Retenidos": buscar_columna(df.columns, "Impuestos Retenidos"),
+    }
+    faltantes = [nombre for nombre, columna in columnas.items() if columna is None]
+    if columna_clave is None:
+        faltantes.insert(0, "Codigo SAT o Clave")
+    if faltantes:
+        raise KeyError("Faltan columnas requeridas: " + ", ".join(faltantes))
+
+    clave = _normalizar_clave_sat(df[columna_clave])
+    excluidas_divisas = clave.str.startswith("841216")
+    base = pd.DataFrame({
+        "Clave": clave,
+        "Fecha": a_fecha(df[columnas["Fecha"]]),
+        "Importe": a_numero(df[columnas["Importe"]]),
+        "Descuento": a_numero(df[columnas["Descuento"]]).fillna(0.0),
+        "Moneda": df[columnas["Moneda"]].astype(str).str.strip().str.upper(),
+        "Tipo_Cambio": a_numero(df[columnas["Tipo de Cambio"]]),
+        "Tipo_Cambio_DOF": a_numero(df[columnas["Tipo de Cambio DOF"]]),
+        "Impuestos_Trasladados": a_numero(
+            df[columnas["Impuestos Trasladados"]]
+        ).fillna(0.0),
+        "Impuestos_Retenidos": a_numero(
+            df[columnas["Impuestos Retenidos"]]
+        ).fillna(0.0),
+    })
+    base = base.loc[~excluidas_divisas].copy()
+
+    es_mxn = base["Moneda"].isin(
+        ["MXN", "PESO", "PESOS", "PESO MEXICANO", "PESOS MEXICANOS"]
+    )
+    tc_valido = np.isfinite(base["Tipo_Cambio"]) & base["Tipo_Cambio"].gt(0)
+    tc_dof_valido = (
+        np.isfinite(base["Tipo_Cambio_DOF"]) & base["Tipo_Cambio_DOF"].gt(0)
+    )
+    usa_tc_dof = ~es_mxn & ~tc_valido & tc_dof_valido
+    factor_mxn = base["Tipo_Cambio"].where(tc_valido)
+    factor_mxn = factor_mxn.fillna(base["Tipo_Cambio_DOF"].where(tc_dof_valido))
+    factor_mxn = factor_mxn.where(~es_mxn, 1.0)
+    sin_tipo_cambio = ~es_mxn & factor_mxn.isna()
+
+    clave_valida = base["Clave"].str.fullmatch(r"\d{8}")
+    registros_validos = (
+        clave_valida
+        & base["Fecha"].notna()
+        & base["Importe"].notna()
+        & ~sin_tipo_cambio
+    )
+    descartadas = int((~registros_validos).sum())
+    filas_tc_dof = int(usa_tc_dof.loc[registros_validos].sum())
+    base = base.loc[registros_validos].copy()
+    factor_mxn = factor_mxn.loc[registros_validos]
+
+    base["Anio"] = base["Fecha"].dt.year.astype(int)
+    base["Clase"] = base["Clave"].str[:6]
+    base["Tipo_Cambio_Aplicado"] = factor_mxn
+    base["SubTotal_Neto_MXN"] = (
+        base["Importe"] - base["Descuento"]
+    ) * base["Tipo_Cambio_Aplicado"]
+    base["Imp_Trasladados_MXN"] = (
+        base["Impuestos_Trasladados"] * base["Tipo_Cambio_Aplicado"]
+    )
+    base["Imp_Retenidos_MXN"] = (
+        base["Impuestos_Retenidos"] * base["Tipo_Cambio_Aplicado"]
+    )
+    base["Monto"] = (
+        base["SubTotal_Neto_MXN"]
+        + base["Imp_Trasladados_MXN"]
+        - base["Imp_Retenidos_MXN"]
+    )
+    base.attrs["filas_divisas_excluidas"] = int(excluidas_divisas.sum())
+    base.attrs["filas_sin_tipo_cambio"] = int(sin_tipo_cambio.sum())
+    base.attrs["filas_tc_dof"] = filas_tc_dof
+    base.attrs["filas_descartadas"] = descartadas
+    return base.reset_index(drop=True)
+
+
+@st.cache_data(show_spinner="Procesando productos recibidos…", max_entries=2)
+def _egresos_productos_cache(
+    nombre: str, contenido: bytes, version: str
+) -> pd.DataFrame:
+    return egresos_productos_sat(leer_archivo(nombre, contenido))
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _clasificar_base_clase_sat(
+    nombre: str, contenido: bytes, version: str
+) -> str | None:
+    columnas = {_norm(str(columna)) for columna in leer_archivo(nombre, contenido).columns}
+    es_emitidos = {
+        "clave", "fecha", "estatus", "tipo documento", "importe"
+    }.issubset(columnas)
+    es_egresos = (
+        bool({"codigo sat", "clave"} & columnas)
+        and {
+            "fecha", "importe", "descuento", "moneda", "tipo de cambio",
+            "tipo de cambio dof", "impuestos trasladados", "impuestos retenidos",
+        }.issubset(columnas)
+    )
+    if es_emitidos == es_egresos:
+        return "ambiguo" if es_emitidos else None
+    return "emitidos" if es_emitidos else "egresos"
+
 
 @st.cache_data(show_spinner="Leyendo el catálogo oficial del SAT…")
 def _leer_catalogo_sat(ruta: str, firma: int, version: str) -> dict:

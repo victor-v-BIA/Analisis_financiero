@@ -901,10 +901,14 @@ def _rotulo_clase_donut(clase: str, descripciones: dict, largo: int = 38) -> str
     return f"{clase} · {desc if len(desc) <= largo else desc[:largo].rstrip() + '…'}"
 
 
-def fig_donut_facturado(d: pd.DataFrame, descripciones: dict | None = None) -> go.Figure:
-    """Gráfica derecha: anillo (`hole=0.5`) con las Top 5 Clases SAT de 6 dígitos por monto con IVA de las partidas de `d` (el periodo ya filtrado) y el
-    resto agrupado en «Otras clases (N)». La clase 010101 va en gris (#94A3B8); las específicas, en azules; «Otras clases», en pizarra. El % va dentro de la dona solo en rebanadas de 4% o más
-    (`textinfo='text'`) y, exacto, en cada etiqueta de la leyenda inferior (clase · descripción de ~38 caracteres (%)). El tooltip trae la descripción completa y el monto."""
+def fig_donut_facturado(
+    d: pd.DataFrame,
+    descripciones: dict | None = None,
+    titulo: str = "Distribución Real Facturada (CFDIs)",
+    nombre_serie: str = "Facturación con IVA",
+) -> go.Figure:
+    """Anillo con las Top 5 Clases SAT por monto y el resto agrupado en «Otras clases (N)».
+    El título y el nombre de la serie pueden adaptarse al tipo de facturación."""
     descripciones = descripciones or {}
     g = d.groupby("Clase")["Monto"].sum().reset_index().sort_values(["Monto", "Clase"], ascending=[False, True]).reset_index(drop=True)
     total = float(g["Monto"].sum())
@@ -919,9 +923,9 @@ def fig_donut_facturado(d: pd.DataFrame, descripciones: dict | None = None) -> g
         colores.append(COLOR_OTRAS_CLASES if c == "otras" else COLOR_SIN_CLASIFICAR if c == CLASE_GENERICA_SAT else next(azul))
     fig = go.Figure(go.Pie(labels=[f"{r[1]} ({p:.1f}%)" for r, p in zip(rebanadas, pcts)], values=[v for _, _, _, v in rebanadas], hole=0.5, sort=False, direction="clockwise",
                            marker=dict(colors=colores, line=dict(color="white", width=1.5)), text=[f"{p:.1f}%" if p >= 4 else "" for p in pcts], textinfo="text", textposition="inside",
-                           insidetextorientation="horizontal", textfont=dict(size=12, color="white"), name="Facturación con IVA",
+                           insidetextorientation="horizontal", textfont=dict(size=12, color="white"), name=nombre_serie,
                            customdata=[f"{r[2]}: {p:.2f}% · ${r[3]:,.0f} MXN" for r, p in zip(rebanadas, pcts)], hovertemplate="%{customdata}<extra></extra>"))
-    return _diseno_donut_sat(fig, "Distribución Real Facturada (CFDIs)", margen_inferior=150)
+    return _diseno_donut_sat(fig, titulo, margen_inferior=150)
 
 
 def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
