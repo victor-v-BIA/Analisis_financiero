@@ -241,8 +241,7 @@ def _sufijo_periodo_clase_sat(
 
 
 def _algun_anio_actividad_en_periodo(
-    actividades: pd.DataFrame, anios_periodo: list[int] | tuple
-) -> bool:
+    actividades: pd.DataFrame, anios_periodo: list[int] | tuple) -> bool:
     """Indica si alguna actividad inició dentro de la ventana de análisis."""
     if actividades is None or actividades.empty or not anios_periodo:
         return False
@@ -361,8 +360,8 @@ def _seccion_clave_sat(
         "actividades y porcentajes registrados en la Constancia de Situación Fiscal "
         "actual. Si la empresa registró una nueva actividad dentro del periodo "
         "analizado, los años anteriores a ese registro podrían no sumar 100%, ya que "
-        "se desconoce cómo estaban distribuidas las actividades antes del cambio."
-    )
+        "se desconoce cómo estaban distribuidas las actividades antes del cambio.")
+    
     mostrar_nota_dos = _algun_anio_actividad_en_periodo(actividades, anios_5)
     if mostrar_nota_dos:
         st.caption(nota_dos_texto)
@@ -371,16 +370,14 @@ def _seccion_clave_sat(
         "Insight para Estructura de Ingresos Facturados",
         max_chars=600,
         placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
-        key="clase_sat_insight",
-    )
+        key="clase_sat_insight",)
 
     if pdf_elements is not None:
         tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
             "Clase": "Clase SAT",
             "Descripcion": "Descripción oficial SAT",
             "Total": "Total facturado (MXN)",
-            "Pct": "% del total",
-        })
+            "Pct": "% del total",})
         tabla_pdf["Descripción oficial SAT"] = tabla_pdf["Descripción oficial SAT"].map(
             lambda valor: escape(str(valor))
         )
@@ -418,8 +415,7 @@ def _seccion_clave_sat(
 def _seccion_egresos_sat(
     f_egresos_productos: _ArchivoMem | None,
     actividades: pd.DataFrame,
-    pdf_elements: list | None,
-) -> None:
+    pdf_elements: list | None,) -> None:
     titulo = "Estructura de Egresos Facturados"
     st.subheader(
         titulo,
@@ -477,15 +473,13 @@ def _seccion_egresos_sat(
             f"o conversión inválida; {filas_sin_tc:,} no tenían un tipo de cambio "
             "válido ni en la columna original ni en la DOF."
         )
-    nota_calculo = (
+    '''nota_calculo = (
         f"Se excluyeron {filas_divisas:,} partidas de divisas con clave SAT iniciada "
         "en 841216. "
         f"El Tipo de Cambio DOF se usó en {filas_tc_dof:,} partidas; "
         f"{filas_descartadas:,} partidas inválidas se descartaron. "
         "Por partida: (Importe − Descuento) × tipo de cambio; al subtotal se suman "
-        "los impuestos trasladados en MXN y se restan los retenidos en MXN."
-    )
-
+        "los impuestos trasladados en MXN y se restan los retenidos en MXN.")'''
     if d.empty:
         mensaje = "No hay partidas válidas para mostrar después de aplicar los filtros."
         st.info(mensaje)
@@ -500,8 +494,8 @@ def _seccion_egresos_sat(
     if catalogo is None:
         st.warning(
             "No se encontró el catálogo oficial del SAT; las descripciones oficiales "
-            "no están disponibles."
-        )
+            "no están disponibles.")
+        
     descripciones = descripciones_clase_sat(d, catalogo)
     disponibles = sorted(int(anio) for anio in d["Anio"].unique())
     elegidos = st.pills(
@@ -523,9 +517,7 @@ def _seccion_egresos_sat(
 
     anios_seleccionados = [int(anio) for anio in elegidos]
     d_sel = d[d["Anio"].isin(anios_seleccionados)]
-    actividades_grafica = _filtrar_actividades_csf_por_anio(
-        actividades, anios_seleccionados, disponibles
-    )
+    actividades_grafica = _filtrar_actividades_csf_por_anio(actividades, anios_seleccionados, disponibles)
     sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
     fig_declarado = fig_donut_declarado(actividades_grafica)
     fig_egresos = fig_donut_facturado(

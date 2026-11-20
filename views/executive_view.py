@@ -10,16 +10,17 @@ import plotly.express as px
 from core.api_rates import _obtener_fix, cruzar_fix
 from components.pdf_generator import generate_modular_pdf
 from utils import (_nb, _nombre_abreviado, _limpiar_y_formatear, _mxn, _formatear_mxn)
+from views.financial_ratios_view import _seccion_razones
 
 from core.loader import (_datos_archivo_cache, anios_5_archivos, _anual_ppd_cache,
                          _balance_cache, _tiempos_cache,_concentracion_cache,
                          _resumen_sf_cache,_res_sf_cache,_operaciones_divisas_cache)
-from views.financial_ratios_view import _seccion_razones
 
 from config import (CODIGO_VERSION, MESES_ES, VISTAS_CICLOS,
-                    METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES, PLAZO_MIN_MESES, PLAZO_MAX_MESES,
-                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,PREFIJO_DIVISAS,
-                    PALETA_AZULES_BIA)
+                    METRICAS_VISUALIZAR, PLAZO_DEFECTO_MESES,
+                    PLAZO_MIN_MESES, PLAZO_MAX_MESES,
+                    MARGEN_COMERCIAL_DEFECTO, TIIE_DEFECTO,
+                    PREFIJO_DIVISAS,PALETA_AZULES_BIA)
 
 from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _grafica_diferencia_cobros_pagos,
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
@@ -28,8 +29,9 @@ from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _
                                 _html_tabla_benchmark, _html_kpis_divisas)
 
 from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,_flujo_bruto_mensual,
-                                _ohlc_mensual,_promedios_mensuales_historicos,_series_anuales_por_mes,_tabla_clientes_sin_facturacion,
-                                _excedente_homologado,_escenarios_credito,kpis_divisas, tabla_intermediarios, benchmark_mercado)
+                                _ohlc_mensual,_promedios_mensuales_historicos,_series_anuales_por_mes,
+                                _tabla_clientes_sin_facturacion,_excedente_homologado,
+                                _escenarios_credito,kpis_divisas, tabla_intermediarios, benchmark_mercado)
 
 
 def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago, f_nomina,
@@ -47,7 +49,8 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     st.subheader("1. Facturación PPD y Complementos: Diferencias Anuales")
     st.caption("Años en los que los importes de los complementos fueron mayores o menores que la facturación PPD.")
 
-    pdf_elements.append({"type": "heading", "text": "1. Facturación PPD y Complementos: Diferencias Anuales"})
+    pdf_elements.append({"type": "heading",
+                         "text": "1. Facturación PPD y Complementos: Diferencias Anuales"})
 
     df_pagos_ingresos, df_pagos_egresos = f_ingresos_pago, f_egresos_pago
 
@@ -233,7 +236,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             titulo_graf = f"Flujo Neto Fiscal Mensual Año {anio_sel}"
             
             df_pdf_tabla = d[["Cobros", "Pagos", "Nomina", "Balance"]].reset_index()
-            df_pdf_tabla.columns = ["Periodo", "Cobros", "Pagos", "Nómina", "Diferencia"] # O Flujo Neto
+            df_pdf_tabla.columns = ["Periodo", "Cobros", "Pagos", "Nómina", "Diferencia"]
 
         st.markdown(f"**{titulo_graf}**")
         render_grafica(fig_cp, key="exec_flujo_neto")
@@ -242,8 +245,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             "Insight para la gráfica de Flujo Neto Fiscal",
             max_chars=600,
             placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
-            key="note_graf_flujo"
-        )
+            key="note_graf_flujo")
 
         pdf_elements.append({"type": "image", 
                              "section_title": "2. Flujo Neto Fiscal",
