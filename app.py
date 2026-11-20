@@ -293,7 +293,11 @@ def main() -> None:
                       file_egresos_pago, file_nomina, file_egresos_productos=file_egresos_productos,
                       file_fix=file_fix, file_razones=file_razones)
     elif modulo == "Barrido y Visoría":
-        modulo_ingresos_sat(file_ingresos_facturas, file_egresos_facturas)
+        modulo_ingresos_sat(
+            file_ingresos_facturas,
+            file_egresos_facturas,
+            file_egresos_productos=file_egresos_productos,
+        )
 
     elif modulo == "Ingresos (Auditoría Operativa)":
         modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, None,

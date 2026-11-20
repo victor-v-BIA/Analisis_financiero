@@ -94,7 +94,9 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "cantidad", "valorunitario", "unidad", "unidaddemedida", "numeroorden", "numerodeorden",
         "numorden", "nodeorden", "orden", "ordencompra", "ordendecompra",
         "folio", "fechadeoperacion", "claveunidad", "codigosat", "descuento",
-        "impuestostrasladados", "impuestosretenidos", "tipodecambiodof"
+        "impuestostrasladados", "impuestosretenidos", "tipodecambiodof",
+        "uuidcfdirecibido", "partida", "importelocaltrasladado",
+        "importelocalretenido"
     }
     
     def es_columna_util(col_name):
@@ -163,7 +165,7 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
     gc.collect()
 
     # 3. Formateo final
-    df.columns = [str(c).strip() for c in df.columns]
+    df.columns = [" ".join(str(c).split()) for c in df.columns]
     cols_texto = df.select_dtypes(include=['object', 'string']).columns
     for col in cols_texto:
         df[col] = df[col].astype(str).str.strip()
@@ -1332,100 +1334,525 @@ def _emitidos_productos_cache(nombre: str, contenido: bytes, version: str) -> pd
     return emitidos_productos_sat(leer_archivo(nombre, contenido))
 
 
-def egresos_productos_sat(df: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza CFDIs recibidos por partida y calcula el total neto en MXN."""
+def _normalizar_uuid_clase_sat(serie: pd.Series) -> pd.Series:
+    return (
+        serie.fillna("")
+        .astype(str)
+        .str.upper()
+        .str.replace(r"\s+", "", regex=True)
+        .replace({"NAN": "", "NONE": ""})
+    )
+
+
+def _tipo_documento_es_ncr(valor) -> bool:
+    tipo = _norm(valor)
+    return (
+        tipo == "e"
+        or "egreso" in tipo
+        or "ncr" in tipo
+        or "nota de credito" in tipo
+        or "nota credito" in tipo
+    )
+
+
+def _puntaje_bloque_ncr(grupo: pd.DataFrame) -> int:
+    puntaje = int(grupo["Clave"].eq("84111506").any())
+    descripciones = grupo["Descripcion"].map(_norm)
+    terminos = (
+        ("anticipo",),
+        ("nota de credito", "nota credito"),
+        ("devolucion",),
+        ("bonificacion",),
+    )
+    for variantes in terminos:
+        puntaje += int(
+            descripciones.map(
+                lambda texto: any(termino in texto for termino in variantes)
+            ).any()
+        )
+    return puntaje
+
+
+def _emparejar_bloques_egresos(
+    bloques: list[dict], encabezados: pd.DataFrame
+) -> dict[int, int]:
+    """Cruza bloques y encabezados por huella exacta y luego con tolerancia de dos centavos."""
+    bloques_por_huella = {}
+    encabezados_por_huella = {}
+    for bloque in bloques:
+        bloques_por_huella.setdefault(bloque["huella"], []).append(bloque)
+    for indice, encabezado in encabezados.iterrows():
+        huella = encabezado["huella"]
+        if huella is not None:
+            encabezados_por_huella.setdefault(huella, []).append(indice)
+
+    asignaciones = {}
+    bloques_usados = set()
+    encabezados_usados = set()
+    for huella in bloques_por_huella.keys() & encabezados_por_huella.keys():
+        bloques_iguales = sorted(
+            bloques_por_huella[huella],
+            key=lambda bloque: (-bloque["puntaje_ncr"], bloque["id"]),
+        )
+        encabezados_iguales = sorted(
+            encabezados_por_huella[huella],
+            key=lambda indice: (
+                not encabezados.at[indice, "es_ncr"],
+                indice,
+            ),
+        )
+        for bloque, indice in zip(bloques_iguales, encabezados_iguales):
+            asignaciones[bloque["id"]] = indice
+            bloques_usados.add(bloque["id"])
+            encabezados_usados.add(indice)
+
+    candidatos = []
+    bloques_restantes = [
+        bloque for bloque in bloques if bloque["id"] not in bloques_usados
+    ]
+    encabezados_restantes = [
+        indice for indice in encabezados.index if indice not in encabezados_usados
+    ]
+    for indice in encabezados_restantes:
+        huella_encabezado = encabezados.at[indice, "huella"]
+        if huella_encabezado is None:
+            continue
+        fecha, rfc, moneda, subtotal, total = huella_encabezado
+        for bloque in bloques_restantes:
+            if bloque["huella"] is None:
+                continue
+            b_fecha, b_rfc, b_moneda, b_subtotal, b_total = bloque["huella"]
+            if (fecha, rfc, moneda) != (b_fecha, b_rfc, b_moneda):
+                continue
+            diferencia_subtotal = abs(subtotal - b_subtotal)
+            diferencia_total = abs(total - b_total)
+            if diferencia_subtotal <= 0.02 and diferencia_total <= 0.02:
+                candidatos.append((
+                    not encabezados.at[indice, "es_ncr"],
+                    -bloque["puntaje_ncr"],
+                    diferencia_subtotal + diferencia_total,
+                    diferencia_subtotal,
+                    diferencia_total,
+                    indice,
+                    bloque["id"],
+                ))
+
+    for _, _, _, _, _, indice, bloque_id in sorted(candidatos):
+        if indice in encabezados_usados or bloque_id in bloques_usados:
+            continue
+        asignaciones[bloque_id] = indice
+        encabezados_usados.add(indice)
+        bloques_usados.add(bloque_id)
+    return asignaciones
+
+
+def egresos_productos_sat(
+    df: pd.DataFrame, df_encabezados: pd.DataFrame
+) -> pd.DataFrame:
+    """Cruza CFDIs recibidos con encabezados, limpia comprobantes y calcula importes MXN por partida."""
     columna_clave = buscar_columna(df.columns, "Codigo SAT") or buscar_columna(
         df.columns, "Clave"
     )
     columnas = {
-        "Fecha": buscar_columna(df.columns, "Fecha"),
+        "Fecha": buscar_columna(df.columns, "Fecha y Hora")
+        or buscar_columna(df.columns, "Fecha de Emision")
+        or buscar_columna(df.columns, "Fecha Emision")
+        or buscar_columna(df.columns, "Fecha"),
         "Importe": buscar_columna(df.columns, "Importe"),
         "Descuento": buscar_columna(df.columns, "Descuento"),
         "Moneda": buscar_columna(df.columns, "Moneda"),
         "Tipo de Cambio": buscar_columna(df.columns, "Tipo de Cambio"),
-        "Tipo de Cambio DOF": buscar_columna(df.columns, "Tipo de Cambio DOF"),
         "Impuestos Trasladados": buscar_columna(df.columns, "Impuestos Trasladados"),
         "Impuestos Retenidos": buscar_columna(df.columns, "Impuestos Retenidos"),
     }
-    faltantes = [nombre for nombre, columna in columnas.items() if columna is None]
+    faltantes = [
+        nombre for nombre, columna in columnas.items()
+        if columna is None and nombre != "Descuento"
+    ]
     if columna_clave is None:
         faltantes.insert(0, "Codigo SAT o Clave")
     if faltantes:
         raise KeyError("Faltan columnas requeridas: " + ", ".join(faltantes))
+    if df_encabezados is None or df_encabezados.empty:
+        raise KeyError("Falta la base SAT CFDIs Recibidos con los encabezados de comprobantes.")
 
-    clave = _normalizar_clave_sat(df[columna_clave])
-    excluidas_divisas = clave.str.startswith("841216")
+    columnas_encabezado = {
+        "UUID": buscar_columna(df_encabezados.columns, "UUID"),
+        "Estatus": buscar_columna(df_encabezados.columns, "Estatus"),
+        "Tipo Documento": (
+            buscar_columna(df_encabezados.columns, "Tipo Documento")
+            or buscar_columna(df_encabezados.columns, "Tipo de Documento")
+            or buscar_columna(df_encabezados.columns, "Tipo de Comprobante")
+        ),
+    }
+    faltantes_encabezado = [
+        nombre for nombre, columna in columnas_encabezado.items() if columna is None
+    ]
+    if faltantes_encabezado:
+        raise KeyError(
+            "La base SAT CFDIs Recibidos requiere las columnas: "
+            + ", ".join(faltantes_encabezado)
+        )
+
+    indice = pd.RangeIndex(len(df))
+    descripcion_col = buscar_columna(df.columns, "Descripcion")
+    uuid_col = buscar_columna(df.columns, "UUID CFDI Recibido")
+    partida_col = buscar_columna(df.columns, "Partida")
+    tipo_cambio_dof_col = buscar_columna(df.columns, "Tipo de Cambio DOF")
+    local_trasladado_col = buscar_columna(df.columns, "Importe Local Trasladado")
+    local_retenido_col = buscar_columna(df.columns, "Importe Local Retenido")
+
+    def numero_opcional(columna):
+        if columna is None:
+            return pd.Series(0.0, index=indice)
+        numeros = a_numero(df[columna])
+        return numeros.where(np.isfinite(numeros), 0.0).fillna(0.0).reset_index(drop=True)
+
     base = pd.DataFrame({
-        "Clave": clave,
-        "Fecha": a_fecha(df[columnas["Fecha"]]),
-        "Importe": a_numero(df[columnas["Importe"]]),
-        "Descuento": a_numero(df[columnas["Descuento"]]).fillna(0.0),
-        "Moneda": df[columnas["Moneda"]].astype(str).str.strip().str.upper(),
-        "Tipo_Cambio": a_numero(df[columnas["Tipo de Cambio"]]),
-        "Tipo_Cambio_DOF": a_numero(df[columnas["Tipo de Cambio DOF"]]),
-        "Impuestos_Trasladados": a_numero(
-            df[columnas["Impuestos Trasladados"]]
-        ).fillna(0.0),
-        "Impuestos_Retenidos": a_numero(
-            df[columnas["Impuestos Retenidos"]]
-        ).fillna(0.0),
+        "Clave": _normalizar_clave_sat(df[columna_clave]).reset_index(drop=True),
+        "Fecha": a_fecha(df[columnas["Fecha"]]).reset_index(drop=True),
+        "RFC_Emisor": (
+            (
+                df[buscar_columna(df.columns, "RFC Emisor")]
+                .fillna("").astype(str).str.strip().str.upper()
+                if buscar_columna(df.columns, "RFC Emisor") is not None
+                else pd.Series("", index=indice)
+            )
+            .reset_index(drop=True)
+        ),
+        "Importe": a_numero(df[columnas["Importe"]]).reset_index(drop=True),
+        "Descuento": numero_opcional(columnas["Descuento"]),
+        "Moneda": (
+            df[columnas["Moneda"]].fillna("").astype(str).str.strip().str.upper()
+            .reset_index(drop=True)
+        ),
+        "Tipo_Cambio": a_numero(df[columnas["Tipo de Cambio"]]).reset_index(drop=True),
+        "Tipo_Cambio_DOF": (
+            a_numero(df[tipo_cambio_dof_col]).reset_index(drop=True)
+            if tipo_cambio_dof_col is not None
+            else pd.Series(np.nan, index=indice)
+        ),
+        "Impuestos_Trasladados": numero_opcional(
+            columnas["Impuestos Trasladados"]
+        ),
+        "Impuestos_Retenidos": numero_opcional(
+            columnas["Impuestos Retenidos"]
+        ),
+        "ImpLocalTras_Original": numero_opcional(local_trasladado_col),
+        "ImpLocalRet_Original": numero_opcional(local_retenido_col),
+        "Descripcion": (
+            df[descripcion_col].fillna("").astype(str).reset_index(drop=True)
+            if descripcion_col is not None
+            else pd.Series("", index=indice)
+        ),
+        "_Orden": np.arange(len(df)),
     })
-    base = base.loc[~excluidas_divisas].copy()
+    clave_producto = _normalizar_uuid_clase_sat(
+        df[uuid_col] if uuid_col is not None else pd.Series("", index=indice)
+    ).reset_index(drop=True)
+    excluidas_divisas = base["Clave"].str.startswith("841216", na=False)
 
-    es_mxn = base["Moneda"].isin(
+    moneda_mxn = base["Moneda"].isin(
         ["MXN", "PESO", "PESOS", "PESO MEXICANO", "PESOS MEXICANOS"]
     )
     tc_valido = np.isfinite(base["Tipo_Cambio"]) & base["Tipo_Cambio"].gt(0)
     tc_dof_valido = (
         np.isfinite(base["Tipo_Cambio_DOF"]) & base["Tipo_Cambio_DOF"].gt(0)
     )
-    usa_tc_dof = ~es_mxn & ~tc_valido & tc_dof_valido
+    usa_tc_dof = ~moneda_mxn & ~tc_valido & tc_dof_valido
     factor_mxn = base["Tipo_Cambio"].where(tc_valido)
     factor_mxn = factor_mxn.fillna(base["Tipo_Cambio_DOF"].where(tc_dof_valido))
-    factor_mxn = factor_mxn.where(~es_mxn, 1.0)
-    sin_tipo_cambio = ~es_mxn & factor_mxn.isna()
+    factor_mxn = factor_mxn.where(~moneda_mxn, 1.0)
+    sin_tipo_cambio = ~moneda_mxn & factor_mxn.isna()
+    base["Tipo_Cambio_Aplicado"] = factor_mxn
 
-    clave_valida = base["Clave"].str.fullmatch(r"\d{8}")
-    registros_validos = (
-        clave_valida
+    encabezados = pd.DataFrame({
+        "UUID": _normalizar_uuid_clase_sat(
+            df_encabezados[columnas_encabezado["UUID"]]
+        ).reset_index(drop=True),
+        "Estatus": (
+            df_encabezados[columnas_encabezado["Estatus"]]
+            .fillna("").astype(str).str.strip().reset_index(drop=True)
+        ),
+        "Tipo Documento": (
+            df_encabezados[columnas_encabezado["Tipo Documento"]]
+            .fillna("").astype(str).str.strip().reset_index(drop=True)
+        ),
+    })
+    encabezados["_Orden_Encabezado"] = np.arange(len(encabezados))
+    encabezados["es_ncr"] = encabezados["Tipo Documento"].map(_tipo_documento_es_ncr)
+    modo_uuid = uuid_col is not None
+
+    if modo_uuid:
+        encabezados_validos = encabezados.loc[encabezados["UUID"].ne("")].drop_duplicates(
+            "UUID", keep="first"
+        )
+        encabezados_por_uuid = encabezados_validos.set_index("UUID")
+        base["UUID"] = clave_producto
+        base["_TieneCruce"] = base["UUID"].isin(encabezados_por_uuid.index)
+        base["Documento_ID"] = base["UUID"].where(base["UUID"].ne(""), "")
+        for nombre in ("Estatus", "Tipo Documento"):
+            base[nombre] = base["UUID"].map(encabezados_por_uuid[nombre])
+        modo_cruce = "UUID CFDI Recibido"
+        base["ImpLocalTras_Dedup"] = 0.0
+        base["ImpLocalRet_Dedup"] = 0.0
+        fila_valida_local = (
+            base["Clave"].str.fullmatch(r"\d{8}")
+            & base["Fecha"].notna()
+            & base["Importe"].notna()
+            & np.isfinite(base["Importe"])
+            & ~sin_tipo_cambio
+            & ~excluidas_divisas
+            & base["UUID"].ne("")
+        )
+        filas_validas = base.loc[fila_valida_local].sort_values("_Orden")
+        primeras_filas = filas_validas.drop_duplicates("UUID", keep="first")["_Orden"]
+        primera_fila_documento = base["_Orden"].isin(primeras_filas)
+        base.loc[primera_fila_documento, "ImpLocalTras_Dedup"] = base.loc[
+            primera_fila_documento, "ImpLocalTras_Original"
+        ]
+        base.loc[primera_fila_documento, "ImpLocalRet_Dedup"] = base.loc[
+            primera_fila_documento, "ImpLocalRet_Original"
+        ]
+    else:
+        if partida_col is None:
+            raise KeyError(
+                "Sin la columna «UUID CFDI Recibido», se requiere «Partida» para reconstruir comprobantes."
+            )
+        if buscar_columna(df.columns, "RFC Emisor") is None:
+            raise KeyError(
+                "Sin la columna «UUID CFDI Recibido», se requiere «RFC Emisor» para reconstruir comprobantes."
+            )
+        campos_huella = {
+            "Fecha": buscar_columna(df_encabezados.columns, "Fecha y Hora")
+            or buscar_columna(df_encabezados.columns, "Fecha de Emision")
+            or buscar_columna(df_encabezados.columns, "Fecha Emision")
+            or buscar_columna(df_encabezados.columns, "Fecha"),
+            "RFC Emisor": buscar_columna(df_encabezados.columns, "RFC Emisor"),
+            "Moneda": buscar_columna(df_encabezados.columns, "Moneda"),
+            "SubTotal": buscar_columna(df_encabezados.columns, "SubTotal"),
+            "Total": buscar_columna(df_encabezados.columns, "Total"),
+        }
+        faltantes_huella = [
+            nombre for nombre, columna in campos_huella.items() if columna is None
+        ]
+        if faltantes_huella:
+            raise KeyError(
+                "El cruce por Partida requiere en la base de encabezados: "
+                + ", ".join(faltantes_huella)
+            )
+
+        partida = a_numero(df[partida_col]).reset_index(drop=True)
+        if (
+            partida.empty
+            or partida.isna().any()
+            or not np.isfinite(partida).all()
+            or not np.isclose(
+                partida.to_numpy(), np.round(partida.to_numpy())
+            ).all()
+        ):
+            raise ValueError("La columna Partida contiene valores vacíos o no enteros.")
+        empieza_bloque = partida.eq(1)
+        if not empieza_bloque.iloc[0]:
+            raise ValueError(
+                "El archivo parece reordenado: la primera fila de productos no inicia con Partida 1."
+            )
+        block_ids = empieza_bloque.cumsum().astype(int)
+        esperado = block_ids.groupby(block_ids, sort=False).cumcount() + 1
+        if not partida.astype(int).eq(esperado).all():
+            raise ValueError(
+                "El archivo parece reordenado: Partida no conserva secuencias consecutivas 1..N."
+            )
+        base["Block_ID"] = block_ids
+        base["Documento_ID"] = "BLOCK-" + block_ids.astype(str)
+        base["ImpLocalTras_Dedup"] = base["ImpLocalTras_Original"].where(
+            empieza_bloque, 0.0
+        )
+        base["ImpLocalRet_Dedup"] = base["ImpLocalRet_Original"].where(
+            empieza_bloque, 0.0
+        )
+
+        encabezados["Fecha_Huella"] = a_fecha(
+            df_encabezados[campos_huella["Fecha"]]
+        ).reset_index(drop=True)
+        encabezados["RFC_Huella"] = (
+            df_encabezados[campos_huella["RFC Emisor"]]
+            .fillna("").astype(str).str.strip().str.upper().reset_index(drop=True)
+        )
+        encabezados["Moneda_Huella"] = (
+            df_encabezados[campos_huella["Moneda"]]
+            .fillna("").astype(str).str.strip().str.upper().reset_index(drop=True)
+        )
+        encabezados["SubTotal_Huella"] = a_numero(
+            df_encabezados[campos_huella["SubTotal"]]
+        ).reset_index(drop=True)
+        encabezados["Total_Huella"] = a_numero(
+            df_encabezados[campos_huella["Total"]]
+        ).reset_index(drop=True)
+
+        def crear_huella(fecha, rfc, moneda, subtotal, total):
+            if (
+                pd.isna(fecha) or not rfc or not moneda
+                or pd.isna(subtotal) or pd.isna(total)
+                or not np.isfinite(float(subtotal))
+                or not np.isfinite(float(total))
+            ):
+                return None
+            return (fecha, rfc, moneda, round(float(subtotal), 2), round(float(total), 2))
+
+        encabezados["huella"] = [
+            crear_huella(fecha, rfc, moneda, subtotal, total)
+            for fecha, rfc, moneda, subtotal, total in zip(
+                encabezados["Fecha_Huella"],
+                encabezados["RFC_Huella"],
+                encabezados["Moneda_Huella"],
+                encabezados["SubTotal_Huella"],
+                encabezados["Total_Huella"],
+            )
+        ]
+        bloques = []
+        for block_id, grupo in base.groupby("Block_ID", sort=True):
+            fechas = grupo["Fecha"].dropna().unique()
+            rfcs = grupo["RFC_Emisor"].dropna().unique()
+            monedas = grupo["Moneda"].dropna().unique()
+            bloque_valido = (
+                len(fechas) == 1
+                and len(rfcs) == 1
+                and len(monedas) == 1
+                and grupo["Importe"].notna().all()
+                and np.isfinite(grupo["Importe"]).all()
+                and bool(rfcs[0])
+                and bool(monedas[0])
+            )
+            huella = None
+            if bloque_valido:
+                subtotal = grupo["Importe"].sum()
+                total_original = (
+                    grupo["Importe"]
+                    - grupo["Descuento"]
+                    + grupo["Impuestos_Trasladados"]
+                    + grupo["ImpLocalTras_Dedup"]
+                    - grupo["Impuestos_Retenidos"]
+                    - grupo["ImpLocalRet_Dedup"]
+                ).sum()
+                huella = crear_huella(
+                    fechas[0], rfcs[0], monedas[0], subtotal, total_original
+                )
+            bloques.append({
+                "id": int(block_id),
+                "huella": huella,
+                "puntaje_ncr": _puntaje_bloque_ncr(grupo),
+            })
+        asignaciones = _emparejar_bloques_egresos(bloques, encabezados)
+        encabezados_por_indice = encabezados.set_index("_Orden_Encabezado")
+        por_bloque = {
+            int(block_id): int(indice_encabezado)
+            for block_id, indice_encabezado in asignaciones.items()
+        }
+        base["_Indice_Encabezado"] = base["Block_ID"].map(por_bloque)
+        base["_TieneCruce"] = base["_Indice_Encabezado"].notna()
+        for nombre in ("UUID", "Estatus", "Tipo Documento"):
+            mapa = encabezados_por_indice[nombre]
+            base[nombre] = base["_Indice_Encabezado"].map(mapa)
+        modo_cruce = "reconstrucción por Partida"
+
+    base["Estatus_Normalizado"] = base["Estatus"].fillna("").map(_norm)
+    base["Tipo_Normalizado"] = base["Tipo Documento"].fillna("").map(_norm)
+    estatus_cancelado = base["Estatus_Normalizado"].str.contains("cancel", regex=False)
+    ncr = base["Tipo Documento"].map(_tipo_documento_es_ncr)
+    tipo_valido = base["Tipo_Normalizado"].isin({"factura", "ingreso", "i"})
+    estatus_valido = base["Estatus_Normalizado"].isin({"activo", "vigente"})
+    tiene_cruce = base["_TieneCruce"]
+
+    def contar_exclusion(mascara):
+        filas = base.loc[mascara]
+        documentos = filas.loc[filas["Documento_ID"].ne(""), "Documento_ID"].nunique()
+        return int(mascara.sum()), int(documentos)
+
+    filas_divisas, comprobantes_divisas = contar_exclusion(excluidas_divisas)
+    filas_ncr, comprobantes_ncr = contar_exclusion(tiene_cruce & ncr)
+    filas_cancelados, comprobantes_cancelados = contar_exclusion(
+        tiene_cruce & estatus_cancelado
+    )
+    filas_sin_cruce, comprobantes_sin_cruce = contar_exclusion(~tiene_cruce)
+    documento_admisible = tiene_cruce & estatus_valido & tipo_valido
+    base_valida = (
+        base["Clave"].str.fullmatch(r"\d{8}")
         & base["Fecha"].notna()
         & base["Importe"].notna()
+        & np.isfinite(base["Importe"])
         & ~sin_tipo_cambio
     )
-    descartadas = int((~registros_validos).sum())
-    filas_tc_dof = int(usa_tc_dof.loc[registros_validos].sum())
+    descartadas = int((documento_admisible & ~excluidas_divisas & ~base_valida).sum())
+    sin_tipo_cambio_validas = int(
+        (documento_admisible & ~excluidas_divisas & sin_tipo_cambio).sum()
+    )
+    registros_validos = (
+        documento_admisible
+        & ~excluidas_divisas
+        & base_valida
+    )
+    filas_tc_dof = int((registros_validos & usa_tc_dof).sum())
     base = base.loc[registros_validos].copy()
-    factor_mxn = factor_mxn.loc[registros_validos]
 
     base["Anio"] = base["Fecha"].dt.year.astype(int)
     base["Clase"] = base["Clave"].str[:6]
-    base["Tipo_Cambio_Aplicado"] = factor_mxn
     base["SubTotal_Neto_MXN"] = (
         base["Importe"] - base["Descuento"]
     ) * base["Tipo_Cambio_Aplicado"]
     base["Imp_Trasladados_MXN"] = (
-        base["Impuestos_Trasladados"] * base["Tipo_Cambio_Aplicado"]
-    )
+        base["Impuestos_Trasladados"] + base["ImpLocalTras_Dedup"]
+    ) * base["Tipo_Cambio_Aplicado"]
     base["Imp_Retenidos_MXN"] = (
-        base["Impuestos_Retenidos"] * base["Tipo_Cambio_Aplicado"]
-    )
-    base["Monto"] = (
+        base["Impuestos_Retenidos"] + base["ImpLocalRet_Dedup"]
+    ) * base["Tipo_Cambio_Aplicado"]
+    base["Monto_MXN"] = (
         base["SubTotal_Neto_MXN"]
         + base["Imp_Trasladados_MXN"]
         - base["Imp_Retenidos_MXN"]
     )
-    base.attrs["filas_divisas_excluidas"] = int(excluidas_divisas.sum())
-    base.attrs["filas_sin_tipo_cambio"] = int(sin_tipo_cambio.sum())
-    base.attrs["filas_tc_dof"] = filas_tc_dof
-    base.attrs["filas_descartadas"] = descartadas
-    return base.reset_index(drop=True)
+    base["Monto"] = base["Monto_MXN"]
+
+    salida = base.reset_index(drop=True)
+    salida.attrs.update({
+        "modo_cruce": modo_cruce,
+        "filas_divisas_excluidas": filas_divisas,
+        "comprobantes_divisas_excluidos": comprobantes_divisas,
+        "filas_ncr_excluidas": filas_ncr,
+        "comprobantes_ncr_excluidos": comprobantes_ncr,
+        "filas_cancelados_excluidas": filas_cancelados,
+        "comprobantes_cancelados_excluidos": comprobantes_cancelados,
+        "filas_sin_cruce": filas_sin_cruce,
+        "comprobantes_sin_cruce": comprobantes_sin_cruce,
+        "filas_sin_tipo_cambio": sin_tipo_cambio_validas,
+        "filas_tc_dof": filas_tc_dof,
+        "filas_descartadas": descartadas,
+    })
+    return salida
+
+
+def _leer_archivo_clase_sat(nombre: str, contenido) -> pd.DataFrame:
+    if isinstance(contenido, tuple):
+        dfs = [
+            leer_archivo(nombre_parte, bytes_parte)
+            for nombre_parte, bytes_parte in contenido
+        ]
+        return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+    return leer_archivo(nombre, contenido)
 
 
 @st.cache_data(show_spinner="Procesando productos recibidos…", max_entries=2)
 def _egresos_productos_cache(
-    nombre: str, contenido: bytes, version: str
+    nombre: str,
+    contenido,
+    nombre_encabezados: str,
+    contenido_encabezados,
+    version: str,
 ) -> pd.DataFrame:
-    return egresos_productos_sat(leer_archivo(nombre, contenido))
+    return egresos_productos_sat(
+        _leer_archivo_clase_sat(nombre, contenido),
+        _leer_archivo_clase_sat(nombre_encabezados, contenido_encabezados),
+    )
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -1433,16 +1860,22 @@ def _clasificar_base_clase_sat(
     nombre: str, contenido: bytes, version: str
 ) -> str | None:
     columnas = {_norm(str(columna)) for columna in leer_archivo(nombre, contenido).columns}
+    es_encabezados = (
+        {"uuid", "estatus", "total"}.issubset(columnas)
+        and bool({"tipo documento", "tipo de documento", "tipo de comprobante"} & columnas)
+    )
     es_emitidos = {
         "clave", "fecha", "estatus", "tipo documento", "importe"
     }.issubset(columnas)
     es_egresos = (
         bool({"codigo sat", "clave"} & columnas)
         and {
-            "fecha", "importe", "descuento", "moneda", "tipo de cambio",
-            "tipo de cambio dof", "impuestos trasladados", "impuestos retenidos",
+            "fecha", "importe", "moneda", "tipo de cambio",
+            "impuestos trasladados", "impuestos retenidos",
         }.issubset(columnas)
     )
+    if es_encabezados:
+        return "encabezados"
     if es_emitidos == es_egresos:
         return "ambiguo" if es_emitidos else None
     return "emitidos" if es_emitidos else "egresos"

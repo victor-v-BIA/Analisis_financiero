@@ -918,9 +918,9 @@ def fig_donut_facturado(
     if len(resto):
         rebanadas.append(("otras", f"Otras clases", f"Otras clases ({len(resto):,} clases)", float(resto["Monto"].sum())))
     pcts = [v / total * 100 if total else 0.0 for _, _, _, v in rebanadas]
-    colores, azul = [], iter(COLORES_CLASES_SAT)
+    colores, azul = [], iter(PALETA_AZULES_BIA)
     for c, _, _, _ in rebanadas:
-        colores.append(COLOR_OTRAS_CLASES if c == "otras" else COLOR_SIN_CLASIFICAR if c == CLASE_GENERICA_SAT else next(azul))
+        colores.append(COLOR_SIN_CLASIFICAR if c == CLASE_GENERICA_SAT else next(azul))
     fig = go.Figure(go.Pie(labels=[f"{r[1]} ({p:.1f}%)" for r, p in zip(rebanadas, pcts)], values=[v for _, _, _, v in rebanadas], hole=0.5, sort=False, direction="clockwise",
                            marker=dict(colors=colores, line=dict(color="white", width=1.5)), text=[f"{p:.1f}%" if p >= 4 else "" for p in pcts], textinfo="text", textposition="inside",
                            insidetextorientation="horizontal", textfont=dict(size=12, color="white"), name=nombre_serie,
@@ -929,15 +929,39 @@ def fig_donut_facturado(
 
 
 def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
-    """Tabla HTML de la matriz (mismo estilo que las tablas de las secciones 6 y 9), con 4 columnas: Clase SAT, descripción oficial, total acumulado y % del total."""
+    """Tabla HTML de importes agrupados por Clase SAT."""
     esc = html.escape
-    cabeza = ["CLASE SAT", "DESCRIPCIÓN OFICIAL SAT", "TOTAL FACTURADO (MXN)", "% DEL TOTAL"]
-    colgroup = '<colgroup><col style="width:12%"><col style="width:54%"><col style="width:22%"><col style="width:12%"></colgroup>'
+    tiene_subtotal = "Subtotal" in t.columns
+    cabeza = ["CLASE SAT", "DESCRIPCIÓN OFICIAL SAT"]
+    if tiene_subtotal:
+        cabeza.append("SUBTOTAL NETO (MXN)")
+    cabeza.extend(["TOTAL FACTURADO (MXN)", "% DEL TOTAL"])
+    anchos = (
+        [10, 42, 18, 18, 12]
+        if tiene_subtotal
+        else [12, 54, 22, 12]
+    )
+    colgroup = "<colgroup>" + "".join(
+        f'<col style="width:{ancho}%">' for ancho in anchos
+    ) + "</colgroup>"
     filas = []
     for _, r in t.iterrows():
         clase = ' class="sf-total"' if r["Tipo"] == "total" else ""
-        filas.append(f'<tr{clase}><td>{esc(str(r["Clase"]))}</td><td class="sf-nombre" title="{esc(str(r["Descripcion"]), quote=True)}">{esc(str(r["Descripcion"]))}</td>'
-                     f'<td class="sf-num">${r["Total"]:,.0f}</td><td class="sf-num">{r["Pct"]:.2f}%</td></tr>')
-    encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i >= 2 else f"<th>{esc(c)}</th>" for i, c in enumerate(cabeza)) + "</tr></thead>"
+        celdas = [
+            f'<td>{esc(str(r["Clase"]))}</td>',
+            f'<td class="sf-nombre" title="{esc(str(r["Descripcion"]), quote=True)}">'
+            f'{esc(str(r["Descripcion"]))}</td>',
+        ]
+        if tiene_subtotal:
+            celdas.append(f'<td class="sf-num">${r["Subtotal"]:,.0f}</td>')
+        celdas.extend([
+            f'<td class="sf-num">${r["Total"]:,.0f}</td>',
+            f'<td class="sf-num">{r["Pct"]:.2f}%</td>',
+        ])
+        filas.append(f'<tr{clase}>{"".join(celdas)}</tr>')
+    encabezado = "<thead><tr>" + "".join(
+        f'<th class="sf-num">{esc(c)}</th>' if i >= 2 else f"<th>{esc(c)}</th>"
+        for i, c in enumerate(cabeza)
+    ) + "</tr></thead>"
     return f'{CSS_SIN_FACTURACION}<div class="sf-wrap"><table class="sf-tabla">{colgroup}{encabezado}<tbody>{"".join(filas)}</tbody></table></div>'
 
