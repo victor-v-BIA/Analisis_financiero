@@ -682,7 +682,7 @@ def _seccion_egresos_sat(
                 "type": "table",
                 "title": "Detalle de Facturación Recibida por Clase SAT",
                 "df": tabla_pdf,
-                "column_widths_pct": [10, 42, 18, 18, 12],
+                "column_widths_pct": [12, 42, 18, 18, 12],
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             }
         ])
