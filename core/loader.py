@@ -1257,11 +1257,8 @@ def _file_uploader_persistente(etiqueta: str, tipos: list[str], clave: str) -> _
     return _ArchivoMem(*guardado)
 
 
-def _bloque_constancia_sat() -> pd.DataFrame:
-    """Bloque 1 de la sección 10: cargador persistente del PDF de la Constancia de Situación Fiscal (sin tabla visible ni captura manual). Lee internamente su tabla «Actividades Económicas» y
-    devuelve un DataFrame (`Actividad Económica`, `Porcentaje (%)`, `Fecha de inicio`) que alimenta la dona «Distribución de Actividades Económicas Declaradas»; sin PDF, o si no se pudo leer, la tabla
-    sale vacía (la dona trae «Sin actividades declaradas»). Un PDF ilegible o sin la tabla se avisa con un `st.warning`."""
-    pdf = _file_uploader_persistente("Sube la Constancia de Situación Fiscal (PDF)", ["pdf"], "csf_pdf")
+def _actividades_constancia_sat(pdf: _ArchivoMem | None) -> pd.DataFrame:
+    """Lee las actividades económicas de un PDF de Constancia, si se proporcionó."""
     filas = []
     if pdf is not None:
         try:
@@ -1276,6 +1273,14 @@ def _bloque_constancia_sat() -> pd.DataFrame:
     return pd.DataFrame({"Actividad Económica": pd.Series([f["Actividad Económica"] for f in filas], dtype="object"),
                          "Porcentaje (%)": pd.Series([f["Porcentaje (%)"] for f in filas], dtype="float"),
                          "Fecha de inicio": pd.Series([f["Fecha de inicio"] for f in filas], dtype="object")})
+
+
+def _bloque_constancia_sat() -> pd.DataFrame:
+    """Carga la Constancia con su uploader persistente y devuelve sus actividades."""
+    pdf = _file_uploader_persistente(
+        "Sube la Constancia de Situación Fiscal (PDF)", ["pdf"], "csf_pdf"
+    )
+    return _actividades_constancia_sat(pdf)
 
 
 def _normalizar_clave_sat(serie: pd.Series) -> pd.Series:

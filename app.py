@@ -9,6 +9,7 @@ import streamlit as st
 from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
 from views.expense_view import (modulo_egresos)
+from views.income_expense_detail import (modulo_ingresos_sat)
 from components.styles import  CSS_FUENTE_GLOBAL, CSS_PANTALLA_SELECCION
 from config import CSS_TARJETAS_KPI
 
@@ -262,7 +263,7 @@ def main() -> None:
         if hay_archivos_ruteados:
             modulo = st.radio("Módulo a Analizar:",
                               ["Dashboard Ejecutivo (Riesgo y Viabilidad)", "Ingresos (Auditoría Operativa)",
-                               "Egresos (Auditoría Operativa)"])
+                               "Egresos (Auditoría Operativa)", "Barrido y Visoría"])
         else:
             modulo = "Dashboard Ejecutivo (Riesgo y Viabilidad)"
 
@@ -291,6 +292,9 @@ def main() -> None:
         modulo_riesgo(file_ingresos_facturas, file_ingresos_pago, file_egresos_facturas,
                       file_egresos_pago, file_nomina, file_egresos_productos=file_egresos_productos,
                       file_fix=file_fix, file_razones=file_razones)
+    elif modulo == "Barrido y Visoría":
+        modulo_ingresos_sat(file_ingresos_facturas, file_egresos_facturas)
+
     elif modulo == "Ingresos (Auditoría Operativa)":
         modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, None,
                         file_egresos_facturas, file_egresos_pago, file_nomina)
