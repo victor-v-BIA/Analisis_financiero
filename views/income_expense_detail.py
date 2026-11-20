@@ -378,7 +378,7 @@ def _seccion_clave_sat(
         int(anio) for anio in d["Anio"].unique()
     )
     elegidos = st.pills(
-        "Años",
+        "Años de Ingresos",
         disponibles,
         selection_mode="multi",
         default=disponibles,
@@ -586,7 +586,7 @@ def _seccion_egresos_sat(
             pdf_elements.append({"type": "callout", "text": escape(mensaje)})
         return
     elegidos = st.pills(
-        "Años de egresos",
+        "Años de Egresos",
         disponibles,
         selection_mode="multi",
         default=disponibles,
