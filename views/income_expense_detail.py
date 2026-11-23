@@ -38,9 +38,9 @@ def _cargar_archivos_clase_sat() -> tuple[
     version_key = "clase_sat_archivos_uploader_version"
     version = int(st.session_state.get(version_key, 0))
     archivos_subidos = st.file_uploader(
-        "Sube aquí las bases que falten. Las bases de CFDIs Recibidos que ya cargaste "
-        "en la barra lateral se reutilizan automáticamente. También puedes cargar "
-        "CFDIs emitidos y la Constancia de Situación Fiscal (PDF).",
+        "Sube aquí las bases que falten. Los archivos cargados en este módulo tienen "
+        "prioridad; si falta una base, se reutiliza la correspondiente de la barra "
+        "lateral. También puedes cargar la Constancia de Situación Fiscal (PDF).",
         type=sorted(_TIPOS_ARCHIVO_CLASE_SAT | {"pdf"}),
         accept_multiple_files=True,
         key=f"clase_sat_archivos_uploader_{version}",)
@@ -165,18 +165,18 @@ def modulo_ingresos_sat(
         _cargar_archivos_clase_sat()
     )
     f_emitidos = (
-        _archivo_en_memoria(file_emitidos_productos) or f_emitidos_local
+        f_emitidos_local or _archivo_en_memoria(file_emitidos_productos)
     )
     f_egresos = (
-        _archivo_en_memoria(file_egresos_productos) or f_egresos_local
+        f_egresos_local or _archivo_en_memoria(file_egresos_productos)
     )
-    f_encabezados = _archivo_en_memoria(file_egresos) or f_encabezados_local
-    if file_egresos_productos is not None:
+    f_encabezados = f_encabezados_local or _archivo_en_memoria(file_egresos)
+    if f_egresos_local is None and file_egresos_productos is not None:
         st.caption(
             f"CFDIs Recibidos Productos reutilizados desde la barra lateral: "
             f"{f_egresos.name}."
         )
-    if file_emitidos_productos is not None:
+    if f_emitidos_local is None and file_emitidos_productos is not None:
         st.caption(
             f"CFDIs Emitidos Productos reutilizados desde la barra lateral: "
             f"{f_emitidos.name}."

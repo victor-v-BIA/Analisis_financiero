@@ -91,10 +91,10 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
         "ivatrasladado", "tasaimpuestostrasladados", "importebase", "uuiddr", "subtotal", "montomxn", "descripcion",
-        "totalmxntc", "subtotalmxntc", "uuidcfdiremitido",
+        "totalmxntc", "subtotalmxntc", "uuidcfdiemitido", "uuidcfdiremitido",
         "cantidad", "valorunitario", "unidad", "unidaddemedida", "numeroorden", "numerodeorden",
         "numorden", "nodeorden", "orden", "ordencompra", "ordendecompra",
-        "folio", "fechadeoperacion", "claveunidad", "codigosat", "descuento",
+        "folio", "fechadeoperacion", "claveunidad", "clavesat", "codigosat", "descuento",
         "impuestostrasladados", "impuestosretenidos", "tipodecambiodof",
         "uuidcfdirecibido", "partida", "importelocaltrasladado",
         "importelocalretenido",
@@ -1438,6 +1438,12 @@ def emitidos_productos_sat(
     df: pd.DataFrame, df_encabezados: pd.DataFrame
 ) -> pd.DataFrame:
     """Cruza productos emitidos con facturas activas y calcula subtotal y total por partida en MXN."""
+    columna_clave_sat = buscar_columna(df.columns, "Clave SAT")
+    columna_clave = buscar_columna(df.columns, "Clave")
+    if columna_clave_sat is not None and columna_clave_sat != columna_clave:
+        if columna_clave is not None:
+            df = df.drop(columns=[columna_clave])
+        df = df.rename(columns={columna_clave_sat: "Clave"})
     df = resolver_columnas(df, COLS_EMITIDOS_PRODUCTOS, COLS_EMITIDOS_PRODUCTOS_OPC)
     uuid_col = buscar_columna(df.columns, "UUID CFDI Emitido")
     if uuid_col is None:
@@ -2174,10 +2180,12 @@ def _clasificar_base_clase_sat(
         and bool({"total", "total mxn tc"} & columnas)
         and bool({"tipo documento", "tipo de documento", "tipo de comprobante"} & columnas)
     )
-    es_emitidos = {
-        "clave", "fecha", "estatus", "tipo documento", "importe",
-        "uuid cfdi emitido",
-    }.issubset(columnas)
+    es_emitidos = (
+        "uuid cfdi emitido" in columnas
+        and "fecha" in columnas
+        and "importe" in columnas
+        and bool({"clave", "clave sat"} & columnas)
+    )
     es_egresos = (
         bool({"codigo sat", "clave"} & columnas)
         and {

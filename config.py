@@ -203,10 +203,9 @@ TOP_DONA_CLASES_SAT = 5                                                         
 
 
 COLS_EMITIDOS_PRODUCTOS = {
-    "Clave": [], "Fecha": [], "Estatus": [], "Tipo Documento": [], "Importe": [],
+    "Clave": [], "Fecha": [], "Importe": [], "UUID CFDI Emitido": [],
 }
 COLS_EMITIDOS_PRODUCTOS_OPC = {
-    "UUID CFDI Emitido": [],
     "Descripcion": [],
     "Razon Social Receptor": [],
     "RFC Receptor": [],

@@ -7,6 +7,7 @@ from core.finance_logic import facturas_a_mxn
 from core.loader import (
     _anual_ppd_cache,
     _concentracion_cache,
+    _clasificar_base_clase_sat,
     _factor_mxn_productos,
     _resumen_sf_cache,
     emitidos_productos_sat,
@@ -57,6 +58,32 @@ class CurrencyConversionTests(unittest.TestCase):
         self.assertEqual(result["Tipo_Cambio_Aplicado"].tolist(), [1, 20, 19])
         self.assertEqual(result.loc[1, "SubTotal_Neto_MXN"], 1800)
         self.assertEqual(result.loc[1, "Monto_MXN"], 2060)
+
+    def test_issued_products_accept_ccr_rows_and_prefer_sat_key(self):
+        headers = pd.DataFrame({
+            "UUID": ["A"],
+            "Estatus": ["Activo"],
+            "Tipo Documento": ["Factura"],
+            "Tipo de Cambio": [1],
+        })
+        products = pd.DataFrame({
+            "UUID CFDI Emitido": ["A"],
+            "Clave": ["INTERNAL-CODE"],
+            "Clave SAT": ["10101010"],
+            "Fecha": ["2025-01-01"],
+            "Importe": [100],
+            "Descuento": [0],
+            "Moneda": ["MXN"],
+            "Tipo de Cambio": [0],
+            "Impuestos Trasladados": [16],
+            "Impuestos Retenidos": [0],
+        })
+
+        result = emitidos_productos_sat(products, headers)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.iloc[0]["Clave"], "10101010")
+        self.assertEqual(result.iloc[0]["Monto_MXN"], 116)
 
     def test_received_products_prefer_header_rate_to_dof(self):
         headers = pd.DataFrame({
@@ -219,6 +246,35 @@ class CurrencyConversionTests(unittest.TestCase):
         self.assertEqual(concentracion["total_general"], 2000)
         self.assertIsNone(resumen["motivo"])
         self.assertIn(2025, resumen["anios"])
+
+    def test_module_classifier_distinguishes_issued_products_from_received(self):
+        emitted_products = (
+            b"UUID CFDI Emitido,Clave SAT,Fecha,Importe,Impuestos Trasladados,"
+            b"Impuestos Retenidos\n"
+            b"E1,10101010,2025-01-15,100,16,0\n"
+        )
+        received_products = (
+            b"UUID CFDI Recibido,Codigo SAT,Fecha,Importe,Impuestos Trasladados,"
+            b"Impuestos Retenidos\n"
+            b"R1,10101010,2025-01-15,100,16,0\n"
+        )
+
+        self.assertEqual(
+            _clasificar_base_clase_sat(
+                "CFDIs Emitidos Productos (6) Nuevo CCR.csv",
+                emitted_products,
+                "classifier-test",
+            ),
+            "emitidos",
+        )
+        self.assertEqual(
+            _clasificar_base_clase_sat(
+                "CFDI Recibidos Productos CCR Nuevo.csv",
+                received_products,
+                "classifier-test",
+            ),
+            "egresos",
+        )
 
 
 if __name__ == "__main__":
