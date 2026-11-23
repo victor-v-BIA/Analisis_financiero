@@ -686,4 +686,8 @@ def _seccion_egresos_sat(
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             }
         ])
+        nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")        
+        nota_egresos_pdf = "<b>Nota</b> " + nota_egresos
+        pdf_elements.append({"type": "callout",
+                                    "text": nota_egresos_pdf})
     
