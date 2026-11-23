@@ -151,14 +151,21 @@ def _cargar_archivos_clase_sat() -> tuple[
 
 
 def modulo_ingresos_sat(
-    file_ingresos, file_egresos, file_egresos_productos=None) -> None:
+    file_ingresos,
+    file_egresos,
+    file_egresos_productos=None,
+    file_emitidos_productos=None,
+) -> None:
     anios_5 = anios_5_archivos(file_ingresos, file_egresos)
     pdf_elements = []
 
     st.title("Barrido y Visoría")
 
-    f_emitidos, f_egresos_local, f_encabezados_local, f_constancia = (
+    f_emitidos_local, f_egresos_local, f_encabezados_local, f_constancia = (
         _cargar_archivos_clase_sat()
+    )
+    f_emitidos = (
+        _archivo_en_memoria(file_emitidos_productos) or f_emitidos_local
     )
     f_egresos = (
         _archivo_en_memoria(file_egresos_productos) or f_egresos_local
@@ -169,12 +176,18 @@ def modulo_ingresos_sat(
             f"CFDIs Recibidos Productos reutilizados desde la barra lateral: "
             f"{f_egresos.name}."
         )
+    if file_emitidos_productos is not None:
+        st.caption(
+            f"CFDIs Emitidos Productos reutilizados desde la barra lateral: "
+            f"{f_emitidos.name}."
+        )
 
     actividades = _actividades_constancia_sat(f_constancia)
     anios_ingresos = _seccion_clave_sat(
         anios_5=anios_5,
         pdf_elements=pdf_elements,
         f_emitidos_productos=f_emitidos,
+        f_encabezados_emitidos=_archivo_en_memoria(file_ingresos),
         actividades=actividades,)
     st.divider()
     _seccion_egresos_sat(
@@ -296,6 +309,7 @@ def _seccion_clave_sat(
     anios_5: list[int] | tuple,
     pdf_elements: list | None,
     f_emitidos_productos: _ArchivoMem | None,
+    f_encabezados_emitidos: _ArchivoMem | None,
     actividades: pd.DataFrame,) -> list[int]:
     """Muestra el perfil fiscal y agrega sus visualizaciones y notas al PDF."""
     subtitulo_seccion = "Perfil Fiscal Declarado y Estructura de Ingresos Facturados"
@@ -309,9 +323,8 @@ def _seccion_clave_sat(
             "de actividades conserva el histórico anterior al primer año seleccionado y "
             "las actividades de los años elegidos; al seleccionar todos los años, muestra "
             "todas las actividades. El filtro también recalcula el anillo facturado y la "
-            "tabla. Solo partidas Activas de tipo Factura. El monto por partida incluye "
-            "el IVA trasladado según Importe, Importe Base y Tasa Impuestos Trasladados; "
-            "no usa el Total repetido por renglón."
+            "tabla. Solo partidas asociadas por UUID a facturas activas; subtotal y total "
+            "por partida se convierten a MXN usando la jerarquía de tipo de cambio."
         ),
     )
     if pdf_elements is not None:
@@ -325,12 +338,25 @@ def _seccion_clave_sat(
             pdf_elements.append({"type": "callout",
                                  "text": escape(mensaje)})
         return []
+    if f_encabezados_emitidos is None:
+        mensaje = (
+            "Para cruzar las partidas emitidas por UUID, carga la base "
+            "«SAT CFDIs Emitidos» en la barra lateral."
+        )
+        st.info(mensaje)
+        if pdf_elements is not None:
+            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+        return []
 
     try:
         d = _emitidos_productos_cache(
-            f_emitidos_productos.name, f_emitidos_productos.getvalue(), CODIGO_VERSION
+            f_emitidos_productos.name,
+            f_emitidos_productos.getvalue(),
+            f_encabezados_emitidos.name,
+            f_encabezados_emitidos.getvalue(),
+            CODIGO_VERSION,
         )
-    except KeyError as e:
+    except (KeyError, ValueError) as e:
         mensaje = (
             f"Información insuficiente: «{f_emitidos_productos.name}» no trae las "
             f"columnas esperadas de conceptos de CFDI emitidos. {e.args[0]}"
@@ -342,13 +368,24 @@ def _seccion_clave_sat(
         return []
     if d.empty:
         mensaje = (
-            f"La base «{f_emitidos_productos.name}» no trae partidas Activas de tipo Factura."
+            f"La base «{f_emitidos_productos.name}» no trae partidas asociadas por UUID "
+            "a facturas emitidas activas de tipo Factura con importes convertibles a MXN."
         )
         st.info(mensaje)
         if pdf_elements is not None:
             pdf_elements.append({"type": "callout",
                                  "text": escape(mensaje)})
         return []
+    if d.attrs.get("filas_sin_cruce"):
+        st.warning(
+            f"{d.attrs['filas_sin_cruce']:,} partidas no coincidieron con los UUID "
+            "de SAT CFDIs Emitidos y se excluyeron."
+        )
+    if d.attrs.get("filas_sin_tipo_cambio"):
+        st.warning(
+            f"{d.attrs['filas_sin_tipo_cambio']:,} partidas extranjeras sin tipo de "
+            "cambio válido se excluyeron."
+        )
 
     catalogo = cargar_catalogo_sat()
     if catalogo is None:
@@ -422,6 +459,7 @@ def _seccion_clave_sat(
         tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
             "Clase": "Clase SAT",
             "Descripcion": "Descripción oficial SAT",
+            "Subtotal": "Subtotal neto (MXN)",
             "Total": "Total facturado (MXN)",
             "Pct": "% del total",})
         tabla_pdf["Descripción oficial SAT"] = tabla_pdf["Descripción oficial SAT"].map(
@@ -430,6 +468,12 @@ def _seccion_clave_sat(
         tabla_pdf["Total facturado (MXN)"] = tabla_pdf["Total facturado (MXN)"].map(
             lambda valor: f"${valor:,.0f}"
         )
+        anchos_pdf = [12, 54, 22, 12]
+        if "Subtotal neto (MXN)" in tabla_pdf.columns:
+            tabla_pdf["Subtotal neto (MXN)"] = tabla_pdf[
+                "Subtotal neto (MXN)"
+            ].map(lambda valor: f"${valor:,.0f}")
+            anchos_pdf = [10, 42, 18, 18, 12]
         tabla_pdf["% del total"] = tabla_pdf["% del total"].map(
             lambda valor: f"{valor:.2f}%"
         )
@@ -442,7 +486,7 @@ def _seccion_clave_sat(
                 "type": "table",
                 "title": "Detalle de Facturación por Clase SAT",
                 "df": tabla_pdf,
-                "column_widths_pct": [12, 54, 22, 12],
+                "column_widths_pct": anchos_pdf,
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             },
         ])
@@ -470,7 +514,9 @@ def _seccion_egresos_sat(
         help=(
             "Compara las actividades declaradas en la Constancia de Situación Fiscal "
             "con los egresos recibidos, agrupados por Clase SAT. Los importes se "
-            "convierten a MXN por partida; se excluyen las claves de divisas 841216."
+            "convierten a MXN por partida: tipo de cambio de la partida, luego el del "
+            "encabezado por UUID y finalmente el DOF. Se muestran subtotal y total; "
+            "se excluyen las claves de divisas 841216."
         ),
     )
     if f_egresos_productos is None:

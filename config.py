@@ -39,7 +39,6 @@ COLS_FACTURAS = {
     "Estatus": [],
     "Tipo Documento": ["Tipo de documento", "Tipo de Comprobante"],
     "Metodo de Pago": ["Método de Pago"],
-    "Total": [],
 }
 COLS_COMPLEMENTOS = {
     "UUID": [],
@@ -67,7 +66,7 @@ MES_ABREV = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 
 # igual que resolver_columnas()-. Los Complementos de Pago de Egresos NO pasan por aquí: modulo_egresos lee y
 # valida su propio archivo (Base PAGO) en línea, dentro de modulo_egresos().
 COLUMNAS_FACTURAS_EGR_REQUERIDAS = {
-    "Total": [],
+    "Total": ["Total MXN TC"],
     "Metodo de Pago": ["Método de Pago"],
     "Fecha": ["Fecha y Hora", "Fecha de Emision", "Fecha de Emisión", "Fecha Emision"],
     "Estatus": [],
@@ -203,8 +202,24 @@ COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                 
 TOP_DONA_CLASES_SAT = 5                                                                           # clases que la dona derecha muestra antes de agrupar «Otras clases (N)»
 
 
-COLS_EMITIDOS_PRODUCTOS = {"Clave": [], "Fecha": [], "Estatus": [], "Tipo Documento": [], "Importe": []}
-COLS_EMITIDOS_PRODUCTOS_OPC = {"Descripcion": [], "Razon Social Receptor": [], "RFC Receptor": [], "Cantidad": [], "Importe Base": [], "Tasa Impuestos Trasladados": []}
+COLS_EMITIDOS_PRODUCTOS = {
+    "Clave": [], "Fecha": [], "Estatus": [], "Tipo Documento": [], "Importe": [],
+}
+COLS_EMITIDOS_PRODUCTOS_OPC = {
+    "UUID CFDI Emitido": [],
+    "Descripcion": [],
+    "Razon Social Receptor": [],
+    "RFC Receptor": [],
+    "Cantidad": [],
+    "Descuento": [],
+    "Moneda": [],
+    "Tipo de Cambio": [],
+    "Tipo de Cambio DOF": [],
+    "Impuestos Trasladados": [],
+    "Impuestos Retenidos": [],
+    "Importe Local Trasladado": [],
+    "Importe Local Retenido": [],
+}
 
 
 # ============================================
@@ -435,13 +450,20 @@ ESTADOS_INEGI = {
 # Mapa {nombre_visible_en_selector: (id_23_o_32_estados, [id_9_estados_con_petroleo])}
 # Series originales · Índice de volumen físico base 2018=100 (FREQ=4, UNIT=1061)
 INDICADORES_ITAEE = {
-    "Total de la actividad económica": ("741177", "741180"),
+    "Total": ("741177", "741180"),
     "Actividades primarias": ("741259",),
+    "111-112 - Agricultura. Cría y explotación de animales": ("778083",),
+    "Resto (Actividades primarias)": ("778147",),
     "Actividades secundarias": ("741323", "741326"),
     "21 - Minería": ("741405", "741408"),
-    "22 - Generación, transmisión y distribución de energía eléctrica, agua y gas": ("741487", "741490"),
+    "22 - Generación, transmisión, distribución y comercialización de energía eléctrica, suministro de agua y de gas natural por ductos al consumidor final": ("741487", "741490"),
     "23 - Construcción": ("741569", "741572"),
     "31-33 - Industrias manufactureras": ("741651", "741654"),
     "Actividades terciarias": ("741733",),
-    "43-46 - Comercio al por mayor y al por menor": ("741797",),
+    "43-46 - Comercio": ("741797",),
+    "48-49-51 - Transportes, correos y almacenamiento. Información en medios masivos": ("778211",),
+    "52-53 - Servicios financieros y de seguros. Servicios inmobiliarios y de alquiler de bienes muebles e intangibles": ("778275",),
+    "54-55-56-81 - Servicios profesionales, científicos y técnicos. Corporativos. Servicios de apoyo a los negocios y manejo de residuos y desechos, y servicios de remediación. Otros servicios excepto actividades gubernamentales": ("778339",),
+    "61-62-93 - Servicios educativos. Servicios de salud y de asistencia social. Actividades legislativas, gubernamentales, de impartición de justicia": ("778403",),
+    "71-72 - Servicios de esparcimiento culturales y deportivos, y otros servicios recreativos. Servicios de alojamiento temporal y de preparación de alimentos y bebidas": ("778467",),
 }

@@ -5,6 +5,8 @@ sincronizar archivos desde Google Drive o localmente (Lazy Loading),
 aplica los estilos globales, enruta los módulos y maneja las funciones de control.
 '''
 
+import hashlib
+
 import streamlit as st
 from views.executive_view import (modulo_riesgo)
 from views.income_view import (modulo_ingresos)
@@ -35,6 +37,50 @@ class ArchivoGrupoSeguro:
 
     def getvalue(self):
         return self.archivos
+
+
+def _huella_archivos_validacion(tipos_archivo: dict) -> str:
+    huella = hashlib.sha256()
+    for tipo, archivos in sorted(tipos_archivo.items()):
+        for archivo in archivos:
+            huella.update(tipo.encode("utf-8"))
+            huella.update(archivo.name.encode("utf-8"))
+            if hasattr(archivo, "id"):
+                huella.update(str(archivo.id).encode("utf-8"))
+                continue
+            contenido = archivo.getvalue() if hasattr(archivo, "getvalue") else archivo
+            if isinstance(contenido, bytes):
+                huella.update(hashlib.sha256(contenido).digest())
+    return huella.hexdigest()
+
+
+def _clasificar_nombre_archivo(nombre: str) -> str | None:
+    nombre = nombre.lower()
+    if any(texto in nombre for texto in (
+        "financial-ratios", "financial_ratios", "razones financieras"
+    )):
+        return "razones_financieras"
+    if (
+        nombre.startswith("fix") or "_fix" in nombre or "fix_" in nombre
+        or "banxico" in nombre or "tipo de cambio" in nombre
+    ):
+        return "fix"
+    if "emitid" in nombre and "producto" in nombre:
+        return "ingresos_productos"
+    if "emitid" in nombre:
+        return "ingresos_facturas"
+    if "cliente" in nombre and "pago" in nombre:
+        return "ingresos_pago"
+    if "producto" in nombre:
+        return "egresos_productos"
+    if "recibid" in nombre and "pago" in nombre:
+        return "egresos_pago"
+    if "recibid" in nombre:
+        return "egresos_facturas"
+    if "nomina" in nombre or "nómina" in nombre:
+        return "nomina"
+    return None
+
 
 def _reiniciar_diagnostico() -> None:
     st.cache_data.clear()
@@ -125,8 +171,8 @@ def main() -> None:
         
         tipos_archivo = {
             "ingresos_facturas": [], "ingresos_pago": [], "egresos_facturas": [],
-            "egresos_productos": [], "egresos_pago": [], "nomina": [], "fix": [],
-            "razones_financieras": []
+            "ingresos_productos": [], "egresos_productos": [], "egresos_pago": [],
+            "nomina": [], "fix": [], "razones_financieras": []
         }
         timbrado_omitido = False
         no_clasificados = []
@@ -147,16 +193,8 @@ def main() -> None:
                             timbrado_omitido = True
                             continue
                         
-                        tipo = None
-                        if any(texto in nombre for texto in ("financial-ratios", "financial_ratios", "razones financieras")): tipo = "razones_financieras"
-                        elif nombre.startswith("fix") or "_fix" in nombre or "fix_" in nombre or "banxico" in nombre or "tipo de cambio" in nombre: tipo = "fix"
-                        elif "emitid" in nombre and "producto" not in nombre: tipo = "ingresos_facturas"
-                        elif "cliente" in nombre and "pago" in nombre: tipo = "ingresos_pago"
-                        elif "producto" in nombre and "emitid" not in nombre: tipo = "egresos_productos"
-                        elif "recibid" in nombre and "pago" not in nombre: tipo = "egresos_facturas"
-                        elif "recibid" in nombre and "pago" in nombre: tipo = "egresos_pago"
-                        elif "nomina" in nombre or "nómina" in nombre: tipo = "nomina"
-                        else:
+                        tipo = _clasificar_nombre_archivo(nombre)
+                        if tipo is None:
                             no_clasificados.append(f_info["name"])
                             continue
                             
@@ -181,16 +219,8 @@ def main() -> None:
                         timbrado_omitido = True
                         continue
                     
-                    tipo = None
-                    if any(texto in nombre for texto in ("financial-ratios", "financial_ratios", "razones financieras")): tipo = "razones_financieras"
-                    elif nombre.startswith("fix") or "_fix" in nombre or "fix_" in nombre or "banxico" in nombre or "tipo de cambio" in nombre: tipo = "fix"
-                    elif "emitid" in nombre and "producto" not in nombre: tipo = "ingresos_facturas"
-                    elif "cliente" in nombre and "pago" in nombre: tipo = "ingresos_pago"
-                    elif "producto" in nombre and "emitid" not in nombre: tipo = "egresos_productos"
-                    elif "recibid" in nombre and "pago" not in nombre: tipo = "egresos_facturas"
-                    elif "recibid" in nombre and "pago" in nombre: tipo = "egresos_pago"
-                    elif "nomina" in nombre or "nómina" in nombre: tipo = "nomina"
-                    else:
+                    tipo = _clasificar_nombre_archivo(nombre)
+                    if tipo is None:
                         no_clasificados.append(f.name)
                         continue
                         
@@ -206,6 +236,13 @@ def main() -> None:
         if no_clasificados:
             st.warning("Archivos ignorados: " + ", ".join(no_clasificados))
 
+        huella_archivos = _huella_archivos_validacion(tipos_archivo)
+        if st.session_state.get("huella_archivos_validacion") != huella_archivos:
+            st.session_state["huella_archivos_validacion"] = huella_archivos
+            st.session_state["estado_validacion"] = "pendiente"
+            st.session_state["alertas_fiscales"] = []
+            st.session_state["regimen_no_verificado"] = False
+
         if archivos_listos:
 
             if 'estado_validacion' not in st.session_state:
@@ -218,20 +255,41 @@ def main() -> None:
                 ))
                 if not archivos_fiscales:
                     st.session_state['estado_validacion'] = 'ok'
+                    st.session_state["regimen_no_verificado"] = False
                 else:
                     with st.spinner("Analizando datos..."):
                         from core.loader import validar_congruencia_fiscal
                         alertas = validar_congruencia_fiscal(tipos_archivo, st.session_state['regimen'])
 
-                        if alertas:
+                        alertas_no_verificacion = [
+                            alerta for alerta in alertas
+                            if alerta.startswith("Los datos no bastan para verificar")
+                        ]
+                        alertas_reales = [
+                            alerta for alerta in alertas
+                            if not alerta.startswith("Los datos no bastan para verificar")
+                        ]
+                        if alertas_reales:
                             st.session_state['estado_validacion'] = 'error'
-                            st.session_state['alertas_fiscales'] = alertas
+                            st.session_state['alertas_fiscales'] = alertas_reales
+                            st.session_state["regimen_no_verificado"] = False
+                        elif alertas_no_verificacion:
+                            st.session_state['estado_validacion'] = 'ok'
+                            st.session_state['alertas_fiscales'] = []
+                            st.session_state["regimen_no_verificado"] = True
                         else:
                             st.session_state['estado_validacion'] = 'ok'
+                            st.session_state["regimen_no_verificado"] = False
                 st.rerun()
 
             elif st.session_state['estado_validacion'] == 'ok':
 
+                if st.session_state.get("regimen_no_verificado", False):
+                    st.warning(
+                        "No se pudo verificar automáticamente el régimen con los RFC "
+                        "de estos archivos. Puedes continuar; confirma que elegiste "
+                        "el tipo de contribuyente correcto."
+                    )
                 if not st.session_state.get('toast_mostrado', False):
                     st.toast("Archivos validados y listos", icon="✅")
                     # Apagamos el interruptor para que no vuelva a salir
@@ -244,6 +302,7 @@ def main() -> None:
                 return arch_tipo[-1]
 
             file_ingresos_facturas = archivo_tipo("ingresos_facturas")
+            file_ingresos_productos = archivo_tipo("ingresos_productos")
             file_ingresos_pago = archivo_tipo("ingresos_pago")
             file_egresos_facturas = archivo_tipo("egresos_facturas")
             file_egresos_productos = archivo_tipo("egresos_productos")
@@ -254,11 +313,11 @@ def main() -> None:
             
             hay_archivos_ruteados = any(f is not None for f in (
                 file_ingresos_facturas, file_ingresos_pago,
-                file_egresos_facturas, file_egresos_productos,
+                file_ingresos_productos, file_egresos_facturas, file_egresos_productos,
                 file_egresos_pago, file_nomina, file_razones))
         else:
             hay_archivos_ruteados = False
-            file_ingresos_facturas = file_ingresos_pago = file_egresos_facturas = file_egresos_productos = file_egresos_pago = file_nomina = file_fix = file_razones = None
+            file_ingresos_facturas = file_ingresos_productos = file_ingresos_pago = file_egresos_facturas = file_egresos_productos = file_egresos_pago = file_nomina = file_fix = file_razones = None
 
         if hay_archivos_ruteados:
             modulo = st.radio("Módulo a Analizar:",
@@ -297,6 +356,7 @@ def main() -> None:
             file_ingresos_facturas,
             file_egresos_facturas,
             file_egresos_productos=file_egresos_productos,
+            file_emitidos_productos=file_ingresos_productos,
         )
 
     elif modulo == "Ingresos (Auditoría Operativa)":

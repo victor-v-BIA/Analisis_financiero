@@ -91,12 +91,13 @@ def leer_archivo(nombre: str, contenido) -> pd.DataFrame:
         "rfcreceptor", "nombrereceptor", "razonsocialreceptor", "razonsocialcliente", 
         "razonsocial1", "formadepago", "moneda", "tipodecambio", "serie", 
         "ivatrasladado", "tasaimpuestostrasladados", "importebase", "uuiddr", "subtotal", "montomxn", "descripcion",
+        "totalmxntc", "subtotalmxntc", "uuidcfdiremitido",
         "cantidad", "valorunitario", "unidad", "unidaddemedida", "numeroorden", "numerodeorden",
         "numorden", "nodeorden", "orden", "ordencompra", "ordendecompra",
         "folio", "fechadeoperacion", "claveunidad", "codigosat", "descuento",
         "impuestostrasladados", "impuestosretenidos", "tipodecambiodof",
         "uuidcfdirecibido", "partida", "importelocaltrasladado",
-        "importelocalretenido"
+        "importelocalretenido",
     }
     
     def es_columna_util(col_name):
@@ -193,6 +194,22 @@ def resolver_columnas(df: pd.DataFrame, requeridas: dict[str, list[str]],
         raise KeyError(f"Faltan columnas: {faltantes}. Columnas encontradas: {list(df.columns)}")
     return df.rename(columns=mapa)
 
+
+def _resolver_columnas_facturas(df: pd.DataFrame) -> pd.DataFrame:
+    opcionales = {
+        "Total": [],
+        "Total MXN TC": [],
+        "SubTotal": ["Subtotal"],
+        "Subtotal MXN TC": [],
+        "Moneda": [],
+        "Tipo de Cambio": [],
+    }
+    df = resolver_columnas(df, COLS_FACTURAS, opcionales)
+    if "Total" not in df.columns and "Total MXN TC" not in df.columns:
+        raise KeyError("Falta la columna Total o Total MXN TC.")
+    return df
+
+
 def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) -> None:
     """Hard stop explícito de columnas (por concepto, tolerante a variantes/acentos/mayúsculas vía _norm()).
 
@@ -209,7 +226,7 @@ def validar_columnas(columnas, requeridas: dict[str, list[str]], etiqueta: str) 
         st.stop()
 
 def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
-    """Facturas emitidas: activas, con fecha, método y total válidos; conserva Razón Social como receptor si falta ese campo."""
+    """Facturas emitidas: activas, filtradas y normalizadas a MXN desde Total MXN TC."""
     avisos: list[str] = []
     base = leer_archivo(nombre, contenido)
     columnas_nombre_receptor = (
@@ -228,7 +245,22 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
             presentes = ~valores.str.casefold().isin({"", "nan", "none", "null", "<na>"})
             nombre_receptor = nombre_receptor.mask(nombre_receptor.eq("") & presentes, valores)
         base["_Nombre_Receptor_Archivo"] = nombre_receptor
-    df = resolver_columnas(base, COLS_FACTURAS)
+    if buscar_columna(base.columns, "RFC Emisor") is None:
+        columnas_razon_social = [
+            columna for columna in base.columns
+            if _norm(str(columna)) == _norm("Razon Social")
+        ]
+        if columnas_razon_social:
+            base = base.drop(columns=columnas_razon_social)
+        base["RFC Emisor"] = ""
+        if not any(
+            buscar_columna(base.columns, nombre) is not None
+            for nombre in ("Nombre Emisor", "Razon Social Emisor", "Nombre del Emisor")
+        ):
+            base["Nombre Emisor"] = ""
+    df = _resolver_columnas_facturas(base)
+    if "Total MXN TC" not in df.columns:
+        raise KeyError("La base de CFDIs emitidos requiere la columna Total MXN TC para sumar los importes en MXN.")
     n0 = len(df)
 
     tipo_crudo = df["Tipo Documento"].astype(str)
@@ -245,9 +277,11 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
                   f"({n_ncr_crudo} NCR detectadas en el archivo, {int(df['Es_NCR'].sum())} tras el filtro).")
 
     # Asignación optimizada con categorías
-    df = df.assign(Fecha=a_fecha(df["Fecha y Hora"]), 
-                   Total=a_numero(df["Total"]),
+    df = df.assign(Fecha=a_fecha(df["Fecha y Hora"]),
+                   Total=a_numero(df["Total MXN TC"]),
                    Metodo_Pago=df["Metodo de Pago"].astype(str).str.upper().astype("category"))
+    if "Subtotal MXN TC" in df.columns:
+        df["SubTotal"] = a_numero(df["Subtotal MXN TC"])
 
     # Convertir las columnas originales a categorías para ahorrar RAM
     if "Estatus" in df.columns:
@@ -255,7 +289,11 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
     if "Tipo Documento" in df.columns:
         df["Tipo Documento"] = df["Tipo Documento"].astype("category")
 
-    ilegibles = df["Fecha"].isna() | df["Total"].isna()
+    ilegibles = (
+        df["Fecha"].isna()
+        | df["Total"].isna()
+        | ~np.isfinite(df["Total"])
+    )
     if ilegibles.any():
         n_ncr_perdidas = int((ilegibles & df["Es_NCR"]).sum())
         avisos.append(f"Facturas: {ilegibles.sum()} filas con fecha/total ilegible descartadas"
@@ -295,6 +333,8 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
                                "Razon Social.1")) if c), None))
     
     columnas = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total", "Es_NCR"]
+    if "SubTotal" in df.columns:
+        columnas.append("SubTotal")
     renombres = {"RFC Emisor": "RFC_Emisor", "Nombre Emisor": "Nombre_Emisor"}
     for col, nuevo in ((col_rfc_receptor, "RFC_Receptor"), (col_nombre_receptor, "Nombre_Receptor"),
                        (buscar_columna(df.columns, "Forma de Pago"), "Forma_Pago")):
@@ -308,9 +348,9 @@ def leer_facturas(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str
 
 
 def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, list[str]]:
-    """Facturación recibida (Egresos): candados exactos confirmados por el usuario, sumatoria bruta."""
+    """Facturación recibida: filtra comprobantes y normaliza Total/SubTotal a MXN."""
     avisos: list[str] = []
-    df = resolver_columnas(leer_archivo(nombre, contenido), COLS_FACTURAS)
+    df = _resolver_columnas_facturas(leer_archivo(nombre, contenido))
     n0 = len(df)
 
     estatus_limpio = df["Estatus"].astype(str).str.strip().str.upper()
@@ -334,12 +374,54 @@ def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, 
     avisos.append(f"Facturación recibida: {n0} filas leídas, {len(df)} vigentes de Tipo 'Factura'/'NCR' "
                   f"({int(df['Es_NCR'].sum())} NCR).")
 
-    total_limpio = df["Total"].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False)
-    
+    moneda = (
+        df["Moneda"].fillna("").astype(str).str.strip().str.upper()
+        if "Moneda" in df.columns
+        else pd.Series("", index=df.index)
+    )
+    es_mxn = moneda.isin(
+        ["", "NAN", "NONE", "NULL", "<NA>", "MXN", "PESO", "PESOS",
+         "PESO MEXICANO", "PESOS MEXICANOS"]
+    )
+    tipo_cambio = (
+        a_numero(df["Tipo de Cambio"])
+        if "Tipo de Cambio" in df.columns
+        else pd.Series(np.nan, index=df.index)
+    )
+    tc_valido = np.isfinite(tipo_cambio) & tipo_cambio.gt(0)
+    factor_origen = tipo_cambio.where(~es_mxn & tc_valido, 1.0)
+    factor_origen = factor_origen.where(es_mxn | tc_valido)
+    if "Total MXN TC" in df.columns:
+        total_mxn = a_numero(df["Total MXN TC"])
+        total_valido = total_mxn.notna() & np.isfinite(total_mxn)
+        factor_salida = pd.Series(1.0, index=df.index).where(total_valido)
+        total_mxn = total_mxn.where(total_valido)
+    else:
+        total_mxn = a_numero(df["Total"]) * factor_origen
+        total_valido = total_mxn.notna() & np.isfinite(total_mxn)
+        factor_salida = pd.Series(1.0, index=df.index).where(total_valido)
+        total_mxn = total_mxn.where(total_valido)
+
+    subtotal_mxn = None
+    if "Subtotal MXN TC" in df.columns:
+        subtotal_mxn = a_numero(df["Subtotal MXN TC"])
+    elif "Total MXN TC" not in df.columns and "SubTotal" in df.columns:
+        subtotal_mxn = a_numero(df["SubTotal"]) * factor_origen
+
+    sin_tipo_cambio = ~es_mxn & ~tc_valido
+    if "Total MXN TC" not in df.columns and sin_tipo_cambio.any():
+        avisos.append(
+            f"Facturación recibida: {int(sin_tipo_cambio.sum())} facturas extranjeras "
+            "sin Tipo de Cambio válido se excluirán."
+        )
+
     # Asignación optimizada con categorías
     df = df.assign(Fecha=a_fecha(df["Fecha y Hora"]),
-                   Total=pd.to_numeric(total_limpio, errors="coerce").fillna(0.0),
+                   Total=total_mxn,
+                   Factor_MXN=factor_salida,
                    Metodo_Pago=df["Metodo de Pago"].astype(str).str.upper().astype("category"))
+    if subtotal_mxn is not None:
+        df["SubTotal"] = subtotal_mxn
 
     if "Estatus" in df.columns:
         df["Estatus"] = df["Estatus"].astype("category")
@@ -362,12 +444,6 @@ def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, 
         df = df[~dup]
 
     col_forma = buscar_columna(df.columns, "Forma de Pago")
-    col_moneda, col_tc = buscar_columna(df.columns, "Moneda"), buscar_columna(df.columns, "Tipo de Cambio")
-    moneda = df[col_moneda].astype(str).str.strip().str.upper() if col_moneda is not None else pd.Series("MXN", index=df.index)
-    es_mxn = moneda.isin(["MXN", "PESOS", "PESO MEXICANO", "NAN", ""])
-    tipo_cambio = a_numero(df[col_tc]) if col_tc is not None else pd.Series(1.0, index=df.index)
-    df = df.assign(Factor_MXN=tipo_cambio.where(~es_mxn, 1.0).where(es_mxn | (tipo_cambio > 0)))
-    
     col_serie = buscar_columna(df.columns, "Serie")
     df["Serie"] = df[col_serie].fillna("").astype(str).str.strip() if col_serie else ""
     col_iva_total = buscar_columna(df.columns, "IVA Trasladado")
@@ -382,6 +458,8 @@ def leer_facturas_egresos(nombre: str, contenido: bytes) -> tuple[pd.DataFrame, 
         
     columnas_salida = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "Metodo_Pago", "Total",
                        "Es_NCR", "Factor_MXN", "Serie"]
+    if "SubTotal" in df.columns:
+        columnas_salida.append("SubTotal")
     if columnas_iva:
         columnas_salida.append("IVA_Trasladado")
     if col_forma is not None:
@@ -834,7 +912,7 @@ def _cargar_base_cache(nombre: str, _contenido: bytes, version: str) -> pd.DataF
     return leer_archivo(nombre, _contenido)
 
 @st.cache_data(show_spinner=False)
-def _anios_analisis_cache(_fac_ing, _fac_egr, version: str) -> tuple:
+def _anios_analisis_cache(fac_ing, fac_egr, version: str) -> tuple:
     """`obtener_anios_analisis` sobre las facturas de Emitidos (Ingresos) y Recibidos (Egresos), en caché."""
     def leer(lector, archivo):
         if archivo is None:
@@ -843,16 +921,16 @@ def _anios_analisis_cache(_fac_ing, _fac_egr, version: str) -> tuple:
             return lector(archivo[0], archivo[1], version)[0]
         except KeyError:
             return None
-    return tuple(obtener_anios_analisis(leer(_facturas_cache, _fac_ing), leer(_facturas_egresos_cache, _fac_egr)))
+    return tuple(obtener_anios_analisis(leer(_facturas_cache, fac_ing), leer(_facturas_egresos_cache, fac_egr)))
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _anual_ppd_cache(lado: str, _fac: tuple, _rep: tuple, anios: tuple, version: str):
+def _anual_ppd_cache(lado: str, fac: tuple, rep: tuple, anios: tuple, version: str):
     """Sección 1: `anual_ppd_clientes` / `anual_ppd_proveedores` en caché -> (DataFrame | None, motivo | None)."""
     from core.finance_logic import anual_ppd_clientes, anual_ppd_proveedores
 
     calculo = anual_ppd_clientes if lado == "clientes" else anual_ppd_proveedores
     try:
-        return calculo(_ArchivoMem(*_fac), _ArchivoMem(*_rep), anios), None
+        return calculo(_ArchivoMem(*fac), _ArchivoMem(*rep), anios), None
     except KeyError as e:
         return None, e.args[0]
 
@@ -938,12 +1016,12 @@ def _tiempos_cache(lado: str, _fac: tuple, _pagos: tuple, anios: tuple, freq: st
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _concentracion_cache(_fac: tuple, anios: tuple, version: str) -> dict:
+def _concentracion_cache(fac: tuple, anios: tuple, version: str) -> dict:
     """Sección 5: importes por cliente (RFC Receptor) de la Facturación Emitida Total, en caché. Devuelve un dict con
     `motivo` (str | None), `sin_cliente` (bool) y, si hay datos, `agrupa_por_rfc`, `por_cliente` (Serie descendente),
     `total_general`, `fact_emitida_total` y `nombre_por_id`."""
     try:
-        facturas, _ = _facturas_cache(_fac[0], _fac[1], version)
+        facturas, _ = _facturas_cache(fac[0], fac[1], version)
         facturas, _ = excluir_años_incompletos(facturas, "Fecha", "Facturas", anios)
     except KeyError as e:
         return {"motivo": e.args[0], "sin_cliente": False}
@@ -972,12 +1050,12 @@ def _concentracion_cache(_fac: tuple, anios: tuple, version: str) -> dict:
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _resumen_sf_cache(_fac: tuple, anios: tuple, version: str) -> dict:
+def _resumen_sf_cache(fac: tuple, anios: tuple, version: str) -> dict:
     """Sección 6: base de facturación emitida y años analizables, en caché. `motivo` (str | None; no se pudo leer la
     base), `vacia`, `anios` (descendente) y `defecto` (último año con periodo anterior comparable)."""
     from core.finance_logic import _base_facturacion_emitida, _clientes_sin_facturacion
 
-    base, motivo = _base_facturacion_emitida(_ArchivoMem(*_fac), anios)
+    base, motivo = _base_facturacion_emitida(_ArchivoMem(*fac), anios)
     if base is None:
         return {"motivo": motivo, "vacia": False, "anios": [], "defecto": None}
     if base.empty:
@@ -988,11 +1066,11 @@ def _resumen_sf_cache(_fac: tuple, anios: tuple, version: str) -> dict:
 
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
-def _res_sf_cache(_fac: tuple, anio: int, anios: tuple, version: str) -> dict:
+def _res_sf_cache(fac: tuple, anio: int, anios: tuple, version: str) -> dict:
     """Sección 6: `_clientes_sin_facturacion` del año elegido, en caché."""
     from core.finance_logic import _base_facturacion_emitida, _clientes_sin_facturacion
 
-    base, _ = _base_facturacion_emitida(_ArchivoMem(*_fac), anios)
+    base, _ = _base_facturacion_emitida(_ArchivoMem(*fac), anios)
     return _clientes_sin_facturacion(base, anio)
 
 @st.cache_data(show_spinner="Procesando bases CFDI...")
@@ -1329,46 +1407,207 @@ def _normalizar_clave_sat(serie: pd.Series) -> pd.Series:
 
 
 
-def tasa_impuesto_sat(serie: pd.Series) -> pd.Series:
-    """`Tasa Impuestos Trasladados` como fracción: numérica, nulos o ilegibles = 0.0 y, si el valor viene en formato porcentual (> 1, p. ej. 16 o «16%»), entre 100."""
-    t = a_numero(serie.astype(str).str.replace("%", "", regex=False)).fillna(0.0)
-    return t.where(t <= 1, t / 100)
+def _factor_mxn_productos(
+    moneda: pd.Series,
+    tipo_cambio_producto: pd.Series,
+    tipo_cambio_encabezado: pd.Series,
+    tipo_cambio_dof: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    moneda = moneda.fillna("").astype(str).str.strip().str.upper()
+    es_mxn = moneda.isin(
+        ["", "NAN", "NONE", "NULL", "<NA>", "MXN", "PESO", "PESOS",
+         "PESO MEXICANO", "PESOS MEXICANOS"]
+    )
+    tc_producto_valido = (
+        np.isfinite(tipo_cambio_producto) & tipo_cambio_producto.gt(0)
+    )
+    tc_encabezado_valido = (
+        np.isfinite(tipo_cambio_encabezado) & tipo_cambio_encabezado.gt(0)
+    )
+    tc_dof_valido = np.isfinite(tipo_cambio_dof) & tipo_cambio_dof.gt(0)
+    factor = tipo_cambio_producto.where(tc_producto_valido)
+    factor = factor.fillna(tipo_cambio_encabezado.where(tc_encabezado_valido))
+    usa_tc_dof = (
+        ~es_mxn & ~tc_producto_valido & ~tc_encabezado_valido & tc_dof_valido
+    )
+    factor = factor.fillna(tipo_cambio_dof.where(tc_dof_valido))
+    return factor.where(~es_mxn, 1.0), usa_tc_dof
 
 
-def monto_con_iva_partida(d: pd.DataFrame) -> tuple[pd.Series, str]:
-    """Calcula el monto de cada partida con IVA, sin redondear antes de sumar:
-    `Importe + (Importe Base.fillna(0) × tasa)` si existe la base, `Importe × (1 + tasa)` si no existe; sin tasa, conserva `Importe`."""
-    if "Tasa Impuestos Trasladados" not in d.columns:
-        return d["Importe"].astype(float), "sin_tasa"
-    tasa = tasa_impuesto_sat(d["Tasa Impuestos Trasladados"])
-    if "Importe Base" in d.columns:
-        return d["Importe"] + a_numero(d["Importe Base"]).fillna(0.0) * tasa, "importe_base"
-    return d["Importe"] * (1 + tasa), "importe"
-
-
-def emitidos_productos_sat(df: pd.DataFrame) -> pd.DataFrame:
-    """Base `CFDIs Emitidos Productos` (texto crudo) -> partidas ACTIVAS de tipo FACTURA (sin canceladas ni notas de crédito) con `Importe` (SubTotal sin IVA de la partida) numérico,
-    `Monto` (el monto con IVA calculado por partida: la cifra que usa la sección 10; `attrs['regla_iva']` indica la regla), `Clave` de 8 dígitos, `Clase` (sus primeros 6 dígitos),
-    `Fecha` y `Anio`. Descarta lo que no tenga fecha, importe o clave de 8 dígitos legibles
-    (`attrs['descartadas']`). KeyError con las columnas faltantes si no es esa base."""
+def emitidos_productos_sat(
+    df: pd.DataFrame, df_encabezados: pd.DataFrame
+) -> pd.DataFrame:
+    """Cruza productos emitidos con facturas activas y calcula subtotal y total por partida en MXN."""
     df = resolver_columnas(df, COLS_EMITIDOS_PRODUCTOS, COLS_EMITIDOS_PRODUCTOS_OPC)
-    vigente = (df["Estatus"].astype(str).str.strip().str.casefold() == "activo") & (df["Tipo Documento"].astype(str).str.strip().str.upper() == "FACTURA")
-    d = df[vigente].copy()
-    d["Fecha"], d["Importe"], d["Clave"] = a_fecha(d["Fecha"]), a_numero(d["Importe"]), _normalizar_clave_sat(d["Clave"])
-    ilegible = d["Fecha"].isna() | d["Importe"].isna() | ~d["Clave"].str.fullmatch(r"\d{8}")
-    d = d[~ilegible].copy()
-    if "Descripcion" not in d.columns:
-        d["Descripcion"] = ""
+    uuid_col = buscar_columna(df.columns, "UUID CFDI Emitido")
+    if uuid_col is None:
+        raise KeyError("La base CFDIs Emitidos Productos requiere la columna UUID CFDI Emitido.")
+    if df_encabezados is None or df_encabezados.empty:
+        raise KeyError("Falta la base SAT CFDIs Emitidos con los encabezados de comprobantes.")
+
+    columnas_encabezado = {
+        "UUID": buscar_columna(df_encabezados.columns, "UUID"),
+        "Estatus": buscar_columna(df_encabezados.columns, "Estatus"),
+        "Tipo Documento": (
+            buscar_columna(df_encabezados.columns, "Tipo Documento")
+            or buscar_columna(df_encabezados.columns, "Tipo de Documento")
+            or buscar_columna(df_encabezados.columns, "Tipo de Comprobante")
+        ),
+    }
+    faltantes = [nombre for nombre, columna in columnas_encabezado.items() if columna is None]
+    if faltantes:
+        raise KeyError(
+            "La base SAT CFDIs Emitidos requiere las columnas: " + ", ".join(faltantes)
+        )
+    col_tc_encabezado = buscar_columna(df_encabezados.columns, "Tipo de Cambio")
+    encabezados = pd.DataFrame({
+        "UUID": _normalizar_uuid_clase_sat(
+            df_encabezados[columnas_encabezado["UUID"]]
+        ),
+        "Estatus": df_encabezados[columnas_encabezado["Estatus"]]
+        .fillna("").astype(str).str.strip(),
+        "Tipo Documento": df_encabezados[columnas_encabezado["Tipo Documento"]]
+        .fillna("").astype(str).str.strip(),
+        "Tipo_Cambio_Encabezado": (
+            a_numero(df_encabezados[col_tc_encabezado])
+            if col_tc_encabezado is not None
+            else np.nan
+        ),
+    })
+    encabezados = encabezados.loc[encabezados["UUID"].ne("")].drop_duplicates(
+        "UUID", keep="first"
+    ).set_index("UUID")
+
+    base = df.copy().reset_index(drop=True)
+    base["UUID"] = _normalizar_uuid_clase_sat(base[uuid_col])
+    base["Estatus_Encabezado"] = base["UUID"].map(encabezados["Estatus"])
+    base["Tipo_Encabezado"] = base["UUID"].map(encabezados["Tipo Documento"])
+    base["Tipo_Cambio_Encabezado"] = base["UUID"].map(
+        encabezados["Tipo_Cambio_Encabezado"]
+    )
+    estatus = base["Estatus_Encabezado"].fillna("").map(_norm)
+    tipo = base["Tipo_Encabezado"].fillna("").map(_norm)
+    tiene_cruce = base["UUID"].isin(encabezados.index)
+    estatus_valido = estatus.isin({"activo", "vigente"})
+    tipo_valido = tipo.isin({"factura", "ingreso", "i"})
+    admisibles = tiene_cruce & estatus_valido & tipo_valido
+    d = base.loc[admisibles].copy()
+    if d.empty:
+        d.attrs.update({
+            "filas_sin_cruce": int((~tiene_cruce).sum()),
+            "filas_ncr_excluidas": int((tiene_cruce & ~tipo_valido).sum()),
+            "filas_cancelados_excluidas": int((tiene_cruce & ~estatus_valido).sum()),
+            "filas_sin_tipo_cambio": 0,
+            "filas_tc_dof": 0,
+            "filas_descartadas": int((~admisibles).sum()),
+        })
+        return d
+
+    def columna_opcional(nombre):
+        return buscar_columna(d.columns, nombre)
+
+    def numero_opcional(nombre):
+        columna = columna_opcional(nombre)
+        if columna is None:
+            return pd.Series(0.0, index=d.index)
+        numeros = a_numero(d[columna])
+        return numeros.where(np.isfinite(numeros), 0.0).fillna(0.0)
+
+    d["Fecha"] = a_fecha(d["Fecha"])
+    d["Clave"] = _normalizar_clave_sat(d["Clave"])
+    d["Importe"] = a_numero(d["Importe"])
+    descuento = numero_opcional("Descuento")
+    tc_producto_col = columna_opcional("Tipo de Cambio")
+    tc_dof_col = columna_opcional("Tipo de Cambio DOF")
+    moneda_col = columna_opcional("Moneda")
+    tc_producto = (
+        a_numero(d[tc_producto_col])
+        if tc_producto_col is not None else pd.Series(np.nan, index=d.index)
+    )
+    tc_dof = (
+        a_numero(d[tc_dof_col])
+        if tc_dof_col is not None else pd.Series(np.nan, index=d.index)
+    )
+    moneda = (
+        d[moneda_col].fillna("").astype(str)
+        if moneda_col is not None else pd.Series("", index=d.index)
+    )
+    factor, usa_tc_dof = _factor_mxn_productos(
+        moneda, tc_producto, d["Tipo_Cambio_Encabezado"], tc_dof
+    )
+    impuestos_tras = numero_opcional("Impuestos Trasladados")
+    impuestos_ret = numero_opcional("Impuestos Retenidos")
+    fila_base_valida = (
+        d["Fecha"].notna()
+        & d["Importe"].notna()
+        & np.isfinite(d["Importe"])
+        & d["Clave"].str.fullmatch(r"\d{8}")
+        & factor.notna()
+    )
+    primeras_filas = d.loc[fila_base_valida].drop_duplicates(
+        "UUID", keep="first"
+    ).index
+    filas_duplicadas = ~d.index.isin(primeras_filas)
+    local_tras = numero_opcional("Importe Local Trasladado").where(
+        ~filas_duplicadas, 0.0
+    )
+    local_ret = numero_opcional("Importe Local Retenido").where(
+        ~filas_duplicadas, 0.0
+    )
+    clave_valida = d["Clave"].str.fullmatch(r"\d{8}")
+    registros_validos = (
+        d["Fecha"].notna()
+        & d["Importe"].notna()
+        & np.isfinite(d["Importe"])
+        & clave_valida
+        & factor.notna()
+    )
+    filas_sin_tc = int((~factor.notna()).sum())
+    filas_descartadas = int((~registros_validos & factor.notna()).sum())
+    d = d.loc[registros_validos].copy()
+    factor = factor.loc[registros_validos]
+    usa_tc_dof = usa_tc_dof.loc[registros_validos]
+    descuento = descuento.loc[registros_validos]
+    impuestos_tras = impuestos_tras.loc[registros_validos]
+    impuestos_ret = impuestos_ret.loc[registros_validos]
+    local_tras = local_tras.loc[registros_validos]
+    local_ret = local_ret.loc[registros_validos]
+    d["Tipo_Cambio_Aplicado"] = factor
+    d["SubTotal_Neto_MXN"] = (d["Importe"] - descuento) * factor
+    d["Imp_Trasladados_MXN"] = (impuestos_tras + local_tras) * factor
+    d["Imp_Retenidos_MXN"] = (impuestos_ret + local_ret) * factor
+    d["Monto_MXN"] = (
+        d["SubTotal_Neto_MXN"]
+        + d["Imp_Trasladados_MXN"]
+        - d["Imp_Retenidos_MXN"]
+    )
+    d["Monto"] = d["Monto_MXN"]
     d["Anio"] = d["Fecha"].dt.year.astype(int)
     d["Clase"] = d["Clave"].str[:6]
-    d["Monto"], regla = monto_con_iva_partida(d)
-    d.attrs["descartadas"], d.attrs["regla_iva"] = int(ilegible.sum()), regla
-    return d.reset_index(drop=True)
+    salida = d.reset_index(drop=True)
+    salida.attrs.update({
+        "filas_sin_cruce": int((~tiene_cruce).sum()),
+        "filas_ncr_excluidas": int((tiene_cruce & ~tipo_valido).sum()),
+        "filas_cancelados_excluidas": int((tiene_cruce & ~estatus_valido).sum()),
+        "filas_sin_tipo_cambio": filas_sin_tc,
+        "filas_tc_dof": int(usa_tc_dof.sum()),
+        "filas_descartadas": filas_descartadas,
+    })
+    return salida
 
 
 @st.cache_data(show_spinner="Leyendo los productos emitidos…")
-def _emitidos_productos_cache(nombre: str, contenido: bytes, version: str) -> pd.DataFrame:
-    return emitidos_productos_sat(leer_archivo(nombre, contenido))
+def _emitidos_productos_cache(
+    nombre: str,
+    contenido,
+    nombre_encabezados: str,
+    contenido_encabezados,
+    version: str,
+) -> pd.DataFrame:
+    return emitidos_productos_sat(
+        _leer_archivo_clase_sat(nombre, contenido),
+        _leer_archivo_clase_sat(nombre_encabezados, contenido_encabezados),
+    )
 
 
 def _normalizar_uuid_clase_sat(serie: pd.Series) -> pd.Series:
@@ -1504,7 +1743,7 @@ def egresos_productos_sat(
     }
     faltantes = [
         nombre for nombre, columna in columnas.items()
-        if columna is None and nombre != "Descuento"
+        if columna is None and nombre not in {"Descuento", "Moneda", "Tipo de Cambio"}
     ]
     if columna_clave is None:
         faltantes.insert(0, "Codigo SAT o Clave")
@@ -1530,6 +1769,9 @@ def egresos_productos_sat(
             "La base SAT CFDIs Recibidos requiere las columnas: "
             + ", ".join(faltantes_encabezado)
         )
+    columna_tc_encabezado = buscar_columna(
+        df_encabezados.columns, "Tipo de Cambio"
+    )
 
     indice = pd.RangeIndex(len(df))
     descripcion_col = buscar_columna(df.columns, "Descripcion")
@@ -1562,8 +1804,14 @@ def egresos_productos_sat(
         "Moneda": (
             df[columnas["Moneda"]].fillna("").astype(str).str.strip().str.upper()
             .reset_index(drop=True)
+            if columnas["Moneda"] is not None
+            else pd.Series("", index=indice)
         ),
-        "Tipo_Cambio": a_numero(df[columnas["Tipo de Cambio"]]).reset_index(drop=True),
+        "Tipo_Cambio": (
+            a_numero(df[columnas["Tipo de Cambio"]]).reset_index(drop=True)
+            if columnas["Tipo de Cambio"] is not None
+            else pd.Series(np.nan, index=indice)
+        ),
         "Tipo_Cambio_DOF": (
             a_numero(df[tipo_cambio_dof_col]).reset_index(drop=True)
             if tipo_cambio_dof_col is not None
@@ -1589,20 +1837,6 @@ def egresos_productos_sat(
     ).reset_index(drop=True)
     excluidas_divisas = base["Clave"].str.startswith("841216", na=False)
 
-    moneda_mxn = base["Moneda"].isin(
-        ["MXN", "PESO", "PESOS", "PESO MEXICANO", "PESOS MEXICANOS"]
-    )
-    tc_valido = np.isfinite(base["Tipo_Cambio"]) & base["Tipo_Cambio"].gt(0)
-    tc_dof_valido = (
-        np.isfinite(base["Tipo_Cambio_DOF"]) & base["Tipo_Cambio_DOF"].gt(0)
-    )
-    usa_tc_dof = ~moneda_mxn & ~tc_valido & tc_dof_valido
-    factor_mxn = base["Tipo_Cambio"].where(tc_valido)
-    factor_mxn = factor_mxn.fillna(base["Tipo_Cambio_DOF"].where(tc_dof_valido))
-    factor_mxn = factor_mxn.where(~moneda_mxn, 1.0)
-    sin_tipo_cambio = ~moneda_mxn & factor_mxn.isna()
-    base["Tipo_Cambio_Aplicado"] = factor_mxn
-
     encabezados = pd.DataFrame({
         "UUID": _normalizar_uuid_clase_sat(
             df_encabezados[columnas_encabezado["UUID"]]
@@ -1614,6 +1848,11 @@ def egresos_productos_sat(
         "Tipo Documento": (
             df_encabezados[columnas_encabezado["Tipo Documento"]]
             .fillna("").astype(str).str.strip().reset_index(drop=True)
+        ),
+        "Tipo_Cambio_Encabezado": (
+            a_numero(df_encabezados[columna_tc_encabezado]).reset_index(drop=True)
+            if columna_tc_encabezado is not None
+            else pd.Series(np.nan, index=pd.RangeIndex(len(df_encabezados)))
         ),
     })
     encabezados["_Orden_Encabezado"] = np.arange(len(encabezados))
@@ -1630,6 +1869,9 @@ def egresos_productos_sat(
         base["Documento_ID"] = base["UUID"].where(base["UUID"].ne(""), "")
         for nombre in ("Estatus", "Tipo Documento"):
             base[nombre] = base["UUID"].map(encabezados_por_uuid[nombre])
+        base["Tipo_Cambio_Encabezado"] = base["UUID"].map(
+            encabezados_por_uuid["Tipo_Cambio_Encabezado"]
+        )
         modo_cruce = "UUID CFDI Recibido"
         base["ImpLocalTras_Dedup"] = 0.0
         base["ImpLocalRet_Dedup"] = 0.0
@@ -1638,7 +1880,6 @@ def egresos_productos_sat(
             & base["Fecha"].notna()
             & base["Importe"].notna()
             & np.isfinite(base["Importe"])
-            & ~sin_tipo_cambio
             & ~excluidas_divisas
             & base["UUID"].ne("")
         )
@@ -1729,7 +1970,7 @@ def egresos_productos_sat(
 
         def crear_huella(fecha, rfc, moneda, subtotal, total):
             if (
-                pd.isna(fecha) or not rfc or not moneda
+                pd.isna(fecha) or not rfc
                 or pd.isna(subtotal) or pd.isna(total)
                 or not np.isfinite(float(subtotal))
                 or not np.isfinite(float(total))
@@ -1759,7 +2000,6 @@ def egresos_productos_sat(
                 and grupo["Importe"].notna().all()
                 and np.isfinite(grupo["Importe"]).all()
                 and bool(rfcs[0])
-                and bool(monedas[0])
             )
             huella = None
             if bloque_valido:
@@ -1788,10 +2028,42 @@ def egresos_productos_sat(
         }
         base["_Indice_Encabezado"] = base["Block_ID"].map(por_bloque)
         base["_TieneCruce"] = base["_Indice_Encabezado"].notna()
-        for nombre in ("UUID", "Estatus", "Tipo Documento"):
+        for nombre in (
+            "UUID", "Estatus", "Tipo Documento", "Tipo_Cambio_Encabezado"
+        ):
             mapa = encabezados_por_indice[nombre]
             base[nombre] = base["_Indice_Encabezado"].map(mapa)
         modo_cruce = "reconstrucción por Partida"
+
+    factor_mxn, usa_tc_dof = _factor_mxn_productos(
+        base["Moneda"],
+        base["Tipo_Cambio"],
+        base["Tipo_Cambio_Encabezado"],
+        base["Tipo_Cambio_DOF"],
+    )
+    sin_tipo_cambio = factor_mxn.isna()
+    base["Tipo_Cambio_Aplicado"] = factor_mxn
+    fila_local_valida = (
+        base["Clave"].str.fullmatch(r"\d{8}")
+        & base["Fecha"].notna()
+        & base["Importe"].notna()
+        & np.isfinite(base["Importe"])
+        & factor_mxn.notna()
+        & ~excluidas_divisas
+    )
+    columna_documento = "UUID" if modo_uuid else "Block_ID"
+    if modo_uuid:
+        fila_local_valida &= base["UUID"].ne("")
+    primeras_filas_locales = base.loc[fila_local_valida].drop_duplicates(
+        columna_documento, keep="first"
+    )["_Orden"]
+    primera_fila_local = base["_Orden"].isin(primeras_filas_locales)
+    base["ImpLocalTras_Dedup"] = base["ImpLocalTras_Original"].where(
+        primera_fila_local, 0.0
+    )
+    base["ImpLocalRet_Dedup"] = base["ImpLocalRet_Original"].where(
+        primera_fila_local, 0.0
+    )
 
     base["Estatus_Normalizado"] = base["Estatus"].fillna("").map(_norm)
     base["Tipo_Normalizado"] = base["Tipo Documento"].fillna("").map(_norm)
@@ -1898,24 +2170,28 @@ def _clasificar_base_clase_sat(
 ) -> str | None:
     columnas = {_norm(str(columna)) for columna in leer_archivo(nombre, contenido).columns}
     es_encabezados = (
-        {"uuid", "estatus", "total"}.issubset(columnas)
+        {"uuid", "estatus"}.issubset(columnas)
+        and bool({"total", "total mxn tc"} & columnas)
         and bool({"tipo documento", "tipo de documento", "tipo de comprobante"} & columnas)
     )
     es_emitidos = {
-        "clave", "fecha", "estatus", "tipo documento", "importe"
+        "clave", "fecha", "estatus", "tipo documento", "importe",
+        "uuid cfdi emitido",
     }.issubset(columnas)
     es_egresos = (
         bool({"codigo sat", "clave"} & columnas)
         and {
-            "fecha", "importe", "moneda", "tipo de cambio",
+            "fecha", "importe",
             "impuestos trasladados", "impuestos retenidos",
         }.issubset(columnas)
     )
     if es_encabezados:
         return "encabezados"
-    if es_emitidos == es_egresos:
-        return "ambiguo" if es_emitidos else None
-    return "emitidos" if es_emitidos else "egresos"
+    if es_emitidos:
+        return "emitidos"
+    if es_egresos:
+        return "egresos"
+    return None
 
 
 @st.cache_data(show_spinner="Leyendo el catálogo oficial del SAT…")

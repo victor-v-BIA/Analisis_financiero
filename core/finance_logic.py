@@ -91,9 +91,12 @@ def diferencia_ppd(facturado_ppd, complementos):
 
 
 def facturas_a_mxn(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Facturas recibidas con `Total` (y `SubTotal`) convertidos a MXN (`Factor_MXN` = 1 en pesos, Tipo de Cambio en moneda extranjera) ANTES de
-    agregarlos. Una factura extranjera sin Tipo de Cambio válido se excluye (nunca se suma sin convertir). Los complementos ('Monto MXN') ya vienen
-    en pesos y NO se vuelven a convertir. Devuelve (DataFrame en MXN, n de facturas excluidas)."""
+    """Aplica `Factor_MXN` a facturas recibidas y excluye las que no tienen factor válido.
+
+    El lector deja `Total`/`SubTotal` ya normalizados a MXN y `Factor_MXN` en 1, por lo
+    que esta función no los vuelve a convertir. Los complementos (`Monto MXN`) tampoco
+    se convierten. Devuelve (DataFrame en MXN, número de facturas excluidas).
+    """
     if "Factor_MXN" not in df.columns:
         return df, 0
     ok = df["Factor_MXN"].notna()
@@ -354,23 +357,28 @@ def _cruce_saldo_insoluto(df_fac: pd.DataFrame, df_pagos: pd.DataFrame, excluir_
 
     df_merge = pd.merge(fac_ppd, pagos_agrupados, left_on="UUID", right_on="UUID DR", how="left")
     df_merge["Monto MXN"] = df_merge["Monto MXN"].fillna(0)
-    df_merge["Total"] = pd.to_numeric(
-        df_merge["Total"].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False),
-        errors="coerce").fillna(0)
+    col_total = (
+        buscar_columna(df_merge.columns, "Total MXN TC")
+        or buscar_columna(df_merge.columns, "Total")
+    )
+    if col_total is None:
+        raise KeyError("Falta Total MXN TC (o Total) en la base de facturas.")
+    df_merge["Total"] = a_numero(df_merge[col_total]).fillna(0)
     df_merge["Saldo_Insoluto"] = df_merge["Total"] - df_merge["Monto MXN"]
     return df_merge
 
 
 def _total_facturado_ppd_vigente(df_fac: pd.DataFrame) -> float:
-    """Suma 'Total' de las facturas con Método de Pago PPD, Tipo Documento de Ingreso ('I'/'Factura') y
+    """Suma `Total MXN TC` de las facturas con Método de Pago PPD, Tipo Documento de Ingreso ('I'/'Factura') y
     Estatus 'Vigente'/'Activo' -el mismo universo limpio que _cruce_saldo_insoluto(excluir_ncr=True), pero sin
     cruzar contra pagos: es la mitad "Facturado" de la resta macro del Dashboard Ejecutivo."""
+    col_total_mxn = buscar_columna(df_fac.columns, "Total MXN TC")
+    if col_total_mxn is None:
+        raise KeyError("La base de CFDIs emitidos requiere la columna Total MXN TC.")
     metodo_ppd = df_fac["Metodo de Pago"].astype(str).str.contains("PPD", case=False, na=False)
     tipo_doc = df_fac["Tipo Documento"].astype(str).str.strip().str.upper().isin(["I", "FACTURA"])
     estatus = df_fac["Estatus"].astype(str).str.strip().str.upper().isin(["VIGENTE", "ACTIVO"])
-    total = pd.to_numeric(
-        df_fac["Total"].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False),
-        errors="coerce").fillna(0)
+    total = a_numero(df_fac[col_total_mxn]).fillna(0)
     return float(total[metodo_ppd & tipo_doc & estatus].sum())
 
 
@@ -490,9 +498,9 @@ def _valor_mxn_facturas(df: pd.DataFrame, metodo_pago: str | None) -> tuple[pd.S
     Documento 'I'/'Factura', excluye NCR), agrupadas por mes de emisión. `metodo_pago` filtra además por
     'Metodo de Pago' (p. ej. "PUE"); None para no filtrar por método.
 
-    Conversión de moneda: factor 1 si es MXN o no hay columna 'Moneda'; si es extranjera, requiere 'Tipo de
-    Cambio' válido (>0) o la factura queda EXCLUIDA de la suma (nunca se suma sin convertir) -mismo criterio
-    que la Sección 5 (Concentración)-.
+    Conversión de moneda: prefiere `Total MXN TC` (o `Subtotal MXN TC` si no hay Total);
+    solo usa el importe nominal con factor 1 en MXN o con `Tipo de Cambio` válido (>0)
+    en moneda extranjera. Una factura extranjera sin cambio válido se excluye.
 
     Devuelve (serie | None, motivo | None, n_excluidas_por_moneda). `serie` es `None` si falta alguna columna
     indispensable (Total/SubTotal, Fecha de emisión, Estatus, o 'Metodo de Pago' cuando `metodo_pago` no es
@@ -500,7 +508,13 @@ def _valor_mxn_facturas(df: pd.DataFrame, metodo_pago: str | None) -> tuple[pd.S
     """
     col_fecha = buscar_columna(df.columns, "Fecha y Hora") or buscar_columna(df.columns, "Fecha")
     # El Total (con impuestos)
-    col_valor = buscar_columna(df.columns, "Total") or buscar_columna(df.columns, "SubTotal")
+    col_valor_mxn = buscar_columna(df.columns, "Total MXN TC")
+    col_valor = (
+        col_valor_mxn
+        or buscar_columna(df.columns, "Total")
+        or buscar_columna(df.columns, "Subtotal MXN TC")
+        or buscar_columna(df.columns, "SubTotal")
+    )
     col_estatus = buscar_columna(df.columns, "Estatus")
     col_tipo = buscar_columna(df.columns, "Tipo Documento")
     col_metodo = buscar_columna(df.columns, "Metodo de Pago")
@@ -520,11 +534,19 @@ def _valor_mxn_facturas(df: pd.DataFrame, metodo_pago: str | None) -> tuple[pd.S
     if d.empty:
         return pd.Series(dtype=float), None, 0
 
-    valor_crudo = pd.to_numeric(d[col_valor].astype(str).str.replace("$", "", regex=False)
-                                             .str.replace(",", "", regex=False), errors="coerce").fillna(0)
+    valor_crudo = pd.to_numeric(
+        d[col_valor].astype(str).str.replace("$", "", regex=False)
+        .str.replace(",", "", regex=False),
+        errors="coerce",
+    )
     col_moneda = buscar_columna(df.columns, "Moneda")
     col_tc = buscar_columna(df.columns, "Tipo de Cambio")
-    if col_moneda is not None:
+    if col_valor_mxn is not None or (
+        col_valor is not None
+        and buscar_columna(df.columns, "Subtotal MXN TC") == col_valor
+    ):
+        es_mxn = pd.Series(True, index=d.index)
+    elif col_moneda is not None:
         moneda = d[col_moneda].astype(str).str.strip().str.upper()
         es_mxn = moneda.isin(["MXN", "PESOS", "PESO MEXICANO", "NAN", ""])
     else:
