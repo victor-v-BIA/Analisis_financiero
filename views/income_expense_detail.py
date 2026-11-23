@@ -366,7 +366,7 @@ def _seccion_clave_sat(
             pdf_elements.append({"type": "callout",
                                  "text": escape(mensaje)})
         return []
-    if d.attrs.get("filas_sin_cruce"):
+    '''if d.attrs.get("filas_sin_cruce"):
         st.info(
             f"{d.attrs['filas_sin_cruce']:,} partidas no coincidieron con los UUID "
             "de SAT CFDIs Emitidos y se excluyeron."
@@ -381,7 +381,7 @@ def _seccion_clave_sat(
                     hide_index=True,
                     width="stretch",
                     height=420,
-                )
+                )'''
     if d.empty:
         mensaje = (
             f"La base «{f_emitidos_productos.name}» no trae partidas asociadas por UUID "
