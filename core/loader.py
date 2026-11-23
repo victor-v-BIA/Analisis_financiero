@@ -692,45 +692,82 @@ def _leer_tabla_fecha_valor(df: pd.DataFrame) -> dict | None:
 
 
 def _cargar_bases_economicas(lado: str) -> dict:
-    """Carga las bases económicas subidas o, si no hay ninguna, las predeterminadas de la carpeta `data/`."""
+    """Carga las bases económicas subidas; para ITAEE consulta la API del INEGI con respaldo en `data/`."""
     if lado not in ("ingresos", "egresos"):
         raise ValueError(f"El lado debe ser 'ingresos' o 'egresos', no {lado!r}.")
 
     pertinentes = ("itaee", "inpc", "tiie") if lado == "ingresos" else ("inpp", "inpc")
     texto = "ITAEE, INPC y/o TIIE" if lado == "ingresos" else "INPP y/o INPC"
-    archivos = st.file_uploader(f"Carga las bases externas ({texto}) · Excel, CSV o Parquet",
-                                type=["xlsx", "xls", "xlsb", "csv", "parquet"],
-                                accept_multiple_files=True, key=f"eco_up_{lado}")
-    entradas = [(f.name, f.getvalue()) for f in archivos or []]
-    if not entradas:
-        st.caption("Si no cargas archivos, se utilizan las bases predeterminadas. "
-                   "Los archivos que subas sustituyen esas bases para esta vista.")
-        base_proyecto = Path(__file__).resolve().parent.parent
-        predeterminados = (
-            (("itaee", RUTA_ITAEE_DEFAULT), ("inpc", RUTA_INPC_DEFAULT))
-            if lado == "ingresos" else (("inpp", RUTA_INPP_DEFAULT),)
-        )
-        for tipo, ruta in predeterminados:
-            archivo = base_proyecto / ruta
-            try:
-                entradas.append((archivo.name, archivo.read_bytes()))
-            except OSError as exc:
-                st.error(f"No se pudo leer la base económica predeterminada {archivo}: {exc}")
+    archivos = st.file_uploader(
+        f"Carga las bases externas ({texto}) · Excel, CSV o Parquet",
+        type=["xlsx", "xls", "xlsb", "csv", "parquet"],
+        accept_multiple_files=True,
+        key=f"eco_up_{lado}",
+    )
 
     series: dict = {}
-    for nombre, contenido in entradas:
+    base_proyecto = Path(__file__).resolve().parent.parent
+
+    def _procesar_entradas(entradas: list[tuple[str, bytes]]) -> None:
+        for nombre, contenido in entradas:
+            try:
+                r = _procesar_archivo_economico(nombre, contenido, CODIGO_VERSION)
+            except (pa.ArrowException, OSError, ValueError) as exc:
+                st.error(f"No se pudo leer la base económica «{nombre}»: {exc}")
+                continue
+            if r["tipo"] is None:
+                st.warning(
+                    f"No se reconoció el formato de «{nombre}» (se esperan una base de ITAEE, INPP, INPC "
+                    "o una serie fecha-valor como la TIIE)."
+                )
+            elif r["tipo"] not in pertinentes:
+                st.info(
+                    f"«{nombre}» es una base de {r['tipo'].upper()}: cárgala en el módulo "
+                    f"{'de Egresos' if lado == 'ingresos' else 'de Ingresos'}."
+                )
+            else:
+                series.setdefault(r["tipo"], {}).update(r["series"])
+
+    entradas_subidas = [(f.name, f.getvalue()) for f in archivos or []]
+    if entradas_subidas:
+        _procesar_entradas(entradas_subidas)
+
+    if lado == "ingresos":
+        if "itaee" not in series:
+            from core.api_inegi import obtener_itaee_por_estado
+
+            itaee_estados, aviso_api = obtener_itaee_por_estado()
+            if itaee_estados:
+                series["itaee_estados"] = itaee_estados
+                st.caption(
+                    "ITAEE obtenido en línea desde la API del INEGI (BIE-BISE). "
+                    "Si cargas un archivo manual de ITAEE, sustituirá estos datos."
+                )
+            else:
+                st.warning(f"{aviso_api} Se utilizará el archivo local predeterminado.")
+                archivo_itaee = base_proyecto / RUTA_ITAEE_DEFAULT
+                try:
+                    _procesar_entradas([(archivo_itaee.name, archivo_itaee.read_bytes())])
+                except OSError as exc:
+                    st.error(f"No se pudo leer la base económica predeterminada {archivo_itaee}: {exc}")
+
+        if "inpc" not in series and not entradas_subidas:
+            archivo_inpc = base_proyecto / RUTA_INPC_DEFAULT
+            try:
+                _procesar_entradas([(archivo_inpc.name, archivo_inpc.read_bytes())])
+            except OSError as exc:
+                st.error(f"No se pudo leer la base económica predeterminada {archivo_inpc}: {exc}")
+    elif not entradas_subidas:
+        st.caption(
+            "Si no cargas archivos, se utilizan las bases predeterminadas. "
+            "Los archivos que subas sustituyen esas bases para esta vista."
+        )
+        archivo_inpp = base_proyecto / RUTA_INPP_DEFAULT
         try:
-            r = _procesar_archivo_economico(nombre, contenido, CODIGO_VERSION)
-        except (pa.ArrowException, OSError, ValueError) as exc: 
-            st.error(f"No se pudo leer la base económica «{nombre}»: {exc}")
-            continue
-        if r["tipo"] is None:
-            st.warning(f"No se reconoció el formato de «{nombre}» (se esperan una base de ITAEE, INPP, INPC o una serie "
-                       "fecha-valor como la TIIE).")
-        elif r["tipo"] not in pertinentes:
-            st.info(f"«{nombre}» es una base de {r['tipo'].upper()}: cárgala en el módulo {'de Egresos' if lado == 'ingresos' else 'de Ingresos'}.")
-        else:
-            series.setdefault(r["tipo"], {}).update(r["series"])
+            _procesar_entradas([(archivo_inpp.name, archivo_inpp.read_bytes())])
+        except OSError as exc:
+            st.error(f"No se pudo leer la base económica predeterminada {archivo_inpp}: {exc}")
+
     return series
 
 

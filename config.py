@@ -393,4 +393,55 @@ _GRUPO_FINANCIERO_FINAL = re.compile(r"\bGRUPO\s+FINANCIERO\s+\S+\s*$", re.IGNOR
 _PARENTESIS = re.compile(r"\([^)]*\)")
 
 
+# =================================================
+# VARIABLES PARA API_INEGI.PY
+# =================================================
 
+ESTADOS_INEGI = {
+    "01": "Aguascalientes",
+    "02": "Baja California",
+    "03": "Baja California Sur",
+    "04": "Campeche",
+    "05": "Coahuila de Zaragoza",
+    "06": "Colima",
+    "07": "Chiapas",
+    "08": "Chihuahua",
+    "09": "Ciudad de México",
+    "10": "Durango",
+    "11": "Guanajuato",
+    "12": "Guerrero",
+    "13": "Hidalgo",
+    "14": "Jalisco",
+    "15": "México",
+    "16": "Michoacán de Ocampo",
+    "17": "Morelos",
+    "18": "Nayarit",
+    "19": "Nuevo León",
+    "20": "Oaxaca",
+    "21": "Puebla",
+    "22": "Querétaro",
+    "23": "Quintana Roo",
+    "24": "San Luis Potosí",
+    "25": "Sinaloa",
+    "26": "Sonora",
+    "27": "Tabasco",
+    "28": "Tamaulipas",
+    "29": "Tlaxcala",
+    "30": "Veracruz de Ignacio de la Llave",
+    "31": "Yucatán",
+    "32": "Zacatecas",
+}
+
+# Mapa {nombre_visible_en_selector: (id_23_o_32_estados, [id_9_estados_con_petroleo])}
+# Series originales · Índice de volumen físico base 2018=100 (FREQ=4, UNIT=1061)
+INDICADORES_ITAEE = {
+    "Total de la actividad económica": ("741177", "741180"),
+    "Actividades primarias": ("741259",),
+    "Actividades secundarias": ("741323", "741326"),
+    "21 - Minería": ("741405", "741408"),
+    "22 - Generación, transmisión y distribución de energía eléctrica, agua y gas": ("741487", "741490"),
+    "23 - Construcción": ("741569", "741572"),
+    "31-33 - Industrias manufactureras": ("741651", "741654"),
+    "Actividades terciarias": ("741733",),
+    "43-46 - Comercio al por mayor y al por menor": ("741797",),
+}

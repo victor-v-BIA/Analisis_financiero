@@ -23,7 +23,7 @@ from core.loader import (anios_5_archivos, _facturas_cache, excluir_años_incomp
 
 from config import (CODIGO_VERSION, REP_VACIO, VISTAS_MODULO, NOMBRE_FECHA,
                     AYUDA_TOTAL, CSS_VISTA_ECONOMICA, ETIQUETA_SELECTOR_SERIE,
-                    MENSAJE_CARGA_ECONOMICA, AYUDA_TOP10_ANUAL)
+                    MENSAJE_CARGA_ECONOMICA, AYUDA_TOP10_ANUAL, ESTADOS_INEGI)
 
 from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vigentes,
                                 _total_facturado_ppd_vigente, diferencia_ppd,
@@ -576,8 +576,10 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             st.info("Selecciona al menos un año para mostrar esta gráfica.")
 
     with fila1[1], st.container(border=True):
-        clave, empresa, color_barra, nombre_barra = (("itaee", ing, "#2563EB", "Ingresos (Base 100)") if ingresos
-                                                     else ("inpp", gas, "#991B1B", "Gastos Operativos (Base 100)"))
+        clave, empresa, color_barra, nombre_barra = (
+            ("itaee", ing, "#2563EB", "Ingresos (Base 100)") if ingresos
+            else ("inpp", gas, "#991B1B", "Gastos Operativos (Base 100)")
+        )
         titulo_ref = "ITAEE" if ingresos else "INPP"
         anios_base100 = seleccionar_anios_grafica(
             f"eco_{lado}_anios_base100", "Años a mostrar"
@@ -586,16 +588,38 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
         indices_base100 = [anios.index(anio) for anio in anios_base100]
         empresa_base100 = [empresa[i] for i in indices_base100]
         anios_base100_str = [str(anio) for anio in anios_base100]
+
+        estado_nombre = None
+        if ingresos and "itaee_estados" in ext:
+            estados_disponibles = sorted(
+                (cve for cve in ext["itaee_estados"] if cve in ESTADOS_INEGI),
+                key=lambda cve: ESTADOS_INEGI[cve],
+            )
+            if estados_disponibles:
+                indice_default = (
+                    estados_disponibles.index("09") if "09" in estados_disponibles else 0
+                )
+                clave_estado = st.selectbox(
+                    "Selecciona la entidad federativa:",
+                    estados_disponibles,
+                    index=indice_default,
+                    format_func=ESTADOS_INEGI.get,
+                    key="eco_sel_ingresos_estado",
+                )
+                estado_nombre = ESTADOS_INEGI[clave_estado]
+                ext["itaee"] = ext["itaee_estados"].get(clave_estado, {})
+
         sector, serie = tarjeta_serie(clave)
         base = _anio_base(anios_base100, empresa_base100, serie) if serie else None
+        sufijo_estado = f" · {estado_nombre}" if estado_nombre else ""
         if serie is None:
-            st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref} (Base 100 = Año Base)**")
+            st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref}{sufijo_estado} (Base 100 = Año Base)**")
             st.info(MENSAJE_CARGA_ECONOMICA)
         elif base is None or len(anios_base100) < 2:
-            st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref} (Base 100 = Año Base)**")
+            st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref}{sufijo_estado} (Base 100 = Año Base)**")
             st.info("Selecciona dos o más ejercicios que existan en la base cargada para calcular el índice Base 100.")
         else:
-            st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref} (Base 100 = {base})**")
+            st.markdown(f"**{'Ingresos' if ingresos else 'Gastos'} vs {titulo_ref}{sufijo_estado} (Base 100 = {base})**")
             idx_emp = [(v / empresa_base100[anios_base100.index(base)] * 100) if a >= base else float("nan")
                        for a, v in zip(anios_base100, empresa_base100)]
             idx_ext = [v if a >= base else float("nan")
@@ -666,10 +690,11 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
 
                 pdf_elements.append({
                     "type": "image",
-                    "section_title": f"3.Ingresos vs ITAEE",
-                    "title": f"Ingresos vs {titulo_ref} (Base 100 = {base}, Sector: {sector})",
+                    "section_title": "3. Ingresos vs ITAEE",
+                    "title": f"Ingresos vs {titulo_ref}{sufijo_estado} (Base 100 = {base}, Sector: {sector})",
                     "fig": fig_base100,
-                    "note": nota_base100})
+                    "note": nota_base100,
+                })
 
      
     if not ingresos and serie is not None and base is not None and len(anios) >= 2:
