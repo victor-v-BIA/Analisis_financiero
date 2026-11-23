@@ -550,7 +550,7 @@ def _seccion_egresos_sat(
     filas_sin_tc = d.attrs.get("filas_sin_tipo_cambio", 0)
     filas_tc_dof = d.attrs.get("filas_tc_dof", 0)
     filas_descartadas = d.attrs.get("filas_descartadas", 0)
-    st.caption(f"Modo de cruce aplicado: {modo_cruce}.")
+    # st.caption(f"Modo de cruce aplicado: {modo_cruce}.")
     st.info(
         "Partidas excluidas / comprobantes afectados (los grupos pueden traslaparse): "
         f" Divisas 841216: {filas_divisas:,} / {comprobantes_divisas:,};"
