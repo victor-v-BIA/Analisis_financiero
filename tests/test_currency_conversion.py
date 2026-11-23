@@ -58,6 +58,10 @@ class CurrencyConversionTests(unittest.TestCase):
         self.assertEqual(result["Tipo_Cambio_Aplicado"].tolist(), [1, 20, 19])
         self.assertEqual(result.loc[1, "SubTotal_Neto_MXN"], 1800)
         self.assertEqual(result.loc[1, "Monto_MXN"], 2060)
+        self.assertEqual(result.attrs["filas_sin_cruce"], 1)
+        detalle = result.attrs["detalle_partidas_sin_cruce"]
+        self.assertEqual(detalle["UUID CFDI Emitido"].tolist(), ["X"])
+        self.assertEqual(detalle["Clave"].tolist(), ["10101010"])
 
     def test_issued_products_accept_ccr_rows_and_prefer_sat_key(self):
         headers = pd.DataFrame({

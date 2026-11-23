@@ -366,6 +366,22 @@ def _seccion_clave_sat(
             pdf_elements.append({"type": "callout",
                                  "text": escape(mensaje)})
         return []
+    if d.attrs.get("filas_sin_cruce"):
+        st.info(
+            f"{d.attrs['filas_sin_cruce']:,} partidas no coincidieron con los UUID "
+            "de SAT CFDIs Emitidos y se excluyeron."
+        )
+        detalle_sin_cruce = d.attrs.get("detalle_partidas_sin_cruce")
+        if isinstance(detalle_sin_cruce, pd.DataFrame) and not detalle_sin_cruce.empty:
+            with st.expander(
+                f"Ver detalle de partidas sin cruce ({len(detalle_sin_cruce):,})"
+            ):
+                st.dataframe(
+                    detalle_sin_cruce,
+                    hide_index=True,
+                    width="stretch",
+                    height=420,
+                )
     if d.empty:
         mensaje = (
             f"La base «{f_emitidos_productos.name}» no trae partidas asociadas por UUID "
@@ -376,11 +392,6 @@ def _seccion_clave_sat(
             pdf_elements.append({"type": "callout",
                                  "text": escape(mensaje)})
         return []
-    if d.attrs.get("filas_sin_cruce"):
-        st.warning(
-            f"{d.attrs['filas_sin_cruce']:,} partidas no coincidieron con los UUID "
-            "de SAT CFDIs Emitidos y se excluyeron."
-        )
     if d.attrs.get("filas_sin_tipo_cambio"):
         st.warning(
             f"{d.attrs['filas_sin_tipo_cambio']:,} partidas extranjeras sin tipo de "
@@ -578,12 +589,12 @@ def _seccion_egresos_sat(
     filas_tc_dof = d.attrs.get("filas_tc_dof", 0)
     filas_descartadas = d.attrs.get("filas_descartadas", 0)
     # st.caption(f"Modo de cruce aplicado: {modo_cruce}.")
-    st.info(
+    '''st.info(
         "Partidas excluidas / comprobantes afectados (los grupos pueden traslaparse): "
         f" Divisas 841216: {filas_divisas:,} / {comprobantes_divisas:,};"
         f" NCR: {filas_ncr:,} / {comprobantes_ncr:,};"
         f" Cancelados: {filas_cancelados:,} / {comprobantes_cancelados:,}."
-    )
+    )'''
     if filas_sin_cruce:
         st.warning(
             f"Sin coincidencia con encabezados: {filas_sin_cruce:,} partidas de "

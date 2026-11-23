@@ -1497,15 +1497,32 @@ def emitidos_productos_sat(
     estatus_valido = estatus.isin({"activo", "vigente"})
     tipo_valido = tipo.isin({"factura", "ingreso", "i"})
     admisibles = tiene_cruce & estatus_valido & tipo_valido
+    sin_cruce = base.loc[~tiene_cruce]
+    columnas_detalle = [
+        columna for columna in (
+            "Fecha", "Partida", "Clave", "Descripcion", "RFC Receptor",
+            "Razon Social Receptor", "Cantidad", "Unidad", "Importe",
+            "Descuento", "Moneda", "Tipo de Cambio", "Tipo de Cambio DOF",
+        )
+        if columna in sin_cruce.columns
+    ]
+    detalle_sin_cruce = sin_cruce[columnas_detalle].copy().reset_index(drop=True)
+    detalle_sin_cruce.insert(
+        0, "UUID CFDI Emitido", sin_cruce["UUID"].reset_index(drop=True)
+    )
+    atributos_cruce = {
+        "filas_sin_cruce": int((~tiene_cruce).sum()),
+        "detalle_partidas_sin_cruce": detalle_sin_cruce,
+        "filas_ncr_excluidas": int((tiene_cruce & ~tipo_valido).sum()),
+        "filas_cancelados_excluidas": int((tiene_cruce & ~estatus_valido).sum()),
+        "filas_descartadas": int((~admisibles).sum()),
+    }
     d = base.loc[admisibles].copy()
     if d.empty:
         d.attrs.update({
-            "filas_sin_cruce": int((~tiene_cruce).sum()),
-            "filas_ncr_excluidas": int((tiene_cruce & ~tipo_valido).sum()),
-            "filas_cancelados_excluidas": int((tiene_cruce & ~estatus_valido).sum()),
+            **atributos_cruce,
             "filas_sin_tipo_cambio": 0,
             "filas_tc_dof": 0,
-            "filas_descartadas": int((~admisibles).sum()),
         })
         return d
 
@@ -1592,9 +1609,7 @@ def emitidos_productos_sat(
     d["Clase"] = d["Clave"].str[:6]
     salida = d.reset_index(drop=True)
     salida.attrs.update({
-        "filas_sin_cruce": int((~tiene_cruce).sum()),
-        "filas_ncr_excluidas": int((tiene_cruce & ~tipo_valido).sum()),
-        "filas_cancelados_excluidas": int((tiene_cruce & ~estatus_valido).sum()),
+        **atributos_cruce,
         "filas_sin_tipo_cambio": filas_sin_tc,
         "filas_tc_dof": int(usa_tc_dof.sum()),
         "filas_descartadas": filas_descartadas,
