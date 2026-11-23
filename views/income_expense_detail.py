@@ -2,13 +2,14 @@ from html import escape
 
 import pandas as pd
 import streamlit as st
+from components.pdf_generator import generate_modular_pdf
+from utils import _ArchivoMem
 
 from components.charts import (
     _html_tabla_clase_sat,
     fig_donut_declarado,
-    fig_donut_facturado,
-)
-from components.pdf_generator import generate_modular_pdf
+    fig_donut_facturado,)
+
 from config import CODIGO_VERSION, NOTA_METODOLOGICA_CLASE_SAT, TOP_FILAS_CLASE_SAT
 from core.loader import (
     _actividades_constancia_sat,
@@ -18,10 +19,7 @@ from core.loader import (
     _emitidos_productos_cache,
     anios_5_archivos,
     cargar_catalogo_sat,
-    descripciones_clase_sat,
-)
-from utils import _ArchivoMem
-
+    descripciones_clase_sat,)
 
 _TIPOS_ARCHIVO_CLASE_SAT = {
     "csv", "xlsx", "xls", "xlsb", "parquet", "pqt",
@@ -36,8 +34,7 @@ def _archivo_en_memoria(archivo) -> _ArchivoMem | None:
 
 
 def _cargar_archivos_clase_sat() -> tuple[
-    _ArchivoMem | None, _ArchivoMem | None, _ArchivoMem | None, _ArchivoMem | None
-]:
+    _ArchivoMem | None, _ArchivoMem | None, _ArchivoMem | None, _ArchivoMem | None]:
     version_key = "clase_sat_archivos_uploader_version"
     version = int(st.session_state.get(version_key, 0))
     archivos_subidos = st.file_uploader(
@@ -46,8 +43,7 @@ def _cargar_archivos_clase_sat() -> tuple[
         "CFDIs emitidos y la Constancia de Situación Fiscal (PDF).",
         type=sorted(_TIPOS_ARCHIVO_CLASE_SAT | {"pdf"}),
         accept_multiple_files=True,
-        key=f"clase_sat_archivos_uploader_{version}",
-    )
+        key=f"clase_sat_archivos_uploader_{version}",)
 
     bases = {"emitidos": [], "egresos": [], "encabezados": []}
     constancias = []
@@ -155,8 +151,7 @@ def _cargar_archivos_clase_sat() -> tuple[
 
 
 def modulo_ingresos_sat(
-    file_ingresos, file_egresos, file_egresos_productos=None
-) -> None:
+    file_ingresos, file_egresos, file_egresos_productos=None) -> None:
     anios_5 = anios_5_archivos(file_ingresos, file_egresos)
     pdf_elements = []
 
@@ -180,16 +175,13 @@ def modulo_ingresos_sat(
         anios_5=anios_5,
         pdf_elements=pdf_elements,
         f_emitidos_productos=f_emitidos,
-        actividades=actividades,
-    )
+        actividades=actividades,)
     st.divider()
     _seccion_egresos_sat(
         f_egresos_productos=f_egresos,
         f_encabezados=f_encabezados,
-        actividades=actividades,
         pdf_elements=pdf_elements,
-        anios_ingresos=anios_ingresos,
-    )
+        anios_ingresos=anios_ingresos,)
 
     st.divider()
     st.subheader("Exportación de Reporte - Barrido y visoría")
@@ -199,22 +191,19 @@ def modulo_ingresos_sat(
             pdf_data = generate_modular_pdf(
                 title="Reporte de Barrido y Visoría",
                 subtitle="",
-                elements=pdf_elements,
-            )
+                elements=pdf_elements,)
         st.download_button(
             label="Descargar reporte PDF",
             data=pdf_data,
             file_name="Reporte_Barrido_Visoria.pdf",
             mime="application/pdf",
             key="btn_download_pdf_clase_sat",
-            type="secondary",
-        )
+            type="secondary",)
 
 def tabla_clase_sat(
     d: pd.DataFrame,
     descripciones: dict | None = None,
-    top: int = TOP_FILAS_CLASE_SAT,
-) -> pd.DataFrame:
+    top: int = TOP_FILAS_CLASE_SAT) -> pd.DataFrame:
     """Construye la matriz acumulada por Clase SAT de las partidas del periodo."""
     descripciones = descripciones or {}
     tiene_subtotal = "SubTotal_Neto_MXN" in d.columns
@@ -274,22 +263,19 @@ def tabla_clase_sat(
 def _filtrar_actividades_csf_por_anio(
     actividades: pd.DataFrame,
     anios_seleccionados: list[int],
-    anios_disponibles: list[int],
-) -> pd.DataFrame:
+    anios_disponibles: list[int],) -> pd.DataFrame:
     """Conserva el histórico anterior al primer año seleccionado y los años elegidos."""
     if set(anios_seleccionados) == set(anios_disponibles):
         return actividades
     anios_inicio = pd.to_datetime(
-        actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce"
-    ).dt.year
+        actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce").dt.year
     historicas = anios_inicio < min(anios_seleccionados)
     seleccionadas = anios_inicio.isin(anios_seleccionados)
     return actividades.loc[historicas | seleccionadas].copy()
 
 
 def _sufijo_periodo_clase_sat(
-    anios_seleccionados: list[int], anios_disponibles: list[int]
-) -> str:
+    anios_seleccionados: list[int], anios_disponibles: list[int]) -> str:
     if set(anios_seleccionados) == set(anios_disponibles):
         return " - Acumulado"
     return " - " + ", ".join(str(anio) for anio in sorted(anios_seleccionados))
@@ -301,8 +287,7 @@ def _algun_anio_actividad_en_periodo(
     if actividades is None or actividades.empty or not anios_periodo:
         return False
     fechas = pd.to_datetime(
-        actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce"
-    )
+        actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce")
     periodo = {int(anio) for anio in anios_periodo}
     return bool(periodo) and fechas.dt.year.isin(periodo).any()
 
@@ -311,8 +296,7 @@ def _seccion_clave_sat(
     anios_5: list[int] | tuple,
     pdf_elements: list | None,
     f_emitidos_productos: _ArchivoMem | None,
-    actividades: pd.DataFrame,
-) -> list[int]:
+    actividades: pd.DataFrame,) -> list[int]:
     """Muestra el perfil fiscal y agrega sus visualizaciones y notas al PDF."""
     subtitulo_seccion = "Perfil Fiscal Declarado y Estructura de Ingresos Facturados"
     st.subheader(
@@ -371,19 +355,16 @@ def _seccion_clave_sat(
         st.warning(
             "No se encontró el catálogo oficial del SAT (catCFDI_V_4_….xls, hoja "
             "c_ClaveProdServ) en la carpeta data/ del proyecto: las descripciones "
-            "oficiales no están disponibles."
-        )
+            "oficiales no están disponibles.")
     descripciones = descripciones_clase_sat(d, catalogo)
     disponibles = sorted({int(anio) for anio in anios_5}) or sorted(
-        int(anio) for anio in d["Anio"].unique()
-    )
+        int(anio) for anio in d["Anio"].unique())
     elegidos = st.pills(
         "Años de Ingresos",
         disponibles,
         selection_mode="multi",
         default=disponibles,
-        key=f"clase_sat_anios_{'_'.join(map(str, disponibles))}",
-    )
+        key=f"clase_sat_anios_{'_'.join(map(str, disponibles))}",)
     if not elegidos:
         mensaje = "Selecciona al menos un año para ver el resumen y la matriz."
         st.info(mensaje)
@@ -398,12 +379,12 @@ def _seccion_clave_sat(
         mensaje = "No hay partidas emitidas para los años seleccionados."
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return disponibles
 
     actividades_grafica = _filtrar_actividades_csf_por_anio(
-        actividades, anios_seleccionados, disponibles
-    )
+        actividades, anios_seleccionados, disponibles)
     sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
     fig_declarado = fig_donut_declarado(actividades_grafica)
     fig_facturado = fig_donut_facturado(d_sel, descripciones)
@@ -481,10 +462,8 @@ def _seccion_clave_sat(
 def _seccion_egresos_sat(
     f_egresos_productos: _ArchivoMem | None,
     f_encabezados: _ArchivoMem | None,
-    actividades: pd.DataFrame,
     pdf_elements: list | None,
-    anios_ingresos: list[int] | tuple = (),
-) -> None:
+    anios_ingresos: list[int] | tuple = (),) -> None:
     titulo = "Estructura de Egresos Facturados"
     st.subheader(
         titulo,
@@ -513,8 +492,10 @@ def _seccion_egresos_sat(
         )
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "heading", "text": titulo})
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "heading",
+                                 "text": titulo})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
 
     try:
@@ -607,8 +588,10 @@ def _seccion_egresos_sat(
         mensaje = "No hay partidas válidas de egresos; se muestran los años disponibles de ingresos."
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "heading", "text": titulo})
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "heading",
+                                 "text": titulo})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
 
     d_sel = d[d["Anio"].isin(anios_seleccionados)]
@@ -616,8 +599,10 @@ def _seccion_egresos_sat(
         mensaje = "No hay partidas de egresos para los años seleccionados."
         st.info(mensaje)
         if pdf_elements is not None:
-            pdf_elements.append({"type": "heading", "text": titulo})
-            pdf_elements.append({"type": "callout", "text": escape(mensaje)})
+            pdf_elements.append({"type": "heading",
+                                 "text": titulo})
+            pdf_elements.append({"type": "callout",
+                                 "text": escape(mensaje)})
         return
     catalogo = cargar_catalogo_sat()
     if catalogo is None:
@@ -689,5 +674,5 @@ def _seccion_egresos_sat(
         nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")        
         nota_egresos_pdf = "<b>Nota</b> " + nota_egresos
         pdf_elements.append({"type": "callout",
-                                    "text": nota_egresos_pdf})
+                             "text": nota_egresos_pdf})
     
