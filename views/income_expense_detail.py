@@ -401,7 +401,7 @@ def _seccion_clave_sat(
     catalogo = cargar_catalogo_sat()
     if catalogo is None:
         st.warning(
-            "No se encontró el catálogo oficial del SAT (catCFDI_V_4_….xls, hoja "
+            "No se encontró el catálogo oficial del SAT (catCFDI.xls, hoja "
             "c_ClaveProdServ) en la carpeta data/ del proyecto: las descripciones "
             "oficiales no están disponibles.")
     descripciones = descripciones_clase_sat(d, catalogo)

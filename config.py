@@ -474,3 +474,30 @@ INDICADORES_ITAEE = {
 RUTA_INPC_DEFAULT = "data/INPC_base.csv"
 # Indicador oficial del INPC Nacional mensual (base 2a quincena julio 2018, canasta 2024 · FREQ=15)
 INDICADOR_INPC_NACIONAL = "865541"
+
+# Mapa {nombre_visible_en_selector: id_indicador_BIE_BISE}
+# INPP Producción total por actividad económica · Índice mensual (FREQ=8, UNIT=190, cobertura nacional)
+INDICADORES_INPP = {
+    "INPP sin Petróleo y con Servicios": "1700001",
+    "INPP con Petróleo y con Servicios": "1700002",
+    "Actividades primarias": "1700003",
+    "Actividades primarias, 11 Agricultura, cría y explotación de animales, aprovechamiento forestal, pesca y caza": "1700004",
+    "Actividades secundarias sin petróleo": "1700160",
+    "Actividades secundarias con petróleo": "1700161",
+    "Actividades secundarias con petróleo, 21 Minería sin petróleo": "1700162",
+    "Actividades secundarias con petróleo, 21 Minería con Petróleo": "1700163",
+    "Actividades secundarias con petróleo, 22 Generación, transmisión, distribución y comercialización de energía eléctrica, suministro de agua y de gas natural por ductos al consumidor final": "1700211",
+    "Actividades secundarias con petróleo, 23 Construcción": "1700226",
+    "Actividades secundarias con petróleo, 31-33 Industrias manufactureras": "1700244",
+    "Actividades terciarias": "1701070",
+    "Actividades terciarias, 48-49 Transportes, correos y almacenamiento": "1701071",
+    "Actividades terciarias, 51 Información en medios masivos": "1701146",
+    "Actividades terciarias, 53 Servicios inmobiliarios y de alquiler de bienes muebles e intangibles": "1701192",
+    "Actividades terciarias, 54 Servicios profesionales, científicos y técnicos": "1701215",
+    "Actividades terciarias, 56 Servicios de apoyo a los negocios y manejo de residuos, y servicios de remediación": "1701264",
+    "Actividades terciarias, 61 Servicios educativos": "1701306",
+    "Actividades terciarias, 62 Servicios de salud y de asistencia social": "1701329",
+    "Actividades terciarias, 71 Servicios de esparcimiento culturales y deportivos, y otros servicios recreativos": "1701362",
+    "Actividades terciarias, 72 Servicios de alojamiento temporal y de preparación de alimentos y bebidas": "1701381",
+    "Actividades terciarias, 81 Otros servicios excepto actividades gubernamentales": "1701404",
+}

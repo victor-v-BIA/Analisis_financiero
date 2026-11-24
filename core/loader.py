@@ -849,11 +849,27 @@ def _cargar_bases_economicas(lado: str) -> dict:
                 f"{' e '.join(fuentes_api)} obtenidos en línea desde la API del INEGI (BIE-BISE). "
                 "Si cargas un archivo manual, sustituirá los datos correspondientes."
             )
-    elif not entradas_subidas:
-        st.caption(
-            "Si no cargas archivos, se utiliza la base predeterminada de INPP. "
-            "Los archivos que subas sustituyen esa base para esta vista."
-        )
+    else:
+        if "inpp" not in series:
+            from core.api_inegi import obtener_inpp_nacional
+
+            inpp_api, aviso_inpp = obtener_inpp_nacional()
+            if inpp_api:
+                series["inpp"] = inpp_api
+                st.caption(
+                    "INPP (cobertura nacional) obtenido en línea desde la API del INEGI (BIE-BISE). "
+                    "Si cargas un archivo manual de INPP, sustituirá estos datos."
+                )
+            else:
+                st.info(
+                    f"No se pudo consultar el INPP en línea ({aviso_inpp}). "
+                    f"Los datos del INPP se toman del archivo previamente cargado ({RUTA_INPP_DEFAULT})."
+                )
+                archivo_inpp = base_proyecto / RUTA_INPP_DEFAULT
+                try:
+                    _procesar_entradas([(archivo_inpp.name, archivo_inpp.read_bytes())])
+                except OSError as exc:
+                    st.error(f"No se pudo leer la base económica predeterminada {archivo_inpp}: {exc}")
         archivo_inpp = base_proyecto / RUTA_INPP_DEFAULT
         try:
             _procesar_entradas([(archivo_inpp.name, archivo_inpp.read_bytes())])
@@ -2249,7 +2265,7 @@ def _ruta_catalogo_sat() -> Path | None:
     """Busca el catálogo SAT primero en `data/` y luego en la raíz y carpeta del módulo."""
     base = Path(__file__).resolve().parent
     carpetas = (base.parent / "data", base.parent, base)
-    nombres = ("catCFDI_V_4_20261106.xls", "catCFDI_V_4_20261106.xlsx")
+    nombres = ("catCFDI.xls", "catCFDI.xlsx")
     for nombre in nombres:
         for carpeta in carpetas:
             ruta = carpeta / nombre

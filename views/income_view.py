@@ -738,7 +738,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                 nota_base100 = st.text_area(f"Insight - Ingresos vs {titulo_ref}",
                                             max_chars=600,
                                             key="note_eco_base100")
-
+ 
                 pdf_elements.append({
                     "type": "image",
                     "section_title": "3. Ingresos vs ITAEE",

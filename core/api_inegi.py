@@ -7,7 +7,7 @@ import re
 import requests
 import streamlit as st
 
-from config import ESTADOS_INEGI, INDICADORES_ITAEE, INDICADOR_INPC_NACIONAL
+from config import ESTADOS_INEGI, INDICADORES_ITAEE, INDICADOR_INPC_NACIONAL, INDICADORES_INPP
 
 _INEGI_URL = "https://www.inegi.org.mx/app/api/indicadores/desarrolladores/jsonxml/INDICATOR"
 _TAMANO_LOTE_INEGI = 3
@@ -202,4 +202,97 @@ def obtener_inpc_nacional() -> tuple[dict[str, dict[int, float]], str | None]:
         return {}, f"error de conexión o lectura con la API del INEGI ({exc})"
     if not datos:
         return {}, "la API del INEGI respondió sin observaciones válidas para el INPC"
+    return datos, None
+
+
+_TAMANO_LOTE_INPP = 6
+
+
+def parsear_respuesta_inpp(
+    respuesta: dict,
+    mapa_indicadores: dict[str, str],
+) -> dict[str, dict[int, float]]:
+    """Convierte el JSON mensual del INPP en {sector: {año: promedio_anual}} conservando el orden."""
+    id_a_sector = {str(ind_id).strip(): nombre for nombre, ind_id in mapa_indicadores.items()}
+    acumulado: dict[str, dict[int, dict[str, float]]] = {}
+
+    for serie in respuesta.get("Series", []):
+        indicador = str(serie.get("INDICADOR", "")).strip()
+        sector = id_a_sector.get(indicador)
+        if sector is None:
+            continue
+
+        for obs in serie.get("OBSERVATIONS", []):
+            periodo = str(obs.get("TIME_PERIOD", "")).strip()
+            coincidencia = re.match(r"^(\d{4})(?:/\d{1,2})?$", periodo)
+            if coincidencia is None:
+                continue
+            anio = int(coincidencia.group(1))
+
+            valor_raw = obs.get("OBS_VALUE")
+            if valor_raw is None or str(valor_raw).strip() == "":
+                continue
+            try:
+                valor = float(valor_raw)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(valor):
+                continue
+
+            acumulado.setdefault(sector, {}).setdefault(anio, {})[periodo] = valor
+
+    resultado: dict[str, dict[int, float]] = {}
+    for sector in mapa_indicadores:
+        anios = acumulado.get(sector)
+        if anios:
+            resultado[sector] = {
+                anio: sum(periodos.values()) / len(periodos)
+                for anio, periodos in sorted(anios.items())
+                if periodos
+            }
+    return resultado
+
+
+@st.cache_data(ttl=86400, show_spinner="Consultando INPP en INEGI...")
+def _consultar_inpp_cache(
+    token: str,
+    indicadores: tuple[tuple[str, str], ...],
+) -> dict[str, dict[int, float]]:
+    mapa = dict(indicadores)
+    todos_ids = list(mapa.values())
+    series_combinadas: list[dict] = []
+
+    with requests.Session() as session:
+        for i in range(0, len(todos_ids), _TAMANO_LOTE_INPP):
+            lote = todos_ids[i:i + _TAMANO_LOTE_INPP]
+            try:
+                datos = _peticion_inegi(session, lote, token, area="00")
+                series_combinadas.extend(datos.get("Series", []))
+            except (requests.RequestException, ValueError):
+                for ind_id in lote:
+                    try:
+                        parcial = _peticion_inegi(session, [ind_id], token, area="00")
+                        series_combinadas.extend(parcial.get("Series", []))
+                    except (requests.RequestException, ValueError):
+                        continue
+
+    if not series_combinadas:
+        raise ValueError("No se obtuvieron series válidas de INPP desde la API del INEGI.")
+    return parsear_respuesta_inpp({"Series": series_combinadas}, mapa)
+
+
+def obtener_inpp_nacional() -> tuple[dict[str, dict[int, float]], str | None]:
+    """Devuelve ({sector: {año: promedio_anual}}, aviso_error)."""
+    token = _token_inegi()
+    if not token:
+        return {}, "No se encontró el token del INEGI (INEGI_TOKEN o st.secrets['inegi_token'])."
+    if not INDICADORES_INPP:
+        return {}, "No hay indicadores INPP configurados en INDICADORES_INPP."
+    clave_cache = tuple(INDICADORES_INPP.items())
+    try:
+        datos = _consultar_inpp_cache(token, clave_cache)
+    except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+        return {}, f"error de conexión o lectura con la API del INEGI ({exc})"
+    if not datos:
+        return {}, "la API del INEGI respondió sin observaciones válidas para el INPP"
     return datos, None
