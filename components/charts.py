@@ -681,60 +681,102 @@ def _html_resumen_metodo_pago(res: dict,paleta: dict | None = None,incluir_detal
     return html + "</div>"
 
 def _fig_poder_adquisitivo(anios_str, idx_emp, idx_inpc):
-    """Genera la gráfica de Poder Adquisitivo: Ingresos vs Inflación General (INPC) con etiquetas fijas."""
+    """Genera la gráfica de Ingresos (Base 100) vs. INPC (Base 100) con etiquetas fijas y tolerancia a NaN."""
     fig = go.Figure()
-    brecha = [ingreso - inflacion for ingreso, inflacion in zip(idx_emp, idx_inpc)]
-    datos_hover_inpc = list(zip(idx_emp, brecha))
-    datos_hover_ingresos = list(zip(idx_inpc, brecha))
-    
-    # Textos fijos para mostrar en la gráfica (ej. el valor numérico con 1 decimal)
-    texto_inpc = [f"{val:.1f}" for val in idx_inpc]
-    texto_ingresos = [f"{val:.1f}" for val in idx_emp]
-    
-    # Curva de Inflación General (INPC)
+
+    def _fmt(v, signo=False):
+        if v is None or pd.isna(v):
+            return "n/d"
+        return f"{float(v):+.1f}" if signo else f"{float(v):.1f}"
+
+    brecha = [
+        (float(ing) - float(inf)) if pd.notna(ing) and pd.notna(inf) else float("nan")
+        for ing, inf in zip(idx_emp, idx_inpc)
+    ]
+    datos_hover_inpc = [[_fmt(ing), _fmt(b, signo=True)] for ing, b in zip(idx_emp, brecha)]
+    datos_hover_ingresos = [[_fmt(inf), _fmt(b, signo=True)] for inf, b in zip(idx_inpc, brecha)]
+
+    texto_inpc = ["" if pd.isna(v) else f"{float(v):.1f}" for v in idx_inpc]
+    texto_ingresos = ["" if pd.isna(v) else f"{float(v):.1f}" for v in idx_emp]
+
+    # Área sombreada solo sobre los años donde ambas curvas tienen dato válido
+    pares_validos = [
+        (a, float(emp), float(inf))
+        for a, emp, inf in zip(anios_str, idx_emp, idx_inpc)
+        if pd.notna(emp) and pd.notna(inf)
+    ]
+    if len(pares_validos) >= 2:
+        x_val = [p[0] for p in pares_validos]
+        emp_val = [p[1] for p in pares_validos]
+        inf_val = [p[2] for p in pares_validos]
+        fig.add_trace(go.Scatter(
+            x=x_val + x_val[::-1],
+            y=emp_val + inf_val[::-1],
+            fill="toself",
+            fillcolor="rgba(16, 185, 129, 0.2)",
+            line=dict(color="rgba(255,255,255,0)"),
+            hoverinfo="skip",
+            showlegend=False,
+            name="Brecha",
+        ))
+
+    # Curva de Inflación General (INPC - Base 100)
     fig.add_trace(go.Scatter(
-        x=anios_str, y=idx_inpc, name="Inflación Consumidor (INPC)", 
-        mode="lines+markers+text",  # Añadido "+text" para mostrar etiquetas fijas
-        text=texto_inpc,            # Lista con el texto de cada punto
-        textposition="bottom left",  # Posición del texto respecto  ['top left', 'top center', 'top right', 'middle left', 'middle center', 'middle right', 'bottom left', 'bottom center', 'bottom right']
+        x=anios_str,
+        y=[None if pd.isna(v) else float(v) for v in idx_inpc],
+        name="INPC (Base 100)",
+        mode="lines+markers+text",
+        text=texto_inpc,
+        textposition="top right",
         textfont=dict(color="#FA4A15", size=11),
-        line=dict(color="#FA4A15", width=3), marker=dict(size=9, color="#FA4A15"),
+        cliponaxis=False,
+        line=dict(color="#FA4A15", width=3, shape="spline", smoothing=0.5),
+        marker=dict(size=9, color="#FA4A15"),
         customdata=datos_hover_inpc,
-        hovertemplate=("<b>%{x}</b><br>INPC: %{y:.1f}<br>Ingresos: %{customdata[0]:.1f}"
-                       "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")))
-    
-    # Curva de Ingresos DPC (Base 100)
-    fig.add_trace(go.Scatter(
-        x=anios_str, y=idx_emp, name="Ingresos (Base 100)", 
-        mode="lines+markers+text",  # Añadido "+text"
-        text=texto_ingresos,        # Lista con el texto de cada punto
-        textposition="top right", # Posición para evitar que se encimen con los del INPC
-        textfont=dict(color="#2563EB", size=11),
-        line=dict(color="#2563EB", width=3), marker=dict(size=9, color="#2563EB"),
-        customdata=datos_hover_ingresos,
-        hovertemplate=("<b>%{x}</b><br>Ingresos: %{y:.1f}<br>INPC: %{customdata[0]:.1f}"
-                       "<br>Brecha (Ingresos - INPC): %{customdata[1]:+.1f} puntos<extra></extra>")
+        hovertemplate=(
+            "<b>%{x}</b><br>INPC (Base 100): %{y:.1f}<br>Ingresos (Base 100): %{customdata[0]}"
+            "<br>Brecha (Ingresos - INPC): %{customdata[1]} puntos<extra></extra>"
+        ),
     ))
-    
-    # Área de relleno sombreada (brecha entre ingresos e inflación)
+
+    # Curva de Ingresos (Base 100) + relleno curvo entre ambas líneas
     fig.add_trace(go.Scatter(
-        x=anios_str + anios_str[::-1],
-        y=idx_emp + idx_inpc[::-1],
-        fill='toself',
-        fillcolor='rgba(16, 185, 129, 0.2)',
-        line=dict(color='rgba(255,255,255,0)'),
-        hoverinfo="skip",
-        showlegend=False,
-        name="Shaded Gap"))
+        x=anios_str,
+        y=[None if pd.isna(v) else float(v) for v in idx_emp],
+        name="Ingresos (Base 100)",
+        mode="lines+markers+text",
+        text=texto_ingresos,
+        textposition="top left",
+        textfont=dict(color="#2563EB", size=11),
+        cliponaxis=False,
+        fill="tonexty",
+        fillcolor="rgba(16, 185, 129, 0.2)",
+        line=dict(color="#2563EB", width=3, shape="spline", smoothing=0.5),
+        marker=dict(size=9, color="#2563EB"),
+        customdata=datos_hover_ingresos,
+        hovertemplate=(
+            "<b>%{x}</b><br>Ingresos (Base 100): %{y:.1f}<br>INPC (Base 100): %{customdata[0]}"
+            "<br>Brecha (Ingresos - INPC): %{customdata[1]} puntos<extra></extra>"
+        ),
+    ))
 
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=90, r=40, t=60, b=40), # Margen superior un poco más amplio por las etiquetas
-        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-        xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"))
+        height=400,
+        margin=dict(l=70, r=40, t=45, b=55),
+        yaxis_title="Índice (Base 100)",
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
+        xaxis=dict(
+            type="category",
+            categoryorder="array",
+            categoryarray=anios_str,
+            showgrid=True,
+            gridcolor="rgba(128,128,128,0.12)",
+        ),
+        yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.18)"),
+    )
     return fig
 
 

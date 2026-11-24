@@ -770,12 +770,12 @@ def _leer_tabla_fecha_valor(df: pd.DataFrame) -> dict | None:
 
 
 def _cargar_bases_economicas(lado: str) -> dict:
-    """Carga las bases económicas subidas; para ITAEE consulta la API del INEGI con respaldo en `data/`."""
+    """Carga bases económicas subidas; en Ingresos consulta ITAEE e INPC vía API del INEGI con respaldo en `data/`."""
     if lado not in ("ingresos", "egresos"):
         raise ValueError(f"El lado debe ser 'ingresos' o 'egresos', no {lado!r}.")
 
-    pertinentes = ("itaee", "inpc", "tiie") if lado == "ingresos" else ("inpp", "inpc")
-    texto = "ITAEE, INPC y/o TIIE" if lado == "ingresos" else "INPP y/o INPC"
+    pertinentes = ("itaee", "inpc", "tiie") if lado == "ingresos" else ("inpp",)
+    texto = "ITAEE, INPC y/o TIIE" if lado == "ingresos" else "INPP"
     archivos = st.file_uploader(
         f"Carga las bases externas ({texto}) · Excel, CSV o Parquet",
         type=["xlsx", "xls", "xlsb", "csv", "parquet"],
@@ -811,34 +811,48 @@ def _cargar_bases_economicas(lado: str) -> dict:
         _procesar_entradas(entradas_subidas)
 
     if lado == "ingresos":
-        if "itaee" not in series:
-            from core.api_inegi import obtener_itaee_por_estado
+        from core.api_inegi import obtener_inpc_nacional, obtener_itaee_por_estado
 
-            itaee_estados, aviso_api = obtener_itaee_por_estado()
+        fuentes_api = []
+
+        if "itaee" not in series:
+            itaee_estados, aviso_itaee = obtener_itaee_por_estado()
             if itaee_estados:
                 series["itaee_estados"] = itaee_estados
-                st.caption(
-                    "ITAEE obtenido en línea desde la API del INEGI (BIE-BISE). "
-                    "Si cargas un archivo manual de ITAEE, sustituirá estos datos."
-                )
+                fuentes_api.append("ITAEE")
             else:
-                st.warning(f"{aviso_api} Se utilizará el archivo local predeterminado.")
+                st.warning(f"{aviso_itaee} Se utilizará el archivo local predeterminado de ITAEE.")
                 archivo_itaee = base_proyecto / RUTA_ITAEE_DEFAULT
                 try:
                     _procesar_entradas([(archivo_itaee.name, archivo_itaee.read_bytes())])
                 except OSError as exc:
                     st.error(f"No se pudo leer la base económica predeterminada {archivo_itaee}: {exc}")
 
-        if "inpc" not in series and not entradas_subidas:
-            archivo_inpc = base_proyecto / RUTA_INPC_DEFAULT
-            try:
-                _procesar_entradas([(archivo_inpc.name, archivo_inpc.read_bytes())])
-            except OSError as exc:
-                st.error(f"No se pudo leer la base económica predeterminada {archivo_inpc}: {exc}")
+        if "inpc" not in series:
+            inpc_api, aviso_inpc = obtener_inpc_nacional()
+            if inpc_api:
+                series["inpc"] = inpc_api
+                fuentes_api.append("INPC Nacional")
+            else:
+                st.info(
+                    f"No se pudo consultar el INPC en línea ({aviso_inpc}). "
+                    f"Los datos del INPC se toman del archivo CSV previamente cargado ({RUTA_INPC_DEFAULT})."
+                )
+                archivo_inpc = base_proyecto / RUTA_INPC_DEFAULT
+                try:
+                    _procesar_entradas([(archivo_inpc.name, archivo_inpc.read_bytes())])
+                except OSError as exc:
+                    st.error(f"No se pudo leer la base económica predeterminada {archivo_inpc}: {exc}")
+
+        if fuentes_api:
+            st.caption(
+                f"{' e '.join(fuentes_api)} obtenidos en línea desde la API del INEGI (BIE-BISE). "
+                "Si cargas un archivo manual, sustituirá los datos correspondientes."
+            )
     elif not entradas_subidas:
         st.caption(
-            "Si no cargas archivos, se utilizan las bases predeterminadas. "
-            "Los archivos que subas sustituyen esas bases para esta vista."
+            "Si no cargas archivos, se utiliza la base predeterminada de INPP. "
+            "Los archivos que subas sustituyen esa base para esta vista."
         )
         archivo_inpp = base_proyecto / RUTA_INPP_DEFAULT
         try:

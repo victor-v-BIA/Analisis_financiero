@@ -565,9 +565,10 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             render_grafica(fig_ing_gas, key=f"eco_{lado}_ingresos_gastos")
 
             nota_ing_gas = st.text_area("Insight - Ingresos vs Gastos Anuales", max_chars=600, key="note_eco_ing_gas")
-            pdf_elements.append({"type": "heading", "text": "2. Evolución de Ingresos"})
+            # pdf_elements.append({"type": "heading", "text": "2. Evolución de Ingresos"})
             pdf_elements.append({
                 "type": "image",
+                "section_title": "2. Evolución de Ingresos",
                 "title": "Ingresos vs Gastos Anuales (Millones MXN)",
                 "fig": fig_ing_gas,
                 "note": nota_ing_gas
@@ -697,35 +698,74 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                 })
 
      
-    if not ingresos and serie is not None and base is not None and len(anios) >= 2:
-        st.markdown("Poder Adquisitivo: Ingresos vs Inflación General (INPC)")
-        anios_poder_adquisitivo = seleccionar_anios_grafica(
-            f"eco_{lado}_anios_poder_adquisitivo", "Años a mostrar"
-        )
-        informar_anios_excluidos(anios_poder_adquisitivo)
-        if anios_poder_adquisitivo:
-            indices_poder_adquisitivo = [
-                anios.index(anio) for anio in anios_poder_adquisitivo
-            ]
-            fig_ing = _fig_poder_adquisitivo(
-                [str(anio) for anio in anios_poder_adquisitivo],
-                [ing[i] for i in indices_poder_adquisitivo],
-                [gas[i] for i in indices_poder_adquisitivo],
+    if ingresos:
+        with st.container(border=True):
+            series_inpc = ext.get("inpc")
+            anios_poder_adquisitivo = seleccionar_anios_grafica(
+                f"eco_{lado}_anios_poder_adquisitivo", "Años a mostrar"
             )
-            render_grafica(fig_ing, key="exec_poder_adquisitivo")
+            informar_anios_excluidos(anios_poder_adquisitivo)
 
-            nota_poder_adq = st.text_area("Insight - Poder Adquisitivo",
-                                          max_chars=600,
-                                          key="note_poder_adq")
-            pdf_elements.append({
-                "type": "image",
-                "section_title": "4. Comportamiento de Ingresos en el Entorno",
-                "title": "Poder Adquisitivo: Ingresos vs Inflación General",
-                "fig": fig_ing,
-                "note": nota_poder_adq if nota_poder_adq and nota_poder_adq.strip() else ""
-            })
-        else:
-            st.info("Selecciona al menos un año para mostrar esta gráfica.")
+            if not series_inpc:
+                st.markdown("**Ingresos (Base 100) vs. INPC (Base 100)**")
+                st.info("No se dispone de datos del INPC para generar el comparativo.")
+            elif not anios_poder_adquisitivo:
+                st.markdown("**Ingresos (Base 100) vs. INPC (Base 100)**")
+                st.info("Selecciona al menos un año para mostrar esta gráfica.")
+            else:
+                if len(series_inpc) > 1:
+                    nombre_inpc = st.selectbox(
+                        "Selecciona la serie de INPC:",
+                        list(series_inpc),
+                        key="eco_sel_ingresos_inpc",
+                    )
+                    serie_inpc = series_inpc[nombre_inpc]
+                else:
+                    serie_inpc = next(iter(series_inpc.values()))
+
+                ing_pa = [ing[anios.index(anio)] for anio in anios_poder_adquisitivo]
+                base_inpc = _anio_base(anios_poder_adquisitivo, ing_pa, serie_inpc)
+
+                if base_inpc is None or len(anios_poder_adquisitivo) < 2:
+                    st.markdown("**Ingresos (Base 100) vs. INPC (Base 100)**")
+                    st.info(
+                        "Selecciona dos o más ejercicios con información de Ingresos e INPC "
+                        "para calcular el índice Base 100."
+                    )
+                else:
+                    st.markdown(f"**Ingresos (Base 100) vs. INPC (Base 100)** *(Base 100 = {base_inpc})*")
+                    anios_pa_str = [str(anio) for anio in anios_poder_adquisitivo]
+                    idx_emp_inpc = [
+                        (v / ing_pa[anios_poder_adquisitivo.index(base_inpc)] * 100)
+                        if a >= base_inpc else float("nan")
+                        for a, v in zip(anios_poder_adquisitivo, ing_pa)
+                    ]
+                    idx_inpc = [
+                        v if a >= base_inpc else float("nan")
+                        for a, v in zip(
+                            anios_poder_adquisitivo,
+                            _rebase(serie_inpc, anios_poder_adquisitivo, base_inpc),
+                        )
+                    ]
+                    fig_ing = _fig_poder_adquisitivo(anios_pa_str, idx_emp_inpc, idx_inpc)
+                    fig_ing.update_yaxes(range=_rango_base100(idx_emp_inpc, idx_inpc))
+                    render_grafica(fig_ing, key="exec_poder_adquisitivo")
+
+                    nota_poder_adq = st.text_area(
+                        "Insight - Ingresos (Base 100) vs. INPC (Base 100)",
+                        max_chars=600,
+                        key="note_poder_adq",
+                    )
+                    pdf_elements.append({
+                        "type": "image",
+                        "section_title": "4. Comportamiento de Ingresos",
+                        "title": f"Ingresos (Base 100) vs. INPC (Base 100) — Base {base_inpc}",
+                        "fig": fig_ing,
+                        "custom_height": 300,
+                        "note": nota_poder_adq.strip() if nota_poder_adq and nota_poder_adq.strip() else "",
+                    })
+    else:
+        st.info("Selecciona al menos un año para mostrar esta gráfica.")
    
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA PDF - VISTA ECONÓMICA

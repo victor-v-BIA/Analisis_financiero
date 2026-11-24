@@ -7,7 +7,7 @@ import re
 import requests
 import streamlit as st
 
-from config import ESTADOS_INEGI, INDICADORES_ITAEE
+from config import ESTADOS_INEGI, INDICADORES_ITAEE, INDICADOR_INPC_NACIONAL
 
 _INEGI_URL = "https://www.inegi.org.mx/app/api/indicadores/desarrolladores/jsonxml/INDICATOR"
 _TAMANO_LOTE_INEGI = 3
@@ -90,8 +90,13 @@ def parsear_respuesta_itaee(
     return resultado
 
 
-def _peticion_inegi(session: requests.Session, ids: list[str], token: str) -> dict:
-    url = f"{_INEGI_URL}/{','.join(ids)}/es/0/false/BIE-BISE/2.0/{token}"
+def _peticion_inegi(
+    session: requests.Session,
+    ids: list[str],
+    token: str,
+    area: str = "0",
+) -> dict:
+    url = f"{_INEGI_URL}/{','.join(ids)}/es/{area}/false/BIE-BISE/2.0/{token}"
     respuesta = session.get(url, params={"type": "json"}, timeout=25)
     respuesta.raise_for_status()
     datos = respuesta.json()
@@ -142,4 +147,59 @@ def obtener_itaee_por_estado() -> tuple[dict[str, dict[str, dict[int, float]]], 
         return {}, f"No se pudo consultar el ITAEE desde la API del INEGI ({exc})."
     if not datos:
         return {}, "La API del INEGI respondió sin observaciones válidas para los estados."
+    return datos, None
+
+
+def parsear_respuesta_inpc(respuesta: dict, indicador_id: str) -> dict[str, dict[int, float]]:
+    """Convierte el JSON mensual del INPC Nacional en {'INPC Nacional': {año: promedio_anual}}."""
+    acumulado: dict[int, dict[str, float]] = {}
+
+    for serie in respuesta.get("Series", []):
+        if str(serie.get("INDICADOR", "")).strip() != str(indicador_id).strip():
+            continue
+        for obs in serie.get("OBSERVATIONS", []):
+            periodo = str(obs.get("TIME_PERIOD", "")).strip()
+            coincidencia = re.match(r"^(\d{4})(?:/\d{1,2})?$", periodo)
+            if coincidencia is None:
+                continue
+            anio = int(coincidencia.group(1))
+
+            valor_raw = obs.get("OBS_VALUE")
+            if valor_raw is None or str(valor_raw).strip() == "":
+                continue
+            try:
+                valor = float(valor_raw)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(valor):
+                continue
+
+            acumulado.setdefault(anio, {})[periodo] = valor
+
+    promedios = {
+        anio: sum(periodos.values()) / len(periodos)
+        for anio, periodos in sorted(acumulado.items())
+        if periodos
+    }
+    return {"INPC Nacional": promedios} if promedios else {}
+
+
+@st.cache_data(ttl=86400, show_spinner="Consultando INPC en INEGI...")
+def _consultar_inpc_cache(token: str, indicador_id: str) -> dict[str, dict[int, float]]:
+    with requests.Session() as session:
+        datos = _peticion_inegi(session, [indicador_id], token, area="00")
+    return parsear_respuesta_inpc(datos, indicador_id)
+
+
+def obtener_inpc_nacional() -> tuple[dict[str, dict[int, float]], str | None]:
+    """Devuelve ({'INPC Nacional': {año: promedio_anual}}, aviso_error)."""
+    token = _token_inegi()
+    if not token:
+        return {}, "No se encontró el token del INEGI (INEGI_TOKEN o st.secrets['inegi_token'])."
+    try:
+        datos = _consultar_inpc_cache(token, INDICADOR_INPC_NACIONAL)
+    except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+        return {}, f"error de conexión o lectura con la API del INEGI ({exc})"
+    if not datos:
+        return {}, "la API del INEGI respondió sin observaciones válidas para el INPC"
     return datos, None

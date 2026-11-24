@@ -424,14 +424,14 @@ def generate_modular_pdf(
                 if custom_height:
                     img = plotly_fig_to_reportlab_image(
                         fig,
-                        width_pt=550,
+                        width_pt=500,
                         height_pt=custom_height,
                         preserve_textfont_size=preserve_textfont_size,
                     )
                 else:
                     img = plotly_fig_to_reportlab_image(
                         fig,
-                        width_pt=350,
+                        width_pt=400,
                         preserve_textfont_size=preserve_textfont_size,
                     )
                     

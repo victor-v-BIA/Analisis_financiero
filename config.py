@@ -28,7 +28,7 @@ NOMBRE_FECHA = "Fecha de Pago"
 
 RUTA_ITAEE_DEFAULT = "data/itaee_20.xlsx"
 RUTA_INPP_DEFAULT = "data/INP_INP.XLS"
-RUTA_INPC_DEFAULT = "data/INPC_base.csv"
+
 
 
 COLS_FACTURAS = {
@@ -466,3 +466,11 @@ INDICADORES_ITAEE = {
     "61-62-93 - Servicios educativos. Servicios de salud y de asistencia social. Actividades legislativas, gubernamentales, de impartición de justicia": ("778403",),
     "71-72 - Servicios de esparcimiento culturales y deportivos, y otros servicios recreativos. Servicios de alojamiento temporal y de preparación de alimentos y bebidas": ("778467",),
 }
+
+# =====================================================
+# VARIABLES PARA GRAFICA DE INPC (VISTA ECONOMICA)
+# =====================================================
+
+RUTA_INPC_DEFAULT = "data/INPC_base.csv"
+# Indicador oficial del INPC Nacional mensual (base 2a quincena julio 2018, canasta 2024 · FREQ=15)
+INDICADOR_INPC_NACIONAL = "865541"
