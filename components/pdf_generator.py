@@ -293,6 +293,16 @@ def generate_modular_pdf(
                     textColor=colors.HexColor("#1F2937"),
                     alignment=1
                 )
+                td_style_span = ParagraphStyle(
+                    'TableCellStyleSpan',
+                    fontName='Helvetica-Bold',
+                    fontSize=8,
+                    leading=10,
+                    textColor=colors.HexColor("#1F2937"),
+                    alignment=1
+                )
+
+                span_rows = set(el.get("span_rows") or df.attrs.get("span_rows", []))
 
                 # Estilo específico para tablas de resumen de 1 sola columna (Método de cobro)
                 td_style_single = ParagraphStyle(
@@ -328,11 +338,14 @@ def generate_modular_pdf(
                 header_row = [Paragraph(f"<b>{c}</b>", th_style) for c in cols] if num_cols > 1 else []
                 
                 body_rows = []
-                for _, row in df.iterrows():
+                for row_i, (_, row) in enumerate(df.iterrows()):
                     row_cells = []
-                    for c in cols:
+                    es_fila_combinada = num_cols > 1 and row_i in span_rows
+                    for col_i, c in enumerate(cols):
                         val = str(row[c]) if pd.notnull(row[c]) else ""
-                        if (
+                        if es_fila_combinada:
+                            row_cells.append(Paragraph(val, td_style_span) if col_i == 0 else Paragraph("", td_style_center))
+                        elif (
                             el.get("status_badges")
                             and c.startswith("Lectura ")
                             and val in StatusBadge._PALETA
@@ -378,7 +391,7 @@ def generate_modular_pdf(
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                     ]))
                 else:
-                    t.setStyle(TableStyle([
+                    table_styles = [
                         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -388,7 +401,17 @@ def generate_modular_pdf(
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
                         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
-                    ]))
+                    ]
+                    header_offset = 1 if header_row else 0
+                    for row_i in sorted(span_rows):
+                        if 0 <= row_i < len(body_rows):
+                            r = row_i + header_offset
+                            table_styles.extend([
+                                ('SPAN', (0, r), (-1, r)),
+                                ('BACKGROUND', (0, r), (-1, r), colors.HexColor("#E5E7EB")),
+                                ('ALIGN', (0, r), (-1, r), 'CENTER'),
+                            ])
+                    t.setStyle(TableStyle(table_styles))
                 
                 table_block.append(t)
                 footnote_text = el.get("footnote", "").strip()

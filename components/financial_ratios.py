@@ -231,6 +231,7 @@ def _html_matriz_razones(
             font-variant-numeric:tabular-nums}
         .razones-tabla th,.razones-tabla td{padding:.52rem .6rem;border-bottom:1px solid rgba(128,128,128,.28)}
         .razones-tabla th{background:rgba(128,128,128,.12);font-weight:600;white-space:nowrap}
+        .razones-tabla tr.razon-pilar td{background:rgba(128,128,128,.09);font-weight:700;text-align:center}
         .razones-tabla th:first-child,.razones-tabla td:first-child{text-align:left}
         .razones-tabla .razon-anio,.razones-tabla .razon-valor{text-align:right;white-space:nowrap}
         .razones-tabla .razon-estado{text-align:center;white-space:nowrap}
@@ -266,11 +267,13 @@ def _html_matriz_razones(
     html.append("</tr></thead><tbody>")
 
     filas_pdf = []
+    filas_pilar = []
     for pilar, metricas in _RAZONES_PILARES:
         disponibles = [metrica for metrica in metricas if metrica in razones.index]
         if not disponibles:
             continue
         html.append(f'<tr class="razon-pilar"><td colspan="{len(columnas)}">{escape(pilar)}</td></tr>')
+        filas_pilar.append(len(filas_pdf))
         filas_pdf.append({
             "Razón": f"<b>{escape(pilar)}</b>",
             **{str(anio): "" for anio in anios},
@@ -348,7 +351,9 @@ def _html_matriz_razones(
             filas_pdf.append(fila_pdf)
 
     html.append("</tbody></table></div>")
-    return "".join(html), pd.DataFrame(filas_pdf, columns=columnas)
+    df_pdf = pd.DataFrame(filas_pdf, columns=columnas)
+    df_pdf.attrs["span_rows"] = filas_pilar
+    return "".join(html), df_pdf
 
 
 def _fig_liquidez_razones(razones: pd.DataFrame):
@@ -406,10 +411,10 @@ def _fig_liquidez_razones(razones: pd.DataFrame):
             "zeroline": False,
         },
         legend={"orientation": "h", "x": 0, "xanchor": "left", "y": -0.28, "yanchor": "top",
-                "font": {"size": 10}, "title": None},
+                "font": {"size": 16}, "title": None},
         height=350,
-        margin={"l": 48, "r": 8, "t": 48, "b": 92},
-        font={"color": "#64748B", "size": 10},
+        margin={"l": 48, "r": 8, "t": 48, "b": 95},
+        font={"color": "#64748B", "size": 14},
         hovermode="x unified",
     )
     return fig
@@ -474,10 +479,10 @@ def _fig_estructura_razones(razones: pd.DataFrame):
             "zerolinewidth": 1.5,
         },
         legend={"orientation": "h", "x": 0, "xanchor": "left", "y": -0.28, "yanchor": "top",
-                "font": {"size": 10}, "title": None},
+                "font": {"size": 16}, "title": None},
         height=350,
-        margin={"l": 48, "r": 8, "t": 48, "b": 92},
-        font={"color": "#64748B", "size": 10},
+        margin={"l": 48, "r": 8, "t": 48, "b": 95},
+        font={"color": "#64748B", "size": 14},
         hovermode="x unified",
     )
     return fig

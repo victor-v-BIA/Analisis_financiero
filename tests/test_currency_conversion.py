@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from core.finance_logic import facturas_a_mxn
+from core.finance_logic import facturas_a_mxn, excluir_cfdis_divisas_emitidos
 from core.loader import (
     _anual_ppd_cache,
     _concentracion_cache,
@@ -88,6 +88,26 @@ class CurrencyConversionTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result.iloc[0]["Clave"], "10101010")
         self.assertEqual(result.iloc[0]["Monto_MXN"], 116)
+
+    def test_issued_currency_exchange_products_exclude_linked_invoice_uuid(self):
+        invoices = pd.DataFrame({
+            "UUID": ["A", "B", "C"],
+            "Fecha": pd.to_datetime(["2025-01-01", "2025-02-01", "2025-03-01"]),
+            "Total": [1000, 2000, 3000],
+            "Es_NCR": [False, False, False],
+        })
+        products = pd.DataFrame({
+            "UUID CFDI Emitido": ["B", "C"],
+            "Clave": ["10101010", "84121600"],
+            "Clave SAT": ["84121600", "10101010"],
+        })
+
+        result, uuids, stats = excluir_cfdis_divisas_emitidos(invoices, products)
+
+        self.assertEqual(uuids, {"B"})
+        self.assertEqual(result["UUID"].tolist(), ["A", "C"])
+        self.assertEqual(stats["partidas"], 1)
+        self.assertEqual(stats["facturas_excluidas"], 1)
 
     def test_received_products_prefer_header_rate_to_dof(self):
         headers = pd.DataFrame({

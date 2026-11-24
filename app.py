@@ -361,7 +361,8 @@ def main() -> None:
 
     elif modulo == "Ingresos (Auditoría Operativa)":
         modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, None,
-                        file_egresos_facturas, file_egresos_pago, file_nomina)
+                        file_egresos_facturas, file_egresos_pago, file_nomina,
+                        file_ingresos_productos=file_ingresos_productos)
     else:
         modulo_egresos(file_egresos_facturas, file_egresos_pago, file_nomina, None,
                        file_ingresos_facturas, file_egresos_productos=file_egresos_productos)

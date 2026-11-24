@@ -234,6 +234,49 @@ def excluir_cfdis_divisas(facturas: pd.DataFrame, productos: pd.DataFrame) -> tu
     return resultado, excluir, estadisticas
 
 
+def excluir_cfdis_divisas_emitidos(
+    facturas: pd.DataFrame, productos: pd.DataFrame
+) -> tuple[pd.DataFrame, set[str], dict[str, int]]:
+    """Excluye de ingresos las facturas enlazadas por UUID con partidas SAT 841216."""
+    columna_clave = (
+        buscar_columna(productos.columns, "Clave SAT")
+        or buscar_columna(productos.columns, "Clave")
+    )
+    columna_uuid = buscar_columna(productos.columns, "UUID CFDI Emitido")
+    faltantes = [
+        nombre for nombre, columna in (
+            ("Clave SAT o Clave", columna_clave),
+            ("UUID CFDI Emitido", columna_uuid),
+        )
+        if columna is None
+    ]
+    if faltantes:
+        raise ValueError(
+            f"Faltan columnas requeridas en el archivo de productos emitidos: {faltantes}"
+        )
+
+    claves = (
+        productos[columna_clave].fillna("").astype(str).str.strip()
+        .str.replace(r"\.0$", "", regex=True)
+    )
+    partidas_divisas = productos.loc[claves.str.startswith("841216", na=False)]
+    uuids_productos = (
+        partidas_divisas[columna_uuid].fillna("").astype(str).str.strip().str.upper()
+    )
+    uuids_productos = uuids_productos[~uuids_productos.isin({"", "NAN", "NONE", "<NA>"})]
+    uuids_divisas = set(uuids_productos)
+
+    uuid_facturas = facturas["UUID"].fillna("").astype(str).str.strip().str.upper()
+    excluir = uuid_facturas.isin(uuids_divisas)
+    resultado = facturas.loc[~excluir].copy()
+    estadisticas = {
+        "partidas": int(len(partidas_divisas)),
+        "partidas_sin_uuid": int(len(partidas_divisas) - len(uuids_productos)),
+        "facturas_excluidas": int(excluir.sum()),
+    }
+    return resultado, uuids_divisas, estadisticas
+
+
 def excluir_complementos_de_cfdis(complementos: pd.DataFrame, uuids: set[str]) -> tuple[pd.DataFrame, int | None]:
     """Excluye complementos enlazados por UUID a CFDI de divisas; None indica que no existe columna de relación."""
     if not uuids:

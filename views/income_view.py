@@ -28,8 +28,9 @@ from config import (CODIGO_VERSION, REP_VACIO, VISTAS_MODULO, NOMBRE_FECHA,
 from core.finance_logic import (resumen_mensual, ncr_por_año, complementos_vigentes,
                                 _total_facturado_ppd_vigente, diferencia_ppd,
                                 matriz_anual, _preparar_concentracion, _pagos_por_factura,
-                                _anio_base, _rebase, _desglose_cobros,_resumen_metodo_cobro_global, 
-                                _resumen_metodo_cobro, facturas_a_mxn,_nomina_ingresos_mensual_mxn)
+                                _anio_base, _rebase, _desglose_cobros,_resumen_metodo_cobro_global,
+                                _resumen_metodo_cobro, facturas_a_mxn,_nomina_ingresos_mensual_mxn,
+                                excluir_cfdis_divisas_emitidos)
 
 
 def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
@@ -215,7 +216,8 @@ def _limpiar_y_formatear(val, prefijo="", sufijo=""):
 
 
 def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
-                    file_egresos_facturas=None, file_egresos_pago=None, file_nomina=None) -> None:
+                    file_egresos_facturas=None, file_egresos_pago=None, file_nomina=None,
+                    file_ingresos_productos=None) -> None:
     st.title("Facturación Emitida e Ingresos Corporativos")
 
     if file_ingresos_facturas is None:
@@ -438,7 +440,11 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                              "title": "Desglose Año con Año Ingresos",
                              "df": tabla_pdf})
         st.divider()
-        _vista_economica("ingresos", file_ingresos_facturas, file_egresos_facturas, ejercicios, anios_5, pdf_elements)
+        _vista_economica(
+            "ingresos", file_ingresos_facturas, file_egresos_facturas,
+            ejercicios, anios_5, pdf_elements, ingresos_facturas=facturas,
+            file_ingresos_productos=file_ingresos_productos,
+        )
         return
 
     facturas_concentracion = df_facturas.copy()
@@ -493,7 +499,9 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
 
 
 def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios_5, pdf_elements: list,
-                     egresos_facturas: pd.DataFrame | None = None) -> None:
+                     egresos_facturas: pd.DataFrame | None = None,
+                     ingresos_facturas: pd.DataFrame | None = None,
+                     file_ingresos_productos=None) -> None:
     st.markdown(CSS_VISTA_ECONOMICA, unsafe_allow_html=True)
     if f_ingresos_fac is None or f_egresos_fac is None:
         st.info("La Vista Económica compara Ingresos contra Gastos: carga también la Facturación "
@@ -524,7 +532,49 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                 f"No se han seleccionado los años {', '.join(excluidos)}. "
                 "La gráfica mostrará únicamente los años seleccionados.")
 
-    ing_d = _facturacion_anual_cache(_nb(f_ingresos_fac), "ingresos", anios_5, CODIGO_VERSION)
+    if lado == "ingresos" and ingresos_facturas is not None:
+        facturas_ingresos = ingresos_facturas
+        if file_ingresos_productos is not None:
+            try:
+                productos_emitidos = cargar_base(file_ingresos_productos)
+                facturas_ingresos, _, estadisticas_divisas = excluir_cfdis_divisas_emitidos(
+                    facturas_ingresos, productos_emitidos
+                )
+            except (KeyError, ValueError) as exc:
+                st.error(
+                    f"No se pudieron excluir las operaciones de divisas de "
+                    f"«{file_ingresos_productos.name}»: {exc}"
+                )
+                return
+            st.info(
+                f"Filtro de divisas: se excluyeron "
+                f"{estadisticas_divisas['facturas_excluidas']:,} factura(s) emitida(s) "
+                f"asociada(s) a {estadisticas_divisas['partidas']:,} partida(s) 841216."
+            )
+            if estadisticas_divisas["partidas_sin_uuid"]:
+                st.warning(
+                    f"{estadisticas_divisas['partidas_sin_uuid']:,} partida(s) 841216 "
+                    "no tenían UUID CFDI Emitido y no pudieron cruzarse."
+                )
+        else:
+            st.warning(
+                "No se puede filtrar la clave SAT 841216 de Ingresos porque falta "
+                "la base CFDIs Emitidos Productos."
+            )
+        facturas_ingresos = facturas_ingresos[~facturas_ingresos["Es_NCR"]]
+        totales_ingresos = facturas_ingresos.groupby(
+            facturas_ingresos["Fecha"].dt.year
+        )["Total"].sum()
+        ing_d = {
+            int(anio): float(monto)
+            for anio, monto in totales_ingresos.reindex(
+                [int(a) for a in anios_5], fill_value=0.0
+            ).items()
+        }
+    else:
+        ing_d = _facturacion_anual_cache(
+            _nb(f_ingresos_fac), "ingresos", anios_5, CODIGO_VERSION
+        )
     if lado == "egresos" and egresos_facturas is not None:
         facturas_gastos = egresos_facturas[~egresos_facturas["Es_NCR"]]
         totales_gastos = facturas_gastos.groupby(facturas_gastos["Fecha"].dt.year)["Total"].sum()
