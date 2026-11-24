@@ -413,7 +413,7 @@ def _fig_liquidez_razones(razones: pd.DataFrame):
         legend={"orientation": "h", "x": 0, "xanchor": "left", "y": -0.28, "yanchor": "top",
                 "font": {"size": 16}, "title": None},
         height=350,
-        margin={"l": 48, "r": 8, "t": 48, "b": 95},
+        margin={"l": 48, "r": 8, "t": 48, "b": 92},
         font={"color": "#64748B", "size": 14},
         hovermode="x unified",
     )
