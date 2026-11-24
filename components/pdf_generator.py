@@ -151,6 +151,84 @@ def create_callout_box(text, styles):
     return box_table
 
 
+def _financial_ratio_cards_table(cards):
+    if not cards:
+        return None
+
+    card_width = 504 / 3
+    inner_width = card_width - 12
+    card_title_style = ParagraphStyle(
+        "FinancialRatioCardTitle",
+        fontName="Helvetica-Bold",
+        fontSize=7.5,
+        leading=9,
+        textColor=colors.HexColor("#374151"),
+    )
+    card_value_style = ParagraphStyle(
+        "FinancialRatioCardValue",
+        fontName="Helvetica-Bold",
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor("#111827"),
+    )
+    card_description_style = ParagraphStyle(
+        "FinancialRatioCardDescription",
+        fontName="Helvetica",
+        fontSize=7,
+        leading=8.5,
+        textColor=colors.HexColor("#4B5563"),
+    )
+
+    card_tables = []
+    card_heights = []
+    for card in cards:
+        card_table = Table(
+            [[Paragraph(escape(card["titulo"]), card_title_style)],
+             [Paragraph(escape(card["valor"]), card_value_style)],
+             [Paragraph(escape(card["descripcion"]), card_description_style)]],
+            colWidths=[inner_width],
+        )
+        card_table.setStyle(TableStyle([
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        card_tables.append(card_table)
+        card_heights.append(card_table.wrap(inner_width, 100000)[1])
+
+    reference_height = card_heights[0]
+    if any(height > reference_height for height in card_heights[1:]):
+        reference_height = max(card_heights)
+    card_count = len(card_tables)
+    while len(card_tables) % 3:
+        card_tables.append("")
+    card_rows = [
+        card_tables[index:index + 3]
+        for index in range(0, len(card_tables), 3)
+    ]
+    cards_table = Table(
+        card_rows,
+        colWidths=[card_width] * 3,
+        rowHeights=[reference_height + 6] * len(card_rows),
+    )
+    table_style = [
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]
+    for index in range(card_count):
+        row_index, column_index = divmod(index, 3)
+        table_style.extend([
+            ("BACKGROUND", (column_index, row_index), (column_index, row_index), colors.HexColor("#F9FAFB")),
+            ("BOX", (column_index, row_index), (column_index, row_index), 0.5, colors.HexColor("#D1D5DB")),
+        ])
+    cards_table.setStyle(TableStyle(table_style))
+    return cards_table
+
+
 def plotly_fig_to_reportlab_image(fig, width_pt=500, height_pt=None, preserve_textfont_size=False):
     if preserve_textfont_size:
         fig = deepcopy(fig)
@@ -245,6 +323,110 @@ def generate_modular_pdf(
             if el.get("text") and el["text"].strip():
                 story.append(create_callout_box(el["text"], styles))
                 story.append(Spacer(1, 10))
+
+        elif el_type == "financial_ratios":
+            block = [
+                Paragraph(escape(el["section_title"]), heading_style),
+                Paragraph(escape(el["cards_title"]), chart_title_style),
+            ]
+
+            cards_table = _financial_ratio_cards_table(el.get("cards", []))
+            if cards_table is not None:
+                block.extend([cards_table, Spacer(1, 5)])
+
+            block.append(Paragraph(escape(el["matrix_title"]), chart_title_style))
+
+            df = el.get("df")
+            if df is not None and not df.empty:
+                cols = list(df.columns)
+                span_rows = set(df.attrs.get("span_rows", []))
+                header_style = ParagraphStyle(
+                    "FinancialRatioTableHeader",
+                    fontName="Helvetica-Bold",
+                    fontSize=7.5,
+                    leading=9,
+                    textColor=colors.white,
+                    alignment=1,
+                )
+                cell_style = ParagraphStyle(
+                    "FinancialRatioTableCell",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    leading=8.5,
+                    textColor=colors.HexColor("#1F2937"),
+                )
+                pillar_style = ParagraphStyle(
+                    "FinancialRatioTablePillar",
+                    fontName="Helvetica-Bold",
+                    fontSize=7.5,
+                    leading=9,
+                    textColor=colors.HexColor("#1F2937"),
+                    alignment=1,
+                )
+                header = [Paragraph(escape(str(col)), header_style) for col in cols]
+                rows = [header]
+                for row_index, (_, row) in enumerate(df.iterrows()):
+                    if row_index in span_rows:
+                        rows.append([
+                            Paragraph(escape(str(row[cols[0]])), pillar_style),
+                            *[Paragraph("", cell_style) for _ in cols[1:]],
+                        ])
+                    else:
+                        rows.append([
+                            Paragraph(escape(str(row[col])), cell_style)
+                            for col in cols
+                        ])
+                first_col_width = 204
+                year_col_width = (504 - first_col_width) / max(len(cols) - 1, 1)
+                table = Table(
+                    rows,
+                    colWidths=[first_col_width] + [year_col_width] * (len(cols) - 1),
+                    repeatRows=1,
+                )
+                table_styles = [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+                ]
+                for row_index in sorted(span_rows):
+                    pdf_row = row_index + 1
+                    table_styles.extend([
+                        ("SPAN", (0, pdf_row), (-1, pdf_row)),
+                        ("BACKGROUND", (0, pdf_row), (-1, pdf_row), colors.HexColor("#E5E7EB")),
+                    ])
+                table.setStyle(TableStyle(table_styles))
+                block.append(table)
+
+            footnotes = el.get("footnotes", [])
+            if footnotes:
+                footnote_style = ParagraphStyle(
+                    "FinancialRatioFootnote",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    leading=9,
+                    textColor=colors.HexColor("#4B5563"),
+                )
+                block.extend(
+                    Paragraph(escape(note), footnote_style)
+                    for note in footnotes
+                )
+            insight = el.get("insight", "").strip()
+            if insight:
+                block.extend([
+                    Spacer(1, 5),
+                    Paragraph(f"<b>Insight:</b> {escape(insight)}", note_style),
+                ])
+            if el.get("note", "").strip():
+                block.extend([
+                    Spacer(1, 5),
+                    create_callout_box(escape(el["note"]), styles),
+                ])
+            story.append(KeepTogether(block))
                 
         elif el_type == "table":
             table_block = []

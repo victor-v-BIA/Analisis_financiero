@@ -749,6 +749,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
 
      
     if ingresos:
+        titulo_ingresos_inpc = "Ingresos (Base 100) vs. INPC (Base 100) - Nivel Nacional"
         with st.container(border=True):
             series_inpc = ext.get("inpc")
             anios_poder_adquisitivo = seleccionar_anios_grafica(
@@ -757,10 +758,10 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
             informar_anios_excluidos(anios_poder_adquisitivo)
 
             if not series_inpc:
-                st.markdown("**Ingresos (Base 100) vs. INPC (Base 100)**")
+                st.markdown(f"**{titulo_ingresos_inpc}**")
                 st.info("No se dispone de datos del INPC para generar el comparativo.")
             elif not anios_poder_adquisitivo:
-                st.markdown("**Ingresos (Base 100) vs. INPC (Base 100)**")
+                st.markdown(f"**{titulo_ingresos_inpc}**")
                 st.info("Selecciona al menos un año para mostrar esta gráfica.")
             else:
                 if len(series_inpc) > 1:
@@ -777,13 +778,15 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                 base_inpc = _anio_base(anios_poder_adquisitivo, ing_pa, serie_inpc)
 
                 if base_inpc is None or len(anios_poder_adquisitivo) < 2:
-                    st.markdown("**Ingresos (Base 100) vs. INPC (Base 100)**")
+                    st.markdown(f"**{titulo_ingresos_inpc}**")
                     st.info(
                         "Selecciona dos o más ejercicios con información de Ingresos e INPC "
                         "para calcular el índice Base 100."
                     )
                 else:
-                    st.markdown(f"**Ingresos (Base 100) vs. INPC (Base 100)** *(Base 100 = {base_inpc})*")
+                    st.markdown(
+                        f"**{titulo_ingresos_inpc} (Base 100 = {base_inpc})**"
+                    )
                     anios_pa_str = [str(anio) for anio in anios_poder_adquisitivo]
                     idx_emp_inpc = [
                         (v / ing_pa[anios_poder_adquisitivo.index(base_inpc)] * 100)
@@ -802,14 +805,14 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                     render_grafica(fig_ing, key="exec_poder_adquisitivo")
 
                     nota_poder_adq = st.text_area(
-                        "Insight - Ingresos (Base 100) vs. INPC (Base 100)",
+                        f"Insight - {titulo_ingresos_inpc}",
                         max_chars=600,
                         key="note_poder_adq",
                     )
                     pdf_elements.append({
                         "type": "image",
                         "section_title": "4. Comportamiento de Ingresos",
-                        "title": f"Ingresos (Base 100) vs. INPC (Base 100) — Base {base_inpc}",
+                        "title": f"{titulo_ingresos_inpc}",
                         "fig": fig_ing,
                         "custom_height": 300,
                         "note": nota_poder_adq.strip() if nota_poder_adq and nota_poder_adq.strip() else "",
