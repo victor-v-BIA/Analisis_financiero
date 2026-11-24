@@ -257,9 +257,9 @@ def modulo_ingresos(file_ingresos_facturas, file_ingresos_pago, anios_5=None,
                    f"ventana de análisis {anios_5[0] if anios_5 else ''}–{anios_5[-1] if anios_5 else ''}).")
         return
 
-    rfc_empresa = facturas["RFC_Emisor"].iloc[0]
+    '''rfc_empresa = facturas["RFC_Emisor"].iloc[0]
     nombre_empresa = facturas["Nombre_Emisor"].iloc[0]
-    st.markdown(f"### Empresa: **{nombre_empresa}** ({rfc_empresa})")
+    st.markdown(f"### Empresa: **{nombre_empresa}** ({rfc_empresa})")'''
 
     vista_modulo = st.radio("Vista", VISTAS_MODULO, horizontal=True, key="ing_vista_modulo", label_visibility="collapsed")
     econ = vista_modulo == "Vista Económica"
@@ -814,8 +814,7 @@ def _vista_economica(lado: str, f_ingresos_fac, f_egresos_fac, ejercicios, anios
                         "custom_height": 300,
                         "note": nota_poder_adq.strip() if nota_poder_adq and nota_poder_adq.strip() else "",
                     })
-    else:
-        st.info("Selecciona al menos un año para mostrar esta gráfica.")
+    
    
     # ---------------------------------------------------------------
     # SECCIÓN DE DESCARGA PDF - VISTA ECONÓMICA

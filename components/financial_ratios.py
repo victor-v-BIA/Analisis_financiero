@@ -380,7 +380,7 @@ def _fig_liquidez_razones(razones: pd.DataFrame):
         color_discrete_map={"Razón Circulante": "#3B82F6", "Prueba Ácida": "#8B5CF6"},
     )
     anios = list(razones.columns)
-    fig.update_traces(line_width=2.5, marker_size=7, textposition="top right", textfont_size=9)
+    fig.update_traces(line_width=2.5, marker_size=7, textposition="top left", textfont_size=12)
     for traza in fig.data:
         if traza.name == "Prueba Ácida":
             traza.textposition = "bottom center"
@@ -451,7 +451,7 @@ def _fig_estructura_razones(razones: pd.DataFrame):
         },
     )
     anios = list(razones.columns)
-    fig.update_traces(line_width=2.5, marker_size=7, textposition="top center", textfont_size=9)
+    fig.update_traces(line_width=2.5, marker_size=7, textposition="top center", textfont_size=12)
     for traza in fig.data:
         if traza.name == "Margen Bruto":
             traza.textposition = "bottom center"
