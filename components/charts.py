@@ -863,21 +863,6 @@ def _html_tabla_intermediarios(t: pd.DataFrame, moneda: str) -> str:
             f"<tbody>{''.join(filas)}</tbody></table></div>")
 
 
-def _html_tabla_benchmark(b: pd.DataFrame) -> str:
-    """B) Benchmark de mercado: para cada nivel de intermediario, su rango de spread sobre la referencia, el monto que la empresa habría pagado por el mismo volumen y fechas, y el
-    ahorro neto frente a lo que le facturaron sus bancos (renglón de referencia al inicio). Rangos «bajo – alto»; el ahorro máximo corresponde al spread bajo."""
-    esc = lambda s: html.escape(str(s), quote=True)
-    mxn = lambda v: f"{'-' if v < 0 else ''}&#36;{abs(v):,.2f}"
-    real = b.attrs.get("facturado_real", float("nan"))
-    cols = ["Nivel de mercado", "Spread sobre referencia", "Monto que habría pagado (MXN)", "Ahorro neto (MXN)"]
-    filas = [f'<tr><td class="sf-nombre"><b>Lo que le facturaron sus bancos actuales</b></td><td class="sf-num">—</td><td class="sf-num"><b>{mxn(real)}</b></td><td class="sf-num">—</td></tr>']
-    for r in b.itertuples(index=False):
-        filas.append(f'<tr><td class="sf-nombre" title="{esc(r[0])}">{esc(r[0])}</td><td class="sf-num">+&#36;{r[1]:.2f} a +&#36;{r[2]:.2f}</td>'
-                     f'<td class="sf-num">{mxn(r[3])} a {mxn(r[4])}</td><td class="sf-num">{mxn(r[6])} a {mxn(r[5])}</td></tr>')
-    colgroup = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in (34, 18, 28, 20)) + "</colgroup>"
-    encabezado = "<thead><tr>" + "".join(f'<th class="sf-num">{esc(c)}</th>' if i else f"<th>{esc(c)}</th>" for i, c in enumerate(cols)) + "</tr></thead>"
-    return (f'{CSS_SIN_FACTURACION}<div class="sf-wrap" style="max-height:{38 + 35 * (len(b) + 1)}px"><table class="sf-tabla">{colgroup}{encabezado}'
-            f"<tbody>{''.join(filas)}</tbody></table></div>")
 
 
 

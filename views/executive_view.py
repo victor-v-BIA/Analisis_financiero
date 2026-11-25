@@ -26,7 +26,7 @@ from components.charts import (_grafica_diferencia_anual, _html_detalle_anual, _
                                 _grafica_ciclos_lineas,_grafica_velas,_grafica_plazos_comparativa,
                                 _layout_plotly,_html_tabla_sin_facturacion,
                                 render_grafica,fig_tc_fix_vs_facturado,_html_tabla_intermediarios,
-                                _html_tabla_benchmark, _html_kpis_divisas)
+                                 _html_kpis_divisas)
 
 from core.finance_logic import ( _tabla_detalle_anual, _anios_cobertura_completa,_flujo_bruto_mensual,
                                 _ohlc_mensual,_promedios_mensuales_historicos,_series_anuales_por_mes,
@@ -1049,16 +1049,10 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
     fig_divisas = fig_tc_fix_vs_facturado(d, fix.get(moneda), moneda, anios)
     st.plotly_chart(fig_divisas, width='stretch', key="div_fig_tc")
 
-    st.markdown("**A) Intermediarios actuales de la empresa**")
+    st.markdown("**Intermediarios actuales de la empresa**")
     st.markdown(_html_tabla_intermediarios(tabla_intermediarios(d), moneda), unsafe_allow_html=True)
     st.divider()
-    st.markdown(f"**B) Comparación de mercados:** ¿con quién conviene operar? Lo que la empresa habría pagado por el mismo volumen de {moneda} y las mismas fechas, sobre la referencia")
-    if hay_fix:
-        st.markdown(_html_tabla_benchmark(benchmark_mercado(d)), unsafe_allow_html=True)
-        st.caption("Spreads de mercado supuestos (pesos por unidad de divisa sobre la referencia): especialistas FX +0.05 a +0.08, banca empresarial preferente +0.12 a +0.15 y ventanilla "
-                   "tradicional +0.25 a +0.35. Ahorro neto = lo facturado − lo que habría pagado; negativo si el banco actual fue más barato que ese nivel.")
-    else:
-        st.info("El benchmark necesita el tipo de cambio de referencia; no se pudo consultar (sin conexión).")
+    
     nota_divisas = st.text_area(
         f"Insight para la gráfica de Operaciones en Divisas {moneda}",
         max_chars=600,
@@ -1125,9 +1119,10 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
         })
         pdf_elements.append({
             "type": "table",
-            "title": f"A) Intermediarios actuales de la empresa — {moneda}",
+            "title": f"Intermediarios actuales de la empresa — {moneda}",
             "df": intermediarios_pdf,
             "column_widths_pct": [23, 15, 11, 13, 16, 12, 12, 10, 13],
+            "note": nota_divisas,
         })
 
         if hay_fix:
@@ -1157,19 +1152,6 @@ def _seccion_divisas(f_productos, f_fix=None, anios=None, pdf_elements=None) -> 
                 ],
             ])
             
-            pdf_elements.append({
-                "type": "table",
-                "title": f"B) Comparación de mercados — {moneda}",
-                "df": benchmark_pdf,
-                "note":( nota_divisas if nota_divisas and nota_divisas.strip() else ""),
-            })
-
-            pdf_elements.append({
-                            "type": "callout", 
-                            "text": '''
-                            <b>Nota:</b> Los spreads sobre el FIX (tipo de cambio de referencia)
-                            de cada nivel son rangos estimados con base en las condiciones del mercado cambiario.
-                            '''})
         else:
             pdf_elements.append({
                 "type": "callout",
