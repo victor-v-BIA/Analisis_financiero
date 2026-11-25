@@ -447,7 +447,8 @@ def generate_modular_pdf(
                 cols = list(df.columns)
                 num_cols = len(cols)
                 total_width = 504  # Ancho total imprimible
-
+                cell_font_size = el.get("cell_font_size", 8)
+                cell_leading = cell_font_size + 2
                 # Estilos de párrafo para celdas
                 th_style = ParagraphStyle(
                     'TableHeaderStyle',
@@ -458,28 +459,37 @@ def generate_modular_pdf(
                     alignment=1
                 )
                 
-                td_style_left = ParagraphStyle(
-                    'TableCellStyleLeft',
-                    fontName='Helvetica',
-                    fontSize=7,
-                    leading=9,
-                    textColor=colors.HexColor("#1F2937"),
-                    alignment=0
-                )
-                
                 td_style_center = ParagraphStyle(
-                    'TableCellStyleCenter',
-                    fontName='Helvetica',
-                    fontSize=7,
-                    leading=9,
+                    "TableCellStyleCenter",
+                    fontName="Helvetica",
+                    fontSize=cell_font_size,
+                    leading=cell_leading,
                     textColor=colors.HexColor("#1F2937"),
-                    alignment=1
+                    alignment=1,
+                )
+
+                td_style_left = ParagraphStyle(
+                    "TableCellStyleLeft",
+                    fontName="Helvetica",
+                    fontSize=cell_font_size,
+                    leading=cell_leading,
+                    textColor=colors.HexColor("#1F2937"),
+                    alignment=0,
+                )
+
+                td_style_single = ParagraphStyle(
+                    "TableCellStyleSingle",
+                    fontName="Helvetica",
+                    fontSize=cell_font_size,
+                    leading=cell_leading,
+                    textColor=colors.HexColor("#1F2937"),
+                    alignment=0,
                 )
                 td_style_span = ParagraphStyle(
                     'TableCellStyleSpan',
                     fontName='Helvetica-Bold',
-                    fontSize=8,
-                    leading=10,
+                    fontSize=cell_font_size,
+                    leading=cell_leading,
                     textColor=colors.HexColor("#1F2937"),
                     alignment=1
                 )

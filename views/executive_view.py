@@ -756,21 +756,21 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
         df_escenarios_pdf = pd.DataFrame([
             {
                 "Concepto / Métrica": "<b>Flujo del Periodo</b>",
-                "Mes Más Bajo (Conservador)": f"{val_cons_f}<br/><font size=7 color='#6B7280'>{sub_cons_f}</font>",
-                "Mes Intermedio (Estimado)": f"{val_med_f}<br/><font size=7 color='#6B7280'>{sub_med_f}</font>",
-                "Mejor Mes (Tope)": f"{val_opt_f}<br/><font size=7 color='#6B7280'>{sub_opt_f}</font>"
+                "Mes Más Bajo (Conservador)": f"{val_cons_f}<br/><font size=8 color='#6B7280'>{sub_cons_f}</font>",
+                "Mes Intermedio (Estimado)": f"{val_med_f}<br/><font size=8 color='#6B7280'>{sub_med_f}</font>",
+                "Mejor Mes (Tope)": f"{val_opt_f}<br/><font size=8 color='#6B7280'>{sub_opt_f}</font>"
             },
             {
                 "Concepto / Métrica": "<b>Capacidad de Pago (Cuota)</b>",
-                "Mes Más Bajo (Conservador)": f"{val_cons_c}<br/><font size=7 color='#6B7280'>{sub_cons_c}</font>",
-                "Mes Intermedio (Estimado)": f"{val_med_c}<br/><font size=7 color='#6B7280'>{sub_med_c}</font>",
-                "Mejor Mes (Tope)": f"{val_opt_c}<br/><font size=7 color='#6B7280'>{sub_opt_c}</font>"
+                "Mes Más Bajo (Conservador)": f"{val_cons_c}<br/><font size=8 color='#6B7280'>{sub_cons_c}</font>",
+                "Mes Intermedio (Estimado)": f"{val_med_c}<br/><font size=8 color='#6B7280'>{sub_med_c}</font>",
+                "Mejor Mes (Tope)": f"{val_opt_c}<br/><font size=8 color='#6B7280'>{sub_opt_c}</font>"
             },
             {
                 "Concepto / Métrica": "<b>Línea de Financiamiento</b>",
-                "Mes Más Bajo (Conservador)": f"{val_cons_l}<br/><font size=7 color='#6B7280'>{sub_cons_l}</font>",
-                "Mes Intermedio (Estimado)": f"{val_med_l}<br/><font size=7 color='#6B7280'>{sub_med_l}</font>",
-                "Mejor Mes (Tope)": f"{val_opt_l}<br/><font size=7 color='#6B7280'>{sub_opt_l}</font>"
+                "Mes Más Bajo (Conservador)": f"{val_cons_l}<br/><font size=8 color='#6B7280'>{sub_cons_l}</font>",
+                "Mes Intermedio (Estimado)": f"{val_med_l}<br/><font size=8 color='#6B7280'>{sub_med_l}</font>",
+                "Mejor Mes (Tope)": f"{val_opt_l}<br/><font size=8 color='#6B7280'>{sub_opt_l}</font>"
             }
         ])
 
@@ -792,6 +792,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
             "type": "table",
             "title": "Comparativa Vertical de Escenarios de Financiamiento",
             "df": df_escenarios_pdf,
+            "cell_font_size": 10,
             "cell_scale": 1.15
         })
         pdf_elements.append({
