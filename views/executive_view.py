@@ -805,7 +805,7 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
 
     st.divider()
     _seccion_divisas(file_egresos_productos, f_fix=file_fix, anios=anios_5, pdf_elements=pdf_elements)
-
+    
     # ---------------------------------------------------------------
     # SECCIÓN 9: Salud Financiera y Razones Financieras
     # ---------------------------------------------------------------
@@ -824,10 +824,6 @@ def modulo_riesgo(f_ingresos_fac, f_ingresos_pago, f_egresos_fac, f_egresos_pago
     with col_pdf_desc:
         st.write("Genera un PDF con las gráficas, sus conclusiones individuales, tablas e información financiera de esta vista.")
         
-
-        if dictamen_res is not None:
-            cons_viabilidad = "VIABLE" if dictamen_res["conservador"] and dictamen_res["conservador"]["es_viable"] else "NO VIABLE"
-
         if st.button("Generar Reporte PDF", key="btn_generar_pdf", type="primary"):
             with st.spinner("Construyendo estructura modular y maquetando PDF..."):
                 
