@@ -294,15 +294,17 @@ def _sufijo_periodo_clase_sat(
     return " - " + ", ".join(str(anio) for anio in sorted(anios_seleccionados))
 
 
-def _algun_anio_actividad_en_periodo(
+def _algun_anio_actividad_fuera_periodo(
     actividades: pd.DataFrame, anios_periodo: list[int] | tuple) -> bool:
-    """Indica si alguna actividad inició dentro de la ventana de análisis."""
+    """Indica si alguna actividad inició fuera de la ventana de análisis."""
     if actividades is None or actividades.empty or not anios_periodo:
         return False
     fechas = pd.to_datetime(
         actividades["Fecha de inicio"], format="%d/%m/%Y", errors="coerce")
     periodo = {int(anio) for anio in anios_periodo}
-    return bool(periodo) and fechas.dt.year.isin(periodo).any()
+    anios_actividad = fechas.dt.year
+    fuera_periodo = anios_actividad.notna() & ~anios_actividad.isin(periodo)
+    return bool(periodo) and fuera_periodo.any()
 
 
 def _seccion_clave_sat(
@@ -447,7 +449,7 @@ def _seccion_clave_sat(
     st.markdown("#### Detalle de Facturación por Clase SAT")
     tabla = tabla_clase_sat(d_sel, descripciones)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
-    st.caption("Nota" + NOTA_METODOLOGICA_CLASE_SAT)
+    st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
 
     nota_dos_texto = (
         "2.- La gráfica Distribución de Actividades Económicas Declaradas muestra las "
@@ -456,9 +458,10 @@ def _seccion_clave_sat(
         "analizado, los años anteriores a ese registro podrían no sumar 100%, ya que "
         "se desconoce cómo estaban distribuidas las actividades antes del cambio.")
     
-    mostrar_nota_dos = _algun_anio_actividad_en_periodo(actividades, anios_5)
+    mostrar_nota_dos = _algun_anio_actividad_fuera_periodo(
+        actividades, anios_seleccionados)
     if mostrar_nota_dos:
-        st.caption(nota_dos_texto)
+        st.info(nota_dos_texto)
 
     comentario = st.text_area(
         "Insight para Estructura de Ingresos Facturados",
@@ -501,16 +504,15 @@ def _seccion_clave_sat(
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             },
         ])
-        nota_metodologica = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")
-        if mostrar_nota_dos:
-            nota_metodologica += (
-                "<br/><br/>" + escape(nota_dos_texto).replace("\n", "<br/>")
-            )
-            texto_nota = "<b>Nota</b> " + nota_metodologica
-        else:
-            texto_nota = nota_metodologica
         pdf_elements.append({"type": "callout",
-                             "text": texto_nota})
+                             "text": "<b>Nota: </b> " + escape(
+                                 NOTA_METODOLOGICA_CLASE_SAT
+                             ).replace("\n", "<br/>")})
+        if mostrar_nota_dos:
+            pdf_elements.append({
+                "type": "callout",
+                "text": escape(nota_dos_texto).replace("\n", "<br/>"),
+            })
     return disponibles
 
 
@@ -678,14 +680,11 @@ def _seccion_egresos_sat(
 
     fig_egresos.update_layout(title_text=f"{fig_egresos.layout.title.text}{sufijo_periodo}")
 
-    egresos = st.plotly_chart(
-            fig_egresos, width="stretch", key="egresos_sat_donut_recibido"
-        )
 
     st.markdown("#### Detalle de Facturación por Clase SAT")
     tabla = tabla_clase_sat(d_sel, descripciones)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
-    st.caption("Nota" + NOTA_METODOLOGICA_CLASE_SAT)
+    st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
 
     comentario = st.text_area(
         "Conclusiones para Estructura de Egresos Facturados",
@@ -732,7 +731,7 @@ def _seccion_egresos_sat(
     },
 ])
         nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")        
-        nota_egresos_pdf = "<b>Nota</b> " + nota_egresos
+        nota_egresos_pdf = "<b>Nota: </b> " + nota_egresos
         pdf_elements.append({"type": "callout",
                              "text": nota_egresos_pdf})
     
