@@ -452,7 +452,7 @@ def _seccion_clave_sat(
     st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
 
     nota_dos_texto = (
-        "2.- La gráfica Distribución de Actividades Económicas Declaradas muestra las "
+        "La gráfica Distribución de Actividades Económicas Declaradas muestra las "
         "actividades y porcentajes registrados en la Constancia de Situación Fiscal "
         "actual. Si la empresa registró una nueva actividad dentro del periodo "
         "analizado, los años anteriores a ese registro podrían no sumar 100%, ya que "
@@ -461,7 +461,7 @@ def _seccion_clave_sat(
     mostrar_nota_dos = _algun_anio_actividad_fuera_periodo(
         actividades, anios_seleccionados)
     if mostrar_nota_dos:
-        st.info(nota_dos_texto)
+        st.caption(nota_dos_texto)
 
     comentario = st.text_area(
         "Insight para Estructura de Ingresos Facturados",
@@ -511,7 +511,7 @@ def _seccion_clave_sat(
         if mostrar_nota_dos:
             pdf_elements.append({
                 "type": "callout",
-                "text": escape(nota_dos_texto).replace("\n", "<br/>"),
+                "text": "<b>Nota: </b> " + escape(nota_dos_texto).replace("\n", "<br/>"),
             })
     return disponibles
 
@@ -680,6 +680,11 @@ def _seccion_egresos_sat(
 
     fig_egresos.update_layout(title_text=f"{fig_egresos.layout.title.text}{sufijo_periodo}")
 
+    st.plotly_chart(
+        fig_egresos,
+        width="stretch",
+        key="egresos_sat_donut_recibido",
+    )
 
     st.markdown("#### Detalle de Facturación por Clase SAT")
     tabla = tabla_clase_sat(d_sel, descripciones)
