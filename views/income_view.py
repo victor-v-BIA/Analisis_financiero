@@ -71,8 +71,7 @@ def _figura_ingresos_egresos(periodos: pd.PeriodIndex, ingresos: pd.Series,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        xaxis_title=None, yaxis_title="MXN",
-    )
+        xaxis_title=None, yaxis_title="MXN",)
     fig.update_xaxes(type="category", categoryorder="array", categoryarray=x, tickangle=-45)
     fig.update_yaxes(tickformat=",.0f", zeroline=False, gridcolor="rgba(128,128,128,0.18)")
     return fig
@@ -87,8 +86,7 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         "Facturación Neta y Flujo Fiscal",
         help=("Facturación Neta: facturas emitidas menos NCR y facturas recibidas menos NCR, por fecha de emisión. "
               "Flujo Fiscal: facturas PUE por fecha de emisión más complementos y nómina por fecha de pago; "
-              "excluye NCR y operaciones de divisas de los egresos. En ambas, la línea es ingresos menos egresos."),
-    )
+              "excluye NCR y operaciones de divisas de los egresos. En ambas, la línea es ingresos menos egresos."),)
     if f_fac_egr is None:
         st.info("Para mostrar la Facturación Neta Mensual falta la Facturación Recibida.")
         return
@@ -114,11 +112,9 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
     anios = sorted(int(anio) for anio in ejercicios)
     periodos = pd.PeriodIndex(
         [pd.Period(f"{anio}-{mes:02d}", freq="M") for anio in anios for mes in range(1, 13)],
-        freq="M",
-    )
+        freq="M",)
 
-    def sumar_por_mes(df: pd.DataFrame, fecha: str,
-                      monto: str) -> pd.Series:
+    def sumar_por_mes(df: pd.DataFrame, fecha: str, monto: str) -> pd.Series:
         fechas = df[fecha]
         periodos_df = fechas if isinstance(fechas.dtype, pd.PeriodDtype) else fechas.dt.to_period("M")
         serie = df.assign(_Periodo=periodos_df).groupby("_Periodo")[monto].sum()
@@ -179,9 +175,9 @@ def _bloque_neta_y_flujo_ingresos(fac_ing: pd.DataFrame, rep_ing: pd.DataFrame,
         and ingresos_complementos_egr is not None
         and ingresos_nomina is not None
     )
-    ingresos_flujo = ingresos_pue + (ingresos_complementos if ingresos_complementos is not None else 0.0)
+    ingresos_flujo = ingresos_pue + (ingresos_complementos if ingresos_complementos is not None else 0)
     egresos_flujo = egresos_pue + (
-        ingresos_complementos_egr if ingresos_complementos_egr is not None else 0.0)
+        ingresos_complementos_egr if ingresos_complementos_egr is not None else 0)
     faltan_flujo = []
     if ingresos_complementos is None:
         faltan_flujo.append("Complementos de Pago de Ingresos")

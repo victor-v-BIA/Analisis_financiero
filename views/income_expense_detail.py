@@ -202,7 +202,7 @@ def modulo_ingresos_sat(
     if st.button("Generar Reporte PDF", key="btn_generar_pdf_clase_sat", type="primary"):
         with st.spinner("Construyendo y maquetando el PDF..."):
             pdf_data = generate_modular_pdf(
-                title="Reporte de Barrido y Visoría",
+                title="",
                 subtitle="",
                 elements=pdf_elements,)
         st.download_button(
@@ -312,7 +312,7 @@ def _seccion_clave_sat(
     f_encabezados_emitidos: _ArchivoMem | None,
     actividades: pd.DataFrame,) -> list[int]:
     """Muestra el perfil fiscal y agrega sus visualizaciones y notas al PDF."""
-    subtitulo_seccion = "Perfil Fiscal Declarado y Estructura de Ingresos Facturados"
+    subtitulo_seccion = "Estructura de Ingresos Facturados"
     st.subheader(
         subtitulo_seccion,
         help=(
@@ -329,7 +329,7 @@ def _seccion_clave_sat(
     )
     if pdf_elements is not None:
         pdf_elements.append({"type": "heading",
-                             "text": "Perfil Fiscal Declarado y Estructura de Ingresos Facturados"})
+                             "text": "Estructura de Ingresos Facturados"})
 
     if f_emitidos_productos is None:
         mensaje = "Carga la base «CFDIs Emitidos Productos» para analizar la facturación por clave SAT."
@@ -716,18 +716,21 @@ def _seccion_egresos_sat(
             lambda valor: f"{valor:.2f}%"
         )
         pdf_elements.extend([
-            {"type": "image",
-             "title":"Estructura de Egresos Facturados",
-             "fig": fig_egresos,
-             "preserve_textfont_size": True},
-            {
-                "type": "table",
-                "title": "Detalle de Facturación Recibida por Clase SAT",
-                "df": tabla_pdf,
-                "column_widths_pct": [12, 42, 18, 18, 12],
-                "note": comentario.strip() if comentario and comentario.strip() else "",
-            }
-        ])
+    {
+        "type": "image",
+        "section_title": "Estructura de Egresos Facturados",
+        "title": "",
+        "fig": fig_egresos,
+        "preserve_textfont_size": True,
+    },
+    {
+        "type": "table",
+        "title": "Detalle de Facturación Recibida por Clase SAT",
+        "df": tabla_pdf,
+        "column_widths_pct": [12, 42, 18, 18, 12],
+        "note": comentario.strip() if comentario and comentario.strip() else "",
+    },
+])
         nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")        
         nota_egresos_pdf = "<b>Nota</b> " + nota_egresos
         pdf_elements.append({"type": "callout",

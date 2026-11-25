@@ -196,7 +196,7 @@ TOP_FILAS_CLASE_SAT = 12            # filas de la matriz antes de «Resto de Cla
 NOTA_METODOLOGICA_CLASE_SAT = ('''\n
 1.- Las claves se agrupan a nivel Clase SAT (primeros 6 dígitos), el mínimo exigido por la Guía de llenado del Anexo 20.Se presenta la descripción oficial de cada Clase, y no el concepto libre de las facturas, para evitar ambigüedades de redacción.''')
 
-COLORES_DECLARADO_CSF = ("#0F766E", "#14B8A6", "#5EEAD4", "#115E59", "#2DD4BF", "#99F6E4", "#134E4A", "#0D9488", "#CCFBF1", "#0891B2")     # tonos azul verdoso: las actividades de la Constancia
+
 COLORES_CLASES_SAT = ("#1E3A8A", "#2563EB", "#3B82F6", "#60A5FA", "#93C5FD")                      # azules: las Top 5 clases específicas de lo facturado
 COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                                   # pizarra: «Otras clases»; gris: 010101
 TOP_DONA_CLASES_SAT = 5                                                                           # clases que la dona derecha muestra antes de agrupar «Otras clases (N)»

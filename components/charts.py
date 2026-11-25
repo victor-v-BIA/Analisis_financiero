@@ -22,9 +22,9 @@ from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     ANCHOS_DETALLE_ANUAL,CSS_DETALLE_ANUAL, PALETA_BUMP,PALETA_BUMP_INGRESOS, PALETA_ING,
                     TEXTO_SOBRE_ING,NOMBRE_NOMINA,COLOR_GASTOS,COLOR_NOMINA,
                     NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD,
-                    CSS_KPI_DIVISAS, PALETA_AZULES_BIA,
-                    COLORES_DECLARADO_CSF,TOP_DONA_CLASES_SAT,
-                    CLASE_GENERICA_SAT,ETIQUETA_DONA_CLAVE_GENERICA,COLORES_CLASES_SAT,COLOR_OTRAS_CLASES,COLOR_SIN_CLASIFICAR)
+                    CSS_KPI_DIVISAS, PALETA_AZULES_BIA
+                    ,TOP_DONA_CLASES_SAT,
+                    CLASE_GENERICA_SAT,ETIQUETA_DONA_CLAVE_GENERICA,COLOR_SIN_CLASIFICAR)
 
 from core.loader import (actividades_declaradas_csf)
 
@@ -986,8 +986,7 @@ def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
         else [12, 54, 22, 12]
     )
     colgroup = "<colgroup>" + "".join(
-        f'<col style="width:{ancho}%">' for ancho in anchos
-    ) + "</colgroup>"
+        f'<col style="width:{ancho}%">' for ancho in anchos) + "</colgroup>"
     filas = []
     for _, r in t.iterrows():
         clase = ' class="sf-total"' if r["Tipo"] == "total" else ""
@@ -1005,7 +1004,6 @@ def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
         filas.append(f'<tr{clase}>{"".join(celdas)}</tr>')
     encabezado = "<thead><tr>" + "".join(
         f'<th class="sf-num">{esc(c)}</th>' if i >= 2 else f"<th>{esc(c)}</th>"
-        for i, c in enumerate(cabeza)
-    ) + "</tr></thead>"
+        for i, c in enumerate(cabeza)) + "</tr></thead>"
     return f'{CSS_SIN_FACTURACION}<div class="sf-wrap"><table class="sf-tabla">{colgroup}{encabezado}<tbody>{"".join(filas)}</tbody></table></div>'
 

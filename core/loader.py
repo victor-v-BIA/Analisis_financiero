@@ -776,12 +776,7 @@ def _cargar_bases_economicas(lado: str) -> dict:
 
     pertinentes = ("itaee", "inpc", "tiie") if lado == "ingresos" else ("inpp",)
     texto = "ITAEE, INPC y/o TIIE" if lado == "ingresos" else "INPP"
-    archivos = st.file_uploader(
-        f"Carga las bases externas ({texto}) · Excel, CSV o Parquet",
-        type=["xlsx", "xls", "xlsb", "csv", "parquet"],
-        accept_multiple_files=True,
-        key=f"eco_up_{lado}",
-    )
+    
 
     series: dict = {}
     base_proyecto = Path(__file__).resolve().parent.parent
@@ -801,14 +796,10 @@ def _cargar_bases_economicas(lado: str) -> dict:
             elif r["tipo"] not in pertinentes:
                 st.info(
                     f"«{nombre}» es una base de {r['tipo'].upper()}: cárgala en el módulo "
-                    f"{'de Egresos' if lado == 'ingresos' else 'de Ingresos'}."
-                )
+                    f"{'de Egresos' if lado == 'ingresos' else 'de Ingresos'}.")
             else:
                 series.setdefault(r["tipo"], {}).update(r["series"])
 
-    entradas_subidas = [(f.name, f.getvalue()) for f in archivos or []]
-    if entradas_subidas:
-        _procesar_entradas(entradas_subidas)
 
     if lado == "ingresos":
         from core.api_inegi import obtener_inpc_nacional, obtener_itaee_por_estado
@@ -836,8 +827,7 @@ def _cargar_bases_economicas(lado: str) -> dict:
             else:
                 st.info(
                     f"No se pudo consultar el INPC en línea ({aviso_inpc}). "
-                    f"Los datos del INPC se toman del archivo CSV previamente cargado ({RUTA_INPC_DEFAULT})."
-                )
+                    f"Los datos del INPC se toman del archivo CSV previamente cargado ({RUTA_INPC_DEFAULT}).")
                 archivo_inpc = base_proyecto / RUTA_INPC_DEFAULT
                 try:
                     _procesar_entradas([(archivo_inpc.name, archivo_inpc.read_bytes())])
@@ -847,8 +837,7 @@ def _cargar_bases_economicas(lado: str) -> dict:
         if fuentes_api:
             st.caption(
                 f"{' e '.join(fuentes_api)} obtenidos en línea desde la API del INEGI (BIE-BISE). "
-                "Si cargas un archivo manual, sustituirá los datos correspondientes."
-            )
+                "Si cargas un archivo manual, sustituirá los datos correspondientes.")
     else:
         if "inpp" not in series:
             from core.api_inegi import obtener_inpp_nacional
@@ -857,14 +846,12 @@ def _cargar_bases_economicas(lado: str) -> dict:
             if inpp_api:
                 series["inpp"] = inpp_api
                 st.caption(
-                    "INPP (cobertura nacional) obtenido en línea desde la API del INEGI (BIE-BISE). "
-                    "Si cargas un archivo manual de INPP, sustituirá estos datos."
-                )
+                    "A considerar: INPP (cobertura nacional) obtenido en línea desde la API del INEGI (BIE-BISE). "
+                    "Si cargas un archivo manual de INPP, sustituirá estos datos.")
             else:
                 st.info(
                     f"No se pudo consultar el INPP en línea ({aviso_inpp}). "
-                    f"Los datos del INPP se toman del archivo previamente cargado ({RUTA_INPP_DEFAULT})."
-                )
+                    f"Los datos del INPP se toman del archivo previamente cargado ({RUTA_INPP_DEFAULT}).")
                 archivo_inpp = base_proyecto / RUTA_INPP_DEFAULT
                 try:
                     _procesar_entradas([(archivo_inpp.name, archivo_inpp.read_bytes())])
@@ -988,8 +975,7 @@ def _balance_cache(_fac_ing: tuple, _pago_ing: tuple, _fac_egr: tuple, _pago_egr
         if isinstance(contenido_productos, tuple):
             productos = pd.concat(
                 [leer_archivo(nombre, contenido) for nombre, contenido in contenido_productos],
-                ignore_index=True,
-            )
+                ignore_index=True,)
         else:
             productos = leer_archivo(nombre_productos, contenido_productos)
         _, uuids_divisas, estadisticas_divisas = excluir_cfdis_divisas(facturas_egr, productos)
