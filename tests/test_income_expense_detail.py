@@ -1,15 +1,49 @@
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
+from components.charts import fig_barra_distribucion_100
 from core.loader import descripciones_clase_sat
 from views.income_expense_detail import (
     _algun_anio_actividad_fuera_periodo,
+    _seleccionar_corte_clases,
     tabla_clase_sat,
 )
 
 
 class IncomeExpenseDetailTests(unittest.TestCase):
+    def test_class_cut_selector_returns_the_selected_mode_and_count(self):
+        detalle = pd.DataFrame({
+            "Clase": ["10101010", "10101011"],
+            "Monto_MXN": [60, 40],
+        })
+
+        with patch(
+            "views.income_expense_detail.st.pills",
+            return_value="50%",
+        ):
+            n_clases, modo = _seleccionar_corte_clases(detalle, key="test_corte")
+
+        self.assertEqual(modo, "50%")
+        self.assertEqual(n_clases, 1)
+
+    def test_pdf_bar_chart_normalizes_distribution_to_100_percent(self):
+        fig = fig_barra_distribucion_100(
+            "Distribución de facturación",
+            ["Clase A", "Clase B"],
+            [3, 1],
+            bar_width=0.60,
+        )
+
+        self.assertEqual(fig.layout.barmode, "stack")
+        self.assertTrue(all(trace.width == 0.60 for trace in fig.data))
+        self.assertEqual([trace.x[0] for trace in fig.data], [75, 25])
+        self.assertEqual(
+            [trace.name for trace in fig.data],
+            ["Clase A (75.0%)", "Clase B (25.0%)"],
+        )
+
     def test_sat_table_aggregates_by_full_eight_digit_key(self):
         detalle = pd.DataFrame({
             "Clase": ["10101010", "10101011", "10101010"],

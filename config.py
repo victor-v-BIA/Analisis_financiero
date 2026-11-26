@@ -192,7 +192,7 @@ CLAVE_GENERICA_SAT = "01010101"
 CLASE_GENERICA_SAT = "01010101"
 ETIQUETA_CLAVE_GENERICA = "Clave genérica (Sin clasificación específica)"        # descripción de 01010101 en la TABLA (en lugar de «No existe en el catálogo»)
 ETIQUETA_DONA_CLAVE_GENERICA = "Sin clasificación específica"                     # descripción de 01010101 en la leyenda y el tooltip de la DONA derecha, con su prefijo «01010101 · » (sin «Clave genérica»)
-TOP_FILAS_CLASE_SAT = 12            # filas de la matriz antes de «Resto de Clases»
+TOP_FILAS_CLASE_SAT = 10            # filas de la matriz antes de «Resto de Clases»
 NOTA_METODOLOGICA_CLASE_SAT = (''' Las partidas se agrupan por su clave SAT completa de 8 dígitos. Se presenta la descripción oficial de cada clave, y no el concepto libre de las facturas, para evitar ambigüedades de redacción.''')
 
 

@@ -7,6 +7,7 @@ from utils import _ArchivoMem
 
 from components.charts import (
     _html_tabla_clase_sat,
+    fig_barra_distribucion_100,
     fig_donut_declarado,
     fig_donut_facturado,
     html_barra_distribucion_100,
@@ -221,7 +222,7 @@ def tabla_clase_sat(
     d: pd.DataFrame,
     descripciones: dict | None = None,
     top: int = TOP_FILAS_CLASE_SAT) -> pd.DataFrame:
-    """Construye la matriz acumulada por Clase SAT de las partidas del periodo."""
+    """Construye la matriz acumulada por ClaVe SAT de las partidas del periodo."""
     descripciones = descripciones or {}
     tiene_subtotal = "SubTotal_Neto_MXN" in d.columns
     cols = ["Clase", "Descripcion"]
@@ -330,8 +331,8 @@ def _calcular_n_clases_corte(
     modo: str,
     top_default: int = TOP_FILAS_CLASE_SAT,
 ) -> int:
-    """Devuelve el número N de clases principales según el corte ('Top', '50%', '60%')."""
-    if d.empty or modo not in ("50%", "60%"):
+    """Devuelve el número N de clases principales según el corte ('Top', '50%', '80%')."""
+    if d.empty or modo not in ("50%", "80%"):
         return top_default
 
     columna_monto = "Monto_MXN" if "Monto_MXN" in d.columns else "Monto"
@@ -346,27 +347,28 @@ def _calcular_n_clases_corte(
     if total <= 0:
         return top_default
 
-    umbral = 50.0 if modo == "50%" else 60.0
+    umbral = 50.0 if modo == "50%" else 80.0
     pct = (g["Monto"] / total) * 100.0
     # Regla inclusiva: incluye las clases necesarias hasta alcanzar o cruzar el umbral
     n = int((pct.cumsum().shift(fill_value=0.0) < umbral).sum())
     return max(1, n)
 
 
-def _seleccionar_corte_clases(d: pd.DataFrame, key: str) -> int:
-    """Renderiza el selector de cobertura (Top / 50% / 60%) y devuelve N clases."""
+def _seleccionar_corte_clases(d: pd.DataFrame, key: str) -> tuple[int, str]:
+    """Renderiza el selector de cobertura y devuelve (N clases, modo elegido)."""
     opcion_top = f"Top {TOP_FILAS_CLASE_SAT}"
     modo = (
         st.pills(
             "Cobertura de Clases SAT",
-            options=[opcion_top, "50%", "60%"],
+            options=[opcion_top, "50%", "80%"],
             default=opcion_top,
             selection_mode="single",
             key=key,
         )
         or opcion_top
     )
-    return _calcular_n_clases_corte(d, modo, TOP_FILAS_CLASE_SAT)
+    n_clases = _calcular_n_clases_corte(d, modo, TOP_FILAS_CLASE_SAT)
+    return n_clases, modo
 
 
 def _seccion_clave_sat(
@@ -392,9 +394,13 @@ def _seccion_clave_sat(
         ),
     )
 
+    encabezado_pdf: dict[str, str] | None = None
     if pdf_elements is not None:
-        pdf_elements.append({"type": "heading",
-                             "text": "Estructura de Ingresos Facturados"})
+        encabezado_pdf = {
+            "type": "heading",
+            "text": "Estructura de Ingresos Facturados",
+        }
+        pdf_elements.append(encabezado_pdf)
 
     if f_emitidos_productos is None:
         mensaje = "Carga la base «CFDIs Emitidos Productos» para analizar la facturación por clave SAT."
@@ -482,13 +488,17 @@ def _seccion_clave_sat(
                                  "text": escape(mensaje)})
         return disponibles
 
-    n_clases_ingresos = _seleccionar_corte_clases(d_sel, key="clase_sat_corte_ingresos")
+    n_clases_ingresos, modo = _seleccionar_corte_clases(
+        d_sel, key="clase_sat_corte_ingresos"
+    )
+    if encabezado_pdf is not None:
+        encabezado_pdf["text"] = f"Estructura de Ingresos Facturados - {modo}"
 
     actividades_grafica = _filtrar_actividades_csf_por_anio(
         actividades, anios_seleccionados, disponibles)
     sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
     fig_declarado = fig_donut_declarado(actividades_grafica)
-    fig_facturado = fig_donut_facturado(d_sel, descripciones)
+    fig_facturado = fig_donut_facturado(d_sel, descripciones, top=5)
     for figura in (fig_declarado, fig_facturado):
         figura.update_layout(title_text=f"{figura.layout.title.text}{sufijo_periodo}")
 
@@ -503,15 +513,29 @@ def _seccion_clave_sat(
         )
         or "Donas"
     )
+    fig_declarado_pdf = fig_declarado
+    fig_facturado_pdf = fig_facturado
 
     if tipo_vista == "Donas":
         st.plotly_chart(fig_declarado, width="stretch", key="clase_sat_donut_declarado")
         st.plotly_chart(fig_facturado, width="stretch", key="clase_sat_donut_facturado")
     else:
         labels_dec, values_dec = _datos_desde_donut(fig_declarado)
-        labels_fac, values_fac = _datos_desde_donut(fig_facturado)
+        fig_facturado_barras = fig_donut_facturado(d_sel, descripciones)
+        labels_fac, values_fac = _datos_desde_donut(fig_facturado_barras)
         titulo_dec = fig_declarado.layout.title.text or f"Distribución de actividades económicas declaradas{sufijo_periodo}"
         titulo_fac = fig_facturado.layout.title.text or f"Distribución real facturada (CFDIs emitidos){sufijo_periodo}"
+        fig_declarado_pdf = fig_barra_distribucion_100(
+            titulo=titulo_dec,
+            labels=labels_dec,
+            values=values_dec,
+        )
+        fig_facturado_pdf = fig_barra_distribucion_100(
+            titulo=titulo_fac,
+            labels=labels_fac,
+            values=values_fac,
+            bar_width=0.52,
+        )
         st.markdown(
             html_barra_distribucion_100(
                 titulo=titulo_dec,
@@ -529,11 +553,10 @@ def _seccion_clave_sat(
             unsafe_allow_html=True,
         )
 
-    st.markdown("#### Detalle de Facturación por Clase SAT")
+    st.markdown("#### Detalle de Facturación")
     tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_ingresos)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
-    st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
-
+   
     nota_dos_texto = (
         "La gráfica Distribución de Actividades Económicas Declaradas muestra las "
         "actividades y porcentajes registrados en la Constancia de Situación Fiscal "
@@ -554,7 +577,7 @@ def _seccion_clave_sat(
 
     if pdf_elements is not None:
         tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
-            "Clase": "Clase SAT",
+            "Clase": "Clave SAT",
             "Descripcion": "Descripción oficial SAT",
             "Subtotal": "Subtotal neto (MXN)",
             "Total": "Total facturado (MXN)",
@@ -576,21 +599,24 @@ def _seccion_clave_sat(
         )
         pdf_elements.extend([
             {"type": "image",
-             "fig": fig_declarado, "preserve_textfont_size": True,},
+             "fig": fig_declarado_pdf,
+             "preserve_textfont_size": tipo_vista == "Donas",
+             "width_pt": 500 if tipo_vista == "Barras 100%" else 400,
+             "render_height": 450 if tipo_vista == "Barras 100%" else 600,},
             {"type": "image",
-             "fig": fig_facturado, "preserve_textfont_size": True,},
+             "fig": fig_facturado_pdf,
+             "preserve_textfont_size": tipo_vista == "Donas",
+             "width_pt": 500 if tipo_vista == "Barras 100%" else 400,
+             "render_height": 450 if tipo_vista == "Barras 100%" else 600,},
             {
                 "type": "table",
-                "title": "Detalle de Facturación por Clase SAT",
+                "title": "Detalle de Facturación Emitida",
                 "df": tabla_pdf,
                 "column_widths_pct": anchos_pdf,
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             },
         ])
-        pdf_elements.append({"type": "callout",
-                             "text": "<b>Nota: </b> " + escape(
-                                 NOTA_METODOLOGICA_CLASE_SAT
-                             ).replace("\n", "<br/>")})
+  
         if mostrar_nota_dos:
             pdf_elements.append({
                 "type": "callout",
@@ -617,7 +643,7 @@ def _seccion_egresos_sat(
         ),
     )
     if f_egresos_productos is None:
-        mensaje = "Carga la base «CFDIs Recibidos Productos» para analizar los egresos por Clase SAT."
+        mensaje = "Carga la base «CFDIs Recibidos Productos» para analizar los egresos por Clave SAT."
         st.info(mensaje)
         if pdf_elements is not None:
             pdf_elements.append({"type": "heading",
@@ -742,14 +768,16 @@ def _seccion_egresos_sat(
     descripciones = descripciones_clase_sat(d, catalogo)
     sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
 
-    n_clases_egresos = _seleccionar_corte_clases(d_sel, key="clase_sat_corte_egresos")
+    n_clases_egresos, modo_egresos = _seleccionar_corte_clases(
+        d_sel, key="clase_sat_corte_egresos"
+    )
 
     fig_egresos = fig_donut_facturado(
         d_sel,
         descripciones,
         titulo="Distribución de Facturación Recibida (CFDIs)",
         nombre_serie="Egresos recibidos",
-        top=n_clases_egresos,
+        top=5,
     )
 
     fig_egresos.update_layout(title_text=f"{fig_egresos.layout.title.text}{sufijo_periodo}")
@@ -765,6 +793,7 @@ def _seccion_egresos_sat(
         )
         or "Donas"
     )
+    fig_egresos_pdf = fig_egresos
 
     if tipo_vista_egresos == "Donas":
         st.plotly_chart(
@@ -773,10 +802,23 @@ def _seccion_egresos_sat(
             key="egresos_sat_donut_recibido",
         )
     else:
-        labels_egr, values_egr = _datos_desde_donut(fig_egresos)
+        fig_egresos_barras = fig_donut_facturado(
+            d_sel,
+            descripciones,
+            titulo="Distribución de Facturación Recibida (CFDIs)",
+            nombre_serie="Egresos recibidos",
+            top=n_clases_egresos,
+        )
+        labels_egr, values_egr = _datos_desde_donut(fig_egresos_barras)
         titulo_egr = (
             fig_egresos.layout.title.text
             or f"Distribución de Facturación Recibida (CFDIs){sufijo_periodo}"
+        )
+        fig_egresos_pdf = fig_barra_distribucion_100(
+            titulo=titulo_egr,
+            labels=labels_egr,
+            values=values_egr,
+            bar_width=0.52,
         )
         st.markdown(
             html_barra_distribucion_100(
@@ -787,10 +829,9 @@ def _seccion_egresos_sat(
             unsafe_allow_html=True,
         )
 
-    st.markdown("#### Detalle de Facturación por Clase SAT")
+    st.markdown("#### Detalle de Facturación")
     tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_egresos)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
-    st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
 
     comentario = st.text_area(
         "Conclusiones para Estructura de Egresos Facturados",
@@ -801,7 +842,7 @@ def _seccion_egresos_sat(
 
     if pdf_elements is not None:
         tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
-            "Clase": "Clase SAT",
+            "Clase": "Clave SAT",
             "Descripcion": "Descripción oficial SAT",
             "Subtotal": "Subtotal neto (MXN)",
             "Total": "Total facturado (MXN)",
@@ -823,20 +864,19 @@ def _seccion_egresos_sat(
         pdf_elements.extend([
             {
                 "type": "image",
-                "section_title": "Estructura de Egresos Facturados",
+                "section_title": f"{titulo} - {modo_egresos}",
                 "title": "",
-                "fig": fig_egresos,
-                "preserve_textfont_size": True,
+                "fig": fig_egresos_pdf,
+                "preserve_textfont_size": tipo_vista_egresos == "Donas",
+                "width_pt": 500 if tipo_vista_egresos == "Barras 100%" else 400,
+                "render_height": 400 if tipo_vista_egresos == "Barras 100%" else 600,
             },
             {
                 "type": "table",
-                "title": "Detalle de Facturación Recibida por Clase SAT",
+                "title": "Detalle de Facturación Recibida",
                 "df": tabla_pdf,
                 "column_widths_pct": [12, 42, 18, 18, 12],
                 "note": comentario.strip() if comentario and comentario.strip() else "",
             },
         ])
-        nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")
-        nota_egresos_pdf = "<b>Nota: </b> " + nota_egresos
-        pdf_elements.append({"type": "callout",
-                             "text": nota_egresos_pdf})
+       

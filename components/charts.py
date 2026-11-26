@@ -984,7 +984,7 @@ def fig_donut_facturado(
         sort=False,
         direction="clockwise",
         marker=dict(colors=colores, line=dict(color="white", width=1.5)),
-        text=[f"{p:.1f}%" if p >= 4 else "" for p in pcts],
+        text=[f"{p:.1f}%" if p >= 3 else "" for p in pcts],
         textinfo="text",
         textposition="inside",
         insidetextorientation="horizontal",
@@ -996,10 +996,10 @@ def fig_donut_facturado(
 
 
 def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
-    """Tabla HTML de importes agrupados por Clase SAT."""
+    """Tabla HTML de importes agrupados por Clave SAT."""
     esc = html.escape
     tiene_subtotal = "Subtotal" in t.columns
-    cabeza = ["CLASE SAT", "DESCRIPCIÓN OFICIAL SAT"]
+    cabeza = ["CLAVE SAT", "DESCRIPCIÓN OFICIAL SAT"]
     if tiene_subtotal:
         cabeza.append("SUBTOTAL NETO (MXN)")
     cabeza.extend(["TOTAL FACTURADO (MXN)", "% DEL TOTAL"])
@@ -1041,6 +1041,75 @@ def _color_texto_contraste(hex_color: str) -> str:
     return "#FFFFFF" if luminancia > 0.58 else "#FFFFFF"
 
 
+def fig_barra_distribucion_100(
+    titulo: str,
+    labels: list[str],
+    values: list[float],
+    bar_width: float = 0.30) -> go.Figure:
+    """Construye la versión Plotly exportable de una barra horizontal apilada al 100%."""
+    pares = [(str(l), float(v)) for l, v in zip(labels, values) if v is not None and float(v) > 0]
+    total = sum(v for _, v in pares)
+    fig = go.Figure()
+    if not pares or total <= 0:
+        fig.add_annotation(
+            text=f"Sin datos para {titulo}.",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+        )
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+        return fig.update_layout(title_text=titulo, showlegend=False)
+
+    for idx, (etiqueta, valor) in enumerate(pares):
+        pct = valor / total * 100.0
+        pct_txt = f"{pct:.1f}%"
+        fig.add_trace(go.Bar(
+            x=[pct],
+            y=["Distribución"],
+            orientation="h",
+            width=bar_width,
+            name=f"{etiqueta} ({pct_txt})",
+            marker_color=PALETA_AZULES_BIA[idx % len(PALETA_AZULES_BIA)],
+            text=[pct_txt if pct >= 5.0 else ""],
+            textposition="inside",
+            insidetextanchor="middle",
+            textfont=dict(size=16, color="white"),
+            customdata=[f"{etiqueta} ({pct_txt})"],
+            hovertemplate="%{customdata}<extra></extra>",
+        ))
+
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=19), x=0, xanchor="left"),
+        barmode="stack",
+        height=400,
+        margin=dict(l=10, r=10, t=60, b=150),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.25,
+            xanchor="left",
+            x=0,
+            font=dict(size=16),
+        ),
+        xaxis=dict(
+            range=[0, 100],
+            tickmode="array",
+            tickvals=[0, 25, 50, 75, 100],
+            ticksuffix="%",
+            showgrid=False,
+            zeroline=False,
+        ),
+        yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+    )
+    return fig
+
+
 def html_barra_distribucion_100(
     titulo: str,
     labels: list[str],
@@ -1080,13 +1149,13 @@ def html_barra_distribucion_100(
       .b100-wrap {{ margin: 8px 0 22px 0; font-family: inherit; }}
       .b100-title {{ font-size: 14px; color: #475569; margin-bottom: 8px; font-weight: 500; }}
       .b100-bar {{
-        display: flex; width: 100%; height: 34px;
+        display: flex; width: 100%; height: 40px;
         border-radius: 6px; overflow: hidden; gap: 2px;
         background: transparent;
       }}
       .b100-seg {{
         display: flex; align-items: center; justify-content: center;
-        font-size: 20px; font-weight: 500; white-space: nowrap;
+        font-size: 22px; font-weight: 500; white-space: nowrap;
         min-width: 2px; transition: opacity 0.15s ease;
       }}
       .b100-seg:hover {{ opacity: 0.9; cursor: pointer; }}

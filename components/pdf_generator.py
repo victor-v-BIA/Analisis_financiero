@@ -229,7 +229,14 @@ def _financial_ratio_cards_table(cards):
     return cards_table
 
 
-def plotly_fig_to_reportlab_image(fig, width_pt=500, height_pt=None, preserve_textfont_size=False):
+def plotly_fig_to_reportlab_image(
+    fig,
+    width_pt=500,
+    height_pt=None,
+    preserve_textfont_size=False,
+    render_width=1000,
+    render_height=600,
+):
     if preserve_textfont_size:
         fig = deepcopy(fig)
 
@@ -238,7 +245,12 @@ def plotly_fig_to_reportlab_image(fig, width_pt=500, height_pt=None, preserve_te
             if trace.type == "pie" and isinstance(trace.textfont.size, (int, float)):
                 trace.textfont.size *= font_scale
 
-    img_bytes = fig.to_image(format="png", width=1000, height=600, scale=2)
+    img_bytes = fig.to_image(
+        format="png",
+        width=render_width,
+        height=render_height,
+        scale=2,
+    )
     img_buffer = io.BytesIO(img_bytes)
     pil_img = PILImage.open(img_buffer)
     orig_width, orig_height = pil_img.size
@@ -636,18 +648,24 @@ def generate_modular_pdf(
                 # Soportar un alto personalizado (custom_height) para gráficas que requieran más espacio vertical
                 custom_height = el.get("custom_height", None)
                 preserve_textfont_size = el.get("preserve_textfont_size", False)
+                render_width = el.get("render_width", 1000)
+                render_height = el.get("render_height", 600)
                 if custom_height:
                     img = plotly_fig_to_reportlab_image(
                         fig,
-                        width_pt=500,
+                        width_pt=el.get("width_pt", 500),
                         height_pt=custom_height,
                         preserve_textfont_size=preserve_textfont_size,
+                        render_width=render_width,
+                        render_height=render_height,
                     )
                 else:
                     img = plotly_fig_to_reportlab_image(
                         fig,
-                        width_pt=400,
+                        width_pt=el.get("width_pt", 400),
                         preserve_textfont_size=preserve_textfont_size,
+                        render_width=render_width,
+                        render_height=render_height,
                     )
                     
                 section_content.append(img)
