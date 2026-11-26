@@ -1060,7 +1060,7 @@ def html_barra_distribucion_100(
         color = paleta[idx % len(paleta)]
         txt_color = _color_texto_contraste(color)
         pct_txt = f"{pct:.1f}%"
-        texto_interno = pct_txt if pct >= 4.0 else ""
+        texto_interno = pct_txt if pct >= 5.0 else ""
         tooltip = escape(f"{etiqueta} ({pct_txt})")
 
         segmentos_html.append(
@@ -1089,7 +1089,7 @@ def html_barra_distribucion_100(
         font-size: 20px; font-weight: 500; white-space: nowrap;
         min-width: 2px; transition: opacity 0.15s ease;
       }}
-      .b100-seg:hover {{ opacity: 0.9; }}
+      .b100-seg:hover {{ opacity: 0.9; cursor: pointer; }}
       .b100-ticks {{
         display: flex; justify-content: space-between;
         font-size: 12px; color: #64748B; margin: 5px 0 12px 0;

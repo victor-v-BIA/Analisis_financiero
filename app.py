@@ -344,7 +344,7 @@ def main() -> None:
     if not hay_archivos_ruteados:
         st.success("Bienvenido al Analizador Financiero. Por favor, carga tus reportes en la barra lateral para comenzar.")
         st.stop()
-
+    
 
     # ENRUTAMIENTO FINAL
     if modulo == "Dashboard Ejecutivo (Riesgo y Viabilidad)":
