@@ -878,7 +878,7 @@ def _diseno_donut_sat(fig: go.Figure, titulo: str, margen_inferior: int = 100) -
     """Diseño común de las dos gráficas de anillo: título propio y leyenda horizontal debajo (los nombres largos viven ahí, no dentro de las rebanadas)."""
     fig.update_layout(title=dict(text=titulo, font=dict(size=19), x=0, xanchor="left"),
                       height=380 + margen_inferior, margin=dict(l=10, r=10, t=60, b=margen_inferior), paper_bgcolor="rgba(0,0,0,0)",
-                      plot_bgcolor="rgba(0,0,0,0)", showlegend=True, legend=dict(orientation="h",font=dict(size=14), yanchor="top",
+                      plot_bgcolor="rgba(0,0,0,0)", showlegend=True, legend=dict(orientation="h",font=dict(size=16), yanchor="top",
                       y=-0.08, xanchor="left", x=0,), legend_title_text=None)
     return fig
 

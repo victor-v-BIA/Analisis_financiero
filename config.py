@@ -189,15 +189,15 @@ COLUMNAS_OPERACIONES_DIVISAS = [
 
 # SECCION 10
 CLAVE_GENERICA_SAT = "01010101"
-CLASE_GENERICA_SAT = "010101"
-ETIQUETA_CLAVE_GENERICA = "Clave genérica (Sin clasificación específica)"        # descripción de 010101 en la TABLA (en lugar de «No existe en el catálogo»)
-ETIQUETA_DONA_CLAVE_GENERICA = "Sin clasificación específica"                     # descripción de 010101 en la leyenda y el tooltip de la DONA derecha, con su prefijo «010101 · » (sin «Clave genérica»)
+CLASE_GENERICA_SAT = "01010101"
+ETIQUETA_CLAVE_GENERICA = "Clave genérica (Sin clasificación específica)"        # descripción de 01010101 en la TABLA (en lugar de «No existe en el catálogo»)
+ETIQUETA_DONA_CLAVE_GENERICA = "Sin clasificación específica"                     # descripción de 01010101 en la leyenda y el tooltip de la DONA derecha, con su prefijo «01010101 · » (sin «Clave genérica»)
 TOP_FILAS_CLASE_SAT = 12            # filas de la matriz antes de «Resto de Clases»
-NOTA_METODOLOGICA_CLASE_SAT = (''' Las claves se agrupan a nivel Clase SAT (primeros 6 dígitos), el mínimo exigido por la Guía de llenado del Anexo 20. Se presenta la descripción oficial de cada Clase, y no el concepto libre de las facturas, para evitar ambigüedades de redacción.''')
+NOTA_METODOLOGICA_CLASE_SAT = (''' Las partidas se agrupan por su clave SAT completa de 8 dígitos. Se presenta la descripción oficial de cada clave, y no el concepto libre de las facturas, para evitar ambigüedades de redacción.''')
 
 
 COLORES_CLASES_SAT = ("#1E3A8A", "#2563EB", "#3B82F6", "#60A5FA", "#93C5FD")                      # azules: las Top 5 clases específicas de lo facturado
-COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                                   # pizarra: «Otras clases»; gris: 010101
+COLOR_OTRAS_CLASES, COLOR_SIN_CLASIFICAR = "#475569", "#94A3B8"                                   # pizarra: «Otras clases»; gris: 01010101
 TOP_DONA_CLASES_SAT = 5                                                                           # clases que la dona derecha muestra antes de agrupar «Otras clases (N)»
 
 

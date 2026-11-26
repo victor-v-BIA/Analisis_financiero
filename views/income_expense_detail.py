@@ -381,9 +381,9 @@ def _seccion_clave_sat(
         subtitulo_seccion,
         help=(
             "Pone lo declarado en la Constancia de Situación Fiscal (CSF) frente a lo "
-            "facturado, agrupado por Clase SAT (los 6 primeros dígitos de la clave de "
-            "producto o servicio, según el catálogo oficial del SAT). La clave genérica "
-            "010101 («No existe en el catálogo») no identifica qué se vendió. El anillo "
+            "facturado, agrupado por la clave SAT completa de 8 dígitos de cada "
+            "producto o servicio, según el catálogo oficial del SAT. La clave genérica "
+            "01010101 no identifica qué se vendió. El anillo "
             "de actividades conserva el histórico anterior al primer año seleccionado y "
             "las actividades de los años elegidos; al seleccionar todos los años, muestra "
             "todas las actividades. El filtro también recalcula el anillo facturado y la "
@@ -609,7 +609,8 @@ def _seccion_egresos_sat(
         titulo,
         help=(
             "Compara las actividades declaradas en la Constancia de Situación Fiscal "
-            "con los egresos recibidos, agrupados por Clase SAT. Los importes se "
+            "con los egresos recibidos, agrupados por la clave SAT completa de 8 "
+            "dígitos. Los importes se "
             "convierten a MXN por partida: tipo de cambio de la partida, luego el del "
             "encabezado por UUID y finalmente el DOF. Se muestran subtotal y total; "
             "se excluyen las claves de divisas 841216."

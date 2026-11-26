@@ -1622,7 +1622,7 @@ def emitidos_productos_sat(
     )
     d["Monto"] = d["Monto_MXN"]
     d["Anio"] = d["Fecha"].dt.year.astype(int)
-    d["Clase"] = d["Clave"].str[:6]
+    d["Clase"] = d["Clave"]
     salida = d.reset_index(drop=True)
     salida.attrs.update({
         **atributos_cruce,
@@ -2142,7 +2142,7 @@ def egresos_productos_sat(
     base = base.loc[registros_validos].copy()
 
     base["Anio"] = base["Fecha"].dt.year.astype(int)
-    base["Clase"] = base["Clave"].str[:6]
+    base["Clase"] = base["Clave"]
     base["SubTotal_Neto_MXN"] = (
         base["Importe"] - base["Descuento"]
     ) * base["Tipo_Cambio_Aplicado"]
@@ -2273,30 +2273,17 @@ def cargar_catalogo_sat() -> dict | None:
     except (KeyError, ValueError, OSError):
         return None
 
-def descripciones_clase_sat(d: pd.DataFrame, catalogo: dict | None) -> dict:
-    """{Clase de 6 dígitos: descripción oficial}. La descripción de una clase es la de la fila `Clase + "00"` del catálogo; si no existe (p. ej. 851215), el respaldo es la descripción
-    de la clave de 8 dígitos de mayor Monto de esa clase; 010101 es «No existe en el catálogo». Sin catálogo: «Sin catálogo»."""
+def descripciones_clase_sat(d: pd.DataFrame, catalogo: dict | None) -> dict[str, str]:
+    if d.empty or "Clase" not in d.columns:
+        return {}
     claves = (catalogo or {}).get("claves", {})
-    if not claves:
-        return {c: (ETIQUETA_CLAVE_GENERICA if c == CLASE_GENERICA_SAT else "Sin catálogo") for c in d["Clase"].unique()}
-    rep = (d.groupby(["Clase", "Clave"])["Monto"].sum().reset_index().sort_values(["Clase", "Monto", "Clave"], ascending=[True, False, True])
-             .drop_duplicates("Clase").set_index("Clase")["Clave"])
     salida = {}
-    for clase, clave in rep.items():
-        salida[clase] = (ETIQUETA_CLAVE_GENERICA if clase == CLASE_GENERICA_SAT else claves.get(clase + "00") or claves.get(clave) or "Clave no encontrada en el catálogo")
-    return salida
-
-def descripciones_clase_sat(d: pd.DataFrame, catalogo: dict | None) -> dict:
-    """{Clase de 6 dígitos: descripción oficial}. La descripción de una clase es la de la fila `Clase + "00"` del catálogo; si no existe (p. ej. 851215), el respaldo es la descripción
-    de la clave de 8 dígitos de mayor Monto de esa clase; 010101 es «No existe en el catálogo». Sin catálogo: «Sin catálogo»."""
-    claves = (catalogo or {}).get("claves", {})
-    if not claves:
-        return {c: (ETIQUETA_CLAVE_GENERICA if c == CLASE_GENERICA_SAT else "Sin catálogo") for c in d["Clase"].unique()}
-    rep = (d.groupby(["Clase", "Clave"])["Monto"].sum().reset_index().sort_values(["Clase", "Monto", "Clave"], ascending=[True, False, True])
-             .drop_duplicates("Clase").set_index("Clase")["Clave"])
-    salida = {}
-    for clase, clave in rep.items():
-        salida[clase] = (ETIQUETA_CLAVE_GENERICA if clase == CLASE_GENERICA_SAT else claves.get(clase + "00") or claves.get(clave) or "Clave no encontrada en el catálogo")
+    for clave in d["Clase"].dropna().astype(str).unique():
+        clave_8 = clave.strip().zfill(8)
+        if clave_8 == CLASE_GENERICA_SAT:
+            salida[clave] = ETIQUETA_CLAVE_GENERICA
+        else:
+            salida[clave] = claves.get(clave_8, "Sin catálogo")
     return salida
 
 def actividades_declaradas_csf(actividades) -> list[tuple[str, float]]:

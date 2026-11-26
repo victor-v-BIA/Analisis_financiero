@@ -58,6 +58,7 @@ class CurrencyConversionTests(unittest.TestCase):
         self.assertEqual(result["Tipo_Cambio_Aplicado"].tolist(), [1, 20, 19])
         self.assertEqual(result.loc[1, "SubTotal_Neto_MXN"], 1800)
         self.assertEqual(result.loc[1, "Monto_MXN"], 2060)
+        self.assertEqual(result["Clase"].tolist(), ["10101010"] * 3)
         self.assertEqual(result.attrs["filas_sin_cruce"], 1)
         detalle = result.attrs["detalle_partidas_sin_cruce"]
         self.assertEqual(detalle["UUID CFDI Emitido"].tolist(), ["X"])
@@ -87,6 +88,7 @@ class CurrencyConversionTests(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result.iloc[0]["Clave"], "10101010")
+        self.assertEqual(result.iloc[0]["Clase"], "10101010")
         self.assertEqual(result.iloc[0]["Monto_MXN"], 116)
 
     def test_issued_currency_exchange_products_exclude_linked_invoice_uuid(self):
@@ -131,6 +133,7 @@ class CurrencyConversionTests(unittest.TestCase):
         result = egresos_productos_sat(products, headers)
 
         self.assertEqual(len(result), 1)
+        self.assertEqual(result.iloc[0]["Clase"], "10101010")
         self.assertEqual(result.iloc[0]["Tipo_Cambio_Aplicado"], 19)
         self.assertEqual(result.iloc[0]["SubTotal_Neto_MXN"], 1900)
         self.assertEqual(result.iloc[0]["Monto_MXN"], 2147)
