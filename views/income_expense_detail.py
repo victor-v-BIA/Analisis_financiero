@@ -8,7 +8,9 @@ from utils import _ArchivoMem
 from components.charts import (
     _html_tabla_clase_sat,
     fig_donut_declarado,
-    fig_donut_facturado,)
+    fig_donut_facturado,
+    html_barra_distribucion_100,
+)
 
 from config import CODIGO_VERSION, NOTA_METODOLOGICA_CLASE_SAT, TOP_FILAS_CLASE_SAT
 from core.loader import (
@@ -19,7 +21,8 @@ from core.loader import (
     _emitidos_productos_cache,
     anios_5_archivos,
     cargar_catalogo_sat,
-    descripciones_clase_sat,)
+    descripciones_clase_sat,
+)
 
 _TIPOS_ARCHIVO_CLASE_SAT = {
     "csv", "xlsx", "xls", "xlsb", "parquet", "pqt",
@@ -213,6 +216,7 @@ def modulo_ingresos_sat(
             key="btn_download_pdf_clase_sat",
             type="secondary",)
 
+
 def tabla_clase_sat(
     d: pd.DataFrame,
     descripciones: dict | None = None,
@@ -307,6 +311,64 @@ def _algun_anio_actividad_fuera_periodo(
     return bool(periodo) and fuera_periodo.any()
 
 
+def _datos_desde_donut(fig) -> tuple[list[str], list[float]]:
+    """Extrae etiquetas, valores y colores directamente de la traza de la dona."""
+    if not fig.data:
+        return [], []
+    traza = fig.data[0]
+    raw_labels = getattr(traza, "labels", None)
+    raw_values = getattr(traza, "values", None)
+    raw_colors = getattr(getattr(traza, "marker", None), "colors", None)
+    labels = [str(x) for x in raw_labels] if raw_labels is not None else []
+    values = [float(x) if pd.notna(x) else 0.0 for x in raw_values] if raw_values is not None else []
+    return labels, values
+
+
+
+def _calcular_n_clases_corte(
+    d: pd.DataFrame,
+    modo: str,
+    top_default: int = TOP_FILAS_CLASE_SAT,
+) -> int:
+    """Devuelve el número N de clases principales según el corte ('Top', '50%', '60%')."""
+    if d.empty or modo not in ("50%", "60%"):
+        return top_default
+
+    columna_monto = "Monto_MXN" if "Monto_MXN" in d.columns else "Monto"
+    g = (
+        d.groupby("Clase", as_index=False)[columna_monto]
+        .sum()
+        .rename(columns={columna_monto: "Monto"})
+        .sort_values(["Monto", "Clase"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
+    total = float(g["Monto"].sum())
+    if total <= 0:
+        return top_default
+
+    umbral = 50.0 if modo == "50%" else 60.0
+    pct = (g["Monto"] / total) * 100.0
+    # Regla inclusiva: incluye las clases necesarias hasta alcanzar o cruzar el umbral
+    n = int((pct.cumsum().shift(fill_value=0.0) < umbral).sum())
+    return max(1, n)
+
+
+def _seleccionar_corte_clases(d: pd.DataFrame, key: str) -> int:
+    """Renderiza el selector de cobertura (Top / 50% / 60%) y devuelve N clases."""
+    opcion_top = f"Top {TOP_FILAS_CLASE_SAT}"
+    modo = (
+        st.pills(
+            "Cobertura de Clases SAT",
+            options=[opcion_top, "50%", "60%"],
+            default=opcion_top,
+            selection_mode="single",
+            key=key,
+        )
+        or opcion_top
+    )
+    return _calcular_n_clases_corte(d, modo, TOP_FILAS_CLASE_SAT)
+
+
 def _seccion_clave_sat(
     anios_5: list[int] | tuple,
     pdf_elements: list | None,
@@ -329,6 +391,7 @@ def _seccion_clave_sat(
             "por partida se convierten a MXN usando la jerarquía de tipo de cambio."
         ),
     )
+
     if pdf_elements is not None:
         pdf_elements.append({"type": "heading",
                              "text": "Estructura de Ingresos Facturados"})
@@ -368,22 +431,8 @@ def _seccion_clave_sat(
             pdf_elements.append({"type": "callout",
                                  "text": escape(mensaje)})
         return []
-    '''if d.attrs.get("filas_sin_cruce"):
-        st.info(
-            f"{d.attrs['filas_sin_cruce']:,} partidas no coincidieron con los UUID "
-            "de SAT CFDIs Emitidos y se excluyeron."
-        )
-        detalle_sin_cruce = d.attrs.get("detalle_partidas_sin_cruce")
-        if isinstance(detalle_sin_cruce, pd.DataFrame) and not detalle_sin_cruce.empty:
-            with st.expander(
-                f"Ver detalle de partidas sin cruce ({len(detalle_sin_cruce):,})"
-            ):
-                st.dataframe(
-                    detalle_sin_cruce,
-                    hide_index=True,
-                    width="stretch",
-                    height=420,
-                )'''
+
+
     if d.empty:
         mensaje = (
             f"La base «{f_emitidos_productos.name}» no trae partidas asociadas por UUID "
@@ -433,6 +482,8 @@ def _seccion_clave_sat(
                                  "text": escape(mensaje)})
         return disponibles
 
+    n_clases_ingresos = _seleccionar_corte_clases(d_sel, key="clase_sat_corte_ingresos")
+
     actividades_grafica = _filtrar_actividades_csf_por_anio(
         actividades, anios_seleccionados, disponibles)
     sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
@@ -441,13 +492,45 @@ def _seccion_clave_sat(
     for figura in (fig_declarado, fig_facturado):
         figura.update_layout(title_text=f"{figura.layout.title.text}{sufijo_periodo}")
 
-    fig_col1, fig_col2 = st.columns(2)
-    with fig_col1:
+    tipo_vista = (
+        st.pills(
+            "Formato de visualización",
+            options=["Donas", "Barras 100%"],
+            default="Donas",
+            selection_mode="single",
+            key="barrida_pills_tipo_perfil_fiscal",
+            label_visibility="visible",
+        )
+        or "Donas"
+    )
+
+    if tipo_vista == "Donas":
         st.plotly_chart(fig_declarado, width="stretch", key="clase_sat_donut_declarado")
-    with fig_col2:
         st.plotly_chart(fig_facturado, width="stretch", key="clase_sat_donut_facturado")
+    else:
+        labels_dec, values_dec = _datos_desde_donut(fig_declarado)
+        labels_fac, values_fac = _datos_desde_donut(fig_facturado)
+        titulo_dec = fig_declarado.layout.title.text or f"Distribución de actividades económicas declaradas{sufijo_periodo}"
+        titulo_fac = fig_facturado.layout.title.text or f"Distribución real facturada (CFDIs emitidos){sufijo_periodo}"
+        st.markdown(
+            html_barra_distribucion_100(
+                titulo=titulo_dec,
+                labels=labels_dec,
+                values=values_dec,
+            ),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            html_barra_distribucion_100(
+                titulo=titulo_fac,
+                labels=labels_fac,
+                values=values_fac,
+            ),
+            unsafe_allow_html=True,
+        )
+
     st.markdown("#### Detalle de Facturación por Clase SAT")
-    tabla = tabla_clase_sat(d_sel, descripciones)
+    tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_ingresos)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
     st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
 
@@ -457,7 +540,7 @@ def _seccion_clave_sat(
         "actual. Si la empresa registró una nueva actividad dentro del periodo "
         "analizado, los años anteriores a ese registro podrían no sumar 100%, ya que "
         "se desconoce cómo estaban distribuidas las actividades antes del cambio.")
-    
+
     mostrar_nota_dos = _algun_anio_actividad_fuera_periodo(
         actividades, anios_seleccionados)
     if mostrar_nota_dos:
@@ -578,25 +661,12 @@ def _seccion_egresos_sat(
                                  "text": escape(mensaje)})
         return
 
-    modo_cruce = d.attrs.get("modo_cruce", "no disponible")
-    filas_divisas = d.attrs.get("filas_divisas_excluidas", 0)
-    comprobantes_divisas = d.attrs.get("comprobantes_divisas_excluidos", 0)
-    filas_ncr = d.attrs.get("filas_ncr_excluidas", 0)
-    comprobantes_ncr = d.attrs.get("comprobantes_ncr_excluidos", 0)
-    filas_cancelados = d.attrs.get("filas_cancelados_excluidas", 0)
-    comprobantes_cancelados = d.attrs.get("comprobantes_cancelados_excluidos", 0)
     filas_sin_cruce = d.attrs.get("filas_sin_cruce", 0)
     comprobantes_sin_cruce = d.attrs.get("comprobantes_sin_cruce", 0)
     filas_sin_tc = d.attrs.get("filas_sin_tipo_cambio", 0)
     filas_tc_dof = d.attrs.get("filas_tc_dof", 0)
     filas_descartadas = d.attrs.get("filas_descartadas", 0)
-    # st.caption(f"Modo de cruce aplicado: {modo_cruce}.")
-    '''st.info(
-        "Partidas excluidas / comprobantes afectados (los grupos pueden traslaparse): "
-        f" Divisas 841216: {filas_divisas:,} / {comprobantes_divisas:,};"
-        f" NCR: {filas_ncr:,} / {comprobantes_ncr:,};"
-        f" Cancelados: {filas_cancelados:,} / {comprobantes_cancelados:,}."
-    )'''
+
     if filas_sin_cruce:
         st.warning(
             f"Sin coincidencia con encabezados: {filas_sin_cruce:,} partidas de "
@@ -613,7 +683,7 @@ def _seccion_egresos_sat(
             f"o conversión inválida; {filas_sin_tc:,} no tenían un tipo de cambio "
             "válido ni en la columna original ni en la DOF."
         )
-    
+
     disponibles = sorted({int(anio) for anio in anios_ingresos})
     if not disponibles:
         mensaje = (
@@ -671,23 +741,53 @@ def _seccion_egresos_sat(
     descripciones = descripciones_clase_sat(d, catalogo)
     sufijo_periodo = _sufijo_periodo_clase_sat(anios_seleccionados, disponibles)
 
+    n_clases_egresos = _seleccionar_corte_clases(d_sel, key="clase_sat_corte_egresos")
+
     fig_egresos = fig_donut_facturado(
         d_sel,
         descripciones,
         titulo="Distribución de Facturación Recibida (CFDIs)",
         nombre_serie="Egresos recibidos",
+        top=n_clases_egresos,
     )
 
     fig_egresos.update_layout(title_text=f"{fig_egresos.layout.title.text}{sufijo_periodo}")
 
-    st.plotly_chart(
-        fig_egresos,
-        width="stretch",
-        key="egresos_sat_donut_recibido",
+    tipo_vista_egresos = (
+        st.pills(
+            "Formato de visualización",
+            options=["Donas", "Barras 100%"],
+            default="Donas",
+            selection_mode="single",
+            key="barrida_pills_tipo_egresos",
+            label_visibility="visible",
+        )
+        or "Donas"
     )
 
+    if tipo_vista_egresos == "Donas":
+        st.plotly_chart(
+            fig_egresos,
+            width="stretch",
+            key="egresos_sat_donut_recibido",
+        )
+    else:
+        labels_egr, values_egr = _datos_desde_donut(fig_egresos)
+        titulo_egr = (
+            fig_egresos.layout.title.text
+            or f"Distribución de Facturación Recibida (CFDIs){sufijo_periodo}"
+        )
+        st.markdown(
+            html_barra_distribucion_100(
+                titulo=titulo_egr,
+                labels=labels_egr,
+                values=values_egr,
+            ),
+            unsafe_allow_html=True,
+        )
+
     st.markdown("#### Detalle de Facturación por Clase SAT")
-    tabla = tabla_clase_sat(d_sel, descripciones)
+    tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_egresos)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
     st.caption("Nota:" + NOTA_METODOLOGICA_CLASE_SAT)
 
@@ -720,23 +820,22 @@ def _seccion_egresos_sat(
             lambda valor: f"{valor:.2f}%"
         )
         pdf_elements.extend([
-    {
-        "type": "image",
-        "section_title": "Estructura de Egresos Facturados",
-        "title": "",
-        "fig": fig_egresos,
-        "preserve_textfont_size": True,
-    },
-    {
-        "type": "table",
-        "title": "Detalle de Facturación Recibida por Clase SAT",
-        "df": tabla_pdf,
-        "column_widths_pct": [12, 42, 18, 18, 12],
-        "note": comentario.strip() if comentario and comentario.strip() else "",
-    },
-])
-        nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")        
+            {
+                "type": "image",
+                "section_title": "Estructura de Egresos Facturados",
+                "title": "",
+                "fig": fig_egresos,
+                "preserve_textfont_size": True,
+            },
+            {
+                "type": "table",
+                "title": "Detalle de Facturación Recibida por Clase SAT",
+                "df": tabla_pdf,
+                "column_widths_pct": [12, 42, 18, 18, 12],
+                "note": comentario.strip() if comentario and comentario.strip() else "",
+            },
+        ])
+        nota_egresos = escape(NOTA_METODOLOGICA_CLASE_SAT).replace("\n", "<br/>")
         nota_egresos_pdf = "<b>Nota: </b> " + nota_egresos
         pdf_elements.append({"type": "callout",
                              "text": nota_egresos_pdf})
-    

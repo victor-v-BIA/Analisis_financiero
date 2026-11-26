@@ -14,6 +14,7 @@ from utils import (_mxn_2d, _importe_abreviado_2d,
                    _abrev_signo, _formatear_mxn )
 
 from core.finance_logic import (_serie_mensual_por_anio, _ranking_anual)
+from html import escape
 
 from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     METRICAS_VISUALIZAR,MESES_ES,
@@ -24,7 +25,7 @@ from config import (COLOR,COLOR_DIF_CERO,COLOR_DIF_POSITIVA,COLOR_DIF_NEGATIVA,
                     NOMBRE_EGR_PUE,NOMBRE_EGR_PPD,COLOR_EGR_PUE,COLOR_EGR_PPD,
                     CSS_KPI_DIVISAS, PALETA_AZULES_BIA
                     ,TOP_DONA_CLASES_SAT,
-                    CLASE_GENERICA_SAT,ETIQUETA_DONA_CLAVE_GENERICA,COLOR_SIN_CLASIFICAR)
+                    CLASE_GENERICA_SAT,ETIQUETA_DONA_CLAVE_GENERICA,COLOR_SIN_CLASIFICAR, TOP_FILAS_CLASE_SAT)
 
 from core.loader import (actividades_declaradas_csf)
 
@@ -918,7 +919,7 @@ def fig_donut_declarado(actividades) -> go.Figure:
                          marker=dict(colors=[PALETA_AZULES_BIA[i % len(PALETA_AZULES_BIA)] for i in range(len(acts))],
                                      line=dict(color="white", width=1.5)),text=[f"{p:g}%" for _, p, _ in acts],
                                      textinfo="text", texttemplate="%{text}", textposition="auto",
-                                     insidetextorientation="horizontal", textfont=dict(size=12,color="white"), name="Distribución declarada",
+                                     insidetextorientation="horizontal", textfont=dict(size=17,color="white"), name="Distribución declarada",
                                      customdata=[f"{n}: {fecha}: {p:g}% declarado" for (n, p, _), fecha in zip(acts, fechas)], hovertemplate="%{customdata}<extra></extra>"))
     return _diseno_donut_sat(fig, titulo)
 
@@ -935,25 +936,62 @@ def fig_donut_facturado(
     descripciones: dict | None = None,
     titulo: str = "Distribución Real Facturada (CFDIs)",
     nombre_serie: str = "Facturación con IVA",
+    top: int = TOP_FILAS_CLASE_SAT,
 ) -> go.Figure:
-    """Anillo con las Top 5 Clases SAT por monto y el resto agrupado en «Otras clases (N)».
-    El título y el nombre de la serie pueden adaptarse al tipo de facturación."""
+    """Anillo con las principales Clases SAT por monto y el resto agrupado en «Otras clases»."""
     descripciones = descripciones or {}
-    g = d.groupby("Clase")["Monto"].sum().reset_index().sort_values(["Monto", "Clase"], ascending=[False, True]).reset_index(drop=True)
+    columna_monto = "Monto_MXN" if "Monto_MXN" in d.columns else "Monto"
+    g = (
+        d.groupby("Clase", as_index=False)[columna_monto]
+        .sum()
+        .rename(columns={columna_monto: "Monto"})
+        .sort_values(["Monto", "Clase"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
     total = float(g["Monto"].sum())
-    top, resto = g.head(TOP_DONA_CLASES_SAT), g.iloc[TOP_DONA_CLASES_SAT:]
-    rebanadas = [(c, _rotulo_clase_donut(c, descripciones), f"{c} · {ETIQUETA_DONA_CLAVE_GENERICA if c == CLASE_GENERICA_SAT else descripciones.get(c, 'Sin catálogo')}", float(v))
-                 for c, v in zip(top["Clase"], top["Monto"])]
+    principales, resto = g.head(top), g.iloc[top:]
+    rebanadas = [
+        (
+            c,
+            _rotulo_clase_donut(c, descripciones),
+            f"{c} · {ETIQUETA_DONA_CLAVE_GENERICA if c == CLASE_GENERICA_SAT else descripciones.get(c, 'Sin catálogo')}",
+            float(v),
+        )
+        for c, v in zip(principales["Clase"], principales["Monto"])
+    ]
     if len(resto):
-        rebanadas.append(("otras", f"Otras clases", f"Otras clases ({len(resto):,} clases)", float(resto["Monto"].sum())))
+        rebanadas.append((
+            "otras",
+            "Otras clases",
+            f"Otras clases ({len(resto):,} clases)",
+            float(resto["Monto"].sum()),
+        ))
     pcts = [v / total * 100 if total else 0.0 for _, _, _, v in rebanadas]
-    colores, azul = [], iter(PALETA_AZULES_BIA)
+
+    colores = []
+    idx_azul = 0
     for c, _, _, _ in rebanadas:
-        colores.append(COLOR_SIN_CLASIFICAR if c == CLASE_GENERICA_SAT else next(azul))
-    fig = go.Figure(go.Pie(labels=[f"{r[1]} ({p:.1f}%)" for r, p in zip(rebanadas, pcts)], values=[v for _, _, _, v in rebanadas], hole=0.5, sort=False, direction="clockwise",
-                           marker=dict(colors=colores, line=dict(color="white", width=1.5)), text=[f"{p:.1f}%" if p >= 4 else "" for p in pcts], textinfo="text", textposition="inside",
-                           insidetextorientation="horizontal", textfont=dict(size=12, color="white"), name=nombre_serie,
-                           customdata=[f"{r[2]}: {p:.2f}% · ${r[3]:,.0f} MXN" for r, p in zip(rebanadas, pcts)], hovertemplate="%{customdata}<extra></extra>"))
+        if c == CLASE_GENERICA_SAT:
+            colores.append(COLOR_SIN_CLASIFICAR)
+        else:
+            colores.append(PALETA_AZULES_BIA[idx_azul % len(PALETA_AZULES_BIA)])
+            idx_azul += 1
+
+    fig = go.Figure(go.Pie(
+        labels=[f"{r[1]} ({p:.1f}%)" for r, p in zip(rebanadas, pcts)],
+        values=[v for _, _, _, v in rebanadas],
+        hole=0.5,
+        sort=False,
+        direction="clockwise",
+        marker=dict(colors=colores, line=dict(color="white", width=1.5)),
+        text=[f"{p:.1f}%" if p >= 4 else "" for p in pcts],
+        textinfo="text",
+        textposition="inside",
+        insidetextorientation="horizontal",
+        textfont=dict(size=17, color="white"),
+        name=nombre_serie,
+        customdata=[f"{r[2]}: {p:.2f}% · ${r[3]:,.0f} MXN" for r, p in zip(rebanadas, pcts)],
+        hovertemplate="%{customdata}<extra></extra>" ))
     return _diseno_donut_sat(fig, titulo, margen_inferior=150)
 
 
@@ -992,3 +1030,84 @@ def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
         for i, c in enumerate(cabeza)) + "</tr></thead>"
     return f'{CSS_SIN_FACTURACION}<div class="sf-wrap"><table class="sf-tabla">{colgroup}{encabezado}<tbody>{"".join(filas)}</tbody></table></div>'
 
+
+def _color_texto_contraste(hex_color: str) -> str:
+    """Devuelve blanco o gris oscuro según la luminancia del segmento."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return "#FFFFFF"
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminancia = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#FFFFFF" if luminancia > 0.58 else "#FFFFFF"
+
+
+def html_barra_distribucion_100(
+    titulo: str,
+    labels: list[str],
+    values: list[float]) -> str:
+    """Construye una barra horizontal apilada al 100% con leyenda en 2 columnas."""
+    pares = [(str(l), float(v)) for l, v in zip(labels, values) if v is not None and float(v) > 0]
+    total = sum(v for _, v in pares)
+    if not pares or total <= 0:
+        return f"<p style='color:#64748B;font-size:14px;'>Sin datos para {escape(titulo)}.</p>"
+
+    paleta =  PALETA_AZULES_BIA
+    segmentos_html = []
+    leyenda_html = []
+
+    for idx, (etiqueta, valor) in enumerate(pares):
+        pct = (valor / total) * 100.0
+        color = paleta[idx % len(paleta)]
+        txt_color = _color_texto_contraste(color)
+        pct_txt = f"{pct:.1f}%"
+        texto_interno = pct_txt if pct >= 4.0 else ""
+        tooltip = escape(f"{etiqueta} ({pct_txt})")
+
+        segmentos_html.append(
+            f'<div class="b100-seg" title="{tooltip}" '
+            f'style="width:{pct:.4f}%;background:{color};color:{txt_color};">'
+            f"{texto_interno}</div>"
+        )
+        leyenda_html.append(
+            '<div class="b100-item">'
+            f'<span class="b100-dot" style="background:{color};"></span>'
+            f'<span class="b100-label">{escape(etiqueta)} ({pct_txt})</span>'
+            "</div>"
+        )
+
+    return f"""
+    <style>
+      .b100-wrap {{ margin: 8px 0 22px 0; font-family: inherit; }}
+      .b100-title {{ font-size: 14px; color: #475569; margin-bottom: 8px; font-weight: 500; }}
+      .b100-bar {{
+        display: flex; width: 100%; height: 34px;
+        border-radius: 6px; overflow: hidden; gap: 2px;
+        background: transparent;
+      }}
+      .b100-seg {{
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px; font-weight: 500; white-space: nowrap;
+        min-width: 2px; transition: opacity 0.15s ease;
+      }}
+      .b100-seg:hover {{ opacity: 0.9; }}
+      .b100-ticks {{
+        display: flex; justify-content: space-between;
+        font-size: 12px; color: #64748B; margin: 5px 0 12px 0;
+      }}
+      .b100-legend {{
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 30px; 
+      }}
+      .b100-item {{ display: flex; align-items: flex-start; gap: 8px; font-size: 16px; color: #475569; line-height: 1.35; }}
+      .b100-dot {{ width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; margin-top: 3px; }}
+      @media (max-width: 640px) {{ .b100-legend {{ grid-template-columns: 1fr; }} }}
+    </style>
+    <div class="b100-wrap">
+      <div class="b100-title">{escape(titulo)}</div>
+      <div class="b100-bar">{"".join(segmentos_html)}</div>
+      <div class="b100-ticks">
+        <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+      </div>
+      <div class="b100-legend">{"".join(leyenda_html)}</div>
+    </div>
+    """
