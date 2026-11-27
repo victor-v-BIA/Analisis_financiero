@@ -1169,7 +1169,7 @@ def fig_barra_distribucion_100(
 def html_barra_distribucion_100(
     titulo: str,
     labels: list[str],
-    values: list[float], max_chars: int = 60) -> str:
+    values: list[float], max_chars: int = 150) -> str:
     """Construye una barra horizontal apilada al 100% con leyenda en 2 columnas."""
     pares = [(str(l), float(v)) for l, v in zip(labels, values) if v is not None and float(v) > 0]
     total = sum(v for _, v in pares)
