@@ -236,6 +236,7 @@ def plotly_fig_to_reportlab_image(
     preserve_textfont_size=False,
     render_width=1000,
     render_height=600,
+    max_height_pt=580,
 ):
     if preserve_textfont_size:
         fig = deepcopy(fig)
@@ -247,16 +248,31 @@ def plotly_fig_to_reportlab_image(
 
     img_bytes = fig.to_image(
         format="png",
-        width=render_width,
-        height=render_height,
-        scale=2,
+        width=fig.layout.width or render_width,
+        height=fig.layout.height or render_height,
+        scale=3,
     )
     img_buffer = io.BytesIO(img_bytes)
     pil_img = PILImage.open(img_buffer)
+
+    # Recorta márgenes transparentes sobrantes para no desperdiciar alto en el PDF
+    if pil_img.mode == "RGBA":
+        bbox = pil_img.split()[-1].getbbox()
+        if bbox:
+            pad = 12
+            pil_img = pil_img.crop((
+                max(0, bbox[0] - pad),
+                max(0, bbox[1] - pad),
+                min(pil_img.width, bbox[2] + pad),
+                min(pil_img.height, bbox[3] + pad),
+            ))
+            img_buffer = io.BytesIO()
+            pil_img.save(img_buffer, format="PNG")
+
     orig_width, orig_height = pil_img.size
-    
+
     aspect_ratio = orig_height / orig_width
-    
+
     if height_pt is None:
         calc_width = width_pt
         calc_height = width_pt * aspect_ratio
@@ -264,9 +280,14 @@ def plotly_fig_to_reportlab_image(
         calc_width = width_pt
         calc_height = height_pt
 
+    # Evita LayoutError si la imagen supera el alto útil de una página
+    if max_height_pt is not None and calc_height > max_height_pt:
+        escala = max_height_pt / calc_height
+        calc_height = max_height_pt
+        calc_width = calc_width * escala
+
     img_buffer.seek(0)
     return RLImage(img_buffer, width=calc_width, height=calc_height)
-
 
 def generate_modular_pdf(
     title: str,
@@ -662,7 +683,7 @@ def generate_modular_pdf(
                 else:
                     img = plotly_fig_to_reportlab_image(
                         fig,
-                        width_pt=el.get("width_pt", 400),
+                        width_pt=el.get("width_pt", 485),
                         preserve_textfont_size=preserve_textfont_size,
                         render_width=render_width,
                         render_height=render_height,

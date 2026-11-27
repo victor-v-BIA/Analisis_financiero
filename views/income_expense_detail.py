@@ -4,10 +4,11 @@ import pandas as pd
 import streamlit as st
 from components.pdf_generator import generate_modular_pdf
 from utils import _ArchivoMem
-
+import re
 from components.charts import (
     _html_tabla_clase_sat,
     fig_barra_distribucion_100,
+
     fig_donut_declarado,
     fig_donut_facturado,
     html_barra_distribucion_100,
@@ -313,17 +314,23 @@ def _algun_anio_actividad_fuera_periodo(
 
 
 def _datos_desde_donut(fig) -> tuple[list[str], list[float]]:
-    """Extrae etiquetas, valores y colores directamente de la traza de la dona."""
+    """Extrae etiquetas limpias y valores directamente de la traza de la dona."""
     if not fig.data:
         return [], []
     traza = fig.data[0]
     raw_labels = getattr(traza, "labels", None)
     raw_values = getattr(traza, "values", None)
-    raw_colors = getattr(getattr(traza, "marker", None), "colors", None)
-    labels = [str(x) for x in raw_labels] if raw_labels is not None else []
-    values = [float(x) if pd.notna(x) else 0.0 for x in raw_values] if raw_values is not None else []
+    labels = (
+        [re.sub(r"\s*\(\d+(?:\.\d+)?%\)\s*$", "", str(x).strip()) for x in raw_labels]
+        if raw_labels is not None
+        else []
+    )
+    values = (
+        [float(x) if pd.notna(x) else 0.0 for x in raw_values]
+        if raw_values is not None
+        else []
+    )
     return labels, values
-
 
 
 def _calcular_n_clases_corte(
@@ -332,7 +339,7 @@ def _calcular_n_clases_corte(
     top_default: int = TOP_FILAS_CLASE_SAT,
 ) -> int:
     """Devuelve el número N de clases principales según el corte ('Top', '50%', '80%')."""
-    if d.empty or modo not in ("50%", "80%"):
+    if d.empty or modo not in ("80%"):
         return top_default
 
     columna_monto = "Monto_MXN" if "Monto_MXN" in d.columns else "Monto"
@@ -347,7 +354,7 @@ def _calcular_n_clases_corte(
     if total <= 0:
         return top_default
 
-    umbral = 50.0 if modo == "50%" else 80.0
+    umbral = 80.0 if modo == "80%" else 80.0
     pct = (g["Monto"] / total) * 100.0
     # Regla inclusiva: incluye las clases necesarias hasta alcanzar o cruzar el umbral
     n = int((pct.cumsum().shift(fill_value=0.0) < umbral).sum())
@@ -355,20 +362,8 @@ def _calcular_n_clases_corte(
 
 
 def _seleccionar_corte_clases(d: pd.DataFrame, key: str) -> tuple[int, str]:
-    """Renderiza el selector de cobertura y devuelve (N clases, modo elegido)."""
-    opcion_top = f"Top {TOP_FILAS_CLASE_SAT}"
-    modo = (
-        st.pills(
-            "Cobertura de Clases SAT",
-            options=[opcion_top, "50%", "80%"],
-            default=opcion_top,
-            selection_mode="single",
-            key=key,
-        )
-        or opcion_top
-    )
-    n_clases = _calcular_n_clases_corte(d, modo, TOP_FILAS_CLASE_SAT)
-    return n_clases, modo
+    """Calcula el corte fijo al 80% de cobertura y devuelve (N clases, modo)."""
+    return _calcular_n_clases_corte(d, "80%", TOP_FILAS_CLASE_SAT), "80%"
 
 
 def _seccion_clave_sat(
@@ -382,7 +377,8 @@ def _seccion_clave_sat(
     st.subheader(
         subtitulo_seccion,
         help=(
-            "Pone lo declarado en la Constancia de Situación Fiscal (CSF) frente a lo "
+            "Pone lo declarado en la Constancia de Situación Fis"
+            "cal (CSF) frente a lo "
             "facturado, agrupado por la clave SAT completa de 8 dígitos de cada "
             "producto o servicio, según el catálogo oficial del SAT. La clave genérica "
             "01010101 no identifica qué se vendió. El anillo "
@@ -492,7 +488,7 @@ def _seccion_clave_sat(
         d_sel, key="clase_sat_corte_ingresos"
     )
     if encabezado_pdf is not None:
-        encabezado_pdf["text"] = f"Estructura de Ingresos Facturados - {modo}"
+        encabezado_pdf["text"] = f"Estructura de Ingresos Facturados"
 
     actividades_grafica = _filtrar_actividades_csf_por_anio(
         actividades, anios_seleccionados, disponibles)
@@ -502,41 +498,28 @@ def _seccion_clave_sat(
     for figura in (fig_declarado, fig_facturado):
         figura.update_layout(title_text=f"{figura.layout.title.text}{sufijo_periodo}")
 
-    tipo_vista = (
-        st.pills(
-            "Formato de visualización",
-            options=["Donas", "Barras 100%"],
-            default="Donas",
-            selection_mode="single",
-            key="barrida_pills_tipo_perfil_fiscal",
-            label_visibility="visible",
-        )
-        or "Donas"
-    )
     fig_declarado_pdf = fig_declarado
     fig_facturado_pdf = fig_facturado
 
-    if tipo_vista == "Donas":
-        st.plotly_chart(fig_declarado, width="stretch", key="clase_sat_donut_declarado")
-        st.plotly_chart(fig_facturado, width="stretch", key="clase_sat_donut_facturado")
-    else:
-        labels_dec, values_dec = _datos_desde_donut(fig_declarado)
-        fig_facturado_barras = fig_donut_facturado(d_sel, descripciones)
-        labels_fac, values_fac = _datos_desde_donut(fig_facturado_barras)
-        titulo_dec = fig_declarado.layout.title.text or f"Distribución de actividades económicas declaradas{sufijo_periodo}"
-        titulo_fac = fig_facturado.layout.title.text or f"Distribución real facturada (CFDIs emitidos){sufijo_periodo}"
-        fig_declarado_pdf = fig_barra_distribucion_100(
+   
+    labels_dec, values_dec = _datos_desde_donut(fig_declarado)
+    fig_facturado_barras = fig_donut_facturado(d_sel, descripciones)
+    labels_fac, values_fac = _datos_desde_donut(fig_facturado_barras)
+    titulo_dec = fig_declarado.layout.title.text or f"Distribución de actividades económicas declaradas{sufijo_periodo}"
+    titulo_fac = fig_facturado.layout.title.text or f"Distribución real facturada (CFDIs emitidos){sufijo_periodo}"
+    fig_declarado_pdf = fig_barra_distribucion_100(
             titulo=titulo_dec,
             labels=labels_dec,
             values=values_dec,
+            bar_width=0.52,
         )
-        fig_facturado_pdf = fig_barra_distribucion_100(
+    fig_facturado_pdf = fig_barra_distribucion_100(
             titulo=titulo_fac,
             labels=labels_fac,
             values=values_fac,
             bar_width=0.52,
         )
-        st.markdown(
+    st.markdown(
             html_barra_distribucion_100(
                 titulo=titulo_dec,
                 labels=labels_dec,
@@ -544,7 +527,7 @@ def _seccion_clave_sat(
             ),
             unsafe_allow_html=True,
         )
-        st.markdown(
+    st.markdown(
             html_barra_distribucion_100(
                 titulo=titulo_fac,
                 labels=labels_fac,
@@ -576,45 +559,20 @@ def _seccion_clave_sat(
         key="clase_sat_insight",)
 
     if pdf_elements is not None:
-        tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
-            "Clase": "Clave SAT",
-            "Descripcion": "Descripción oficial SAT",
-            "Subtotal": "Subtotal neto (MXN)",
-            "Total": "Total facturado (MXN)",
-            "Pct": "% del total",})
-        tabla_pdf["Descripción oficial SAT"] = tabla_pdf["Descripción oficial SAT"].map(
-            lambda valor: escape(str(valor))
-        )
-        tabla_pdf["Total facturado (MXN)"] = tabla_pdf["Total facturado (MXN)"].map(
-            lambda valor: f"${valor:,.0f}"
-        )
-        anchos_pdf = [12, 54, 22, 12]
-        if "Subtotal neto (MXN)" in tabla_pdf.columns:
-            tabla_pdf["Subtotal neto (MXN)"] = tabla_pdf[
-                "Subtotal neto (MXN)"
-            ].map(lambda valor: f"${valor:,.0f}")
-            anchos_pdf = [10, 42, 18, 18, 12]
-        tabla_pdf["% del total"] = tabla_pdf["% del total"].map(
-            lambda valor: f"{valor:.2f}%"
-        )
+  
         pdf_elements.extend([
-            {"type": "image",
-             "fig": fig_declarado_pdf,
-             "preserve_textfont_size": tipo_vista == "Donas",
-             "width_pt": 500 if tipo_vista == "Barras 100%" else 400,
-             "render_height": 450 if tipo_vista == "Barras 100%" else 600,},
-            {"type": "image",
-             "fig": fig_facturado_pdf,
-             "preserve_textfont_size": tipo_vista == "Donas",
-             "width_pt": 500 if tipo_vista == "Barras 100%" else 400,
-             "render_height": 450 if tipo_vista == "Barras 100%" else 600,},
             {
-                "type": "table",
-                "title": "Detalle de Facturación Emitida",
-                "df": tabla_pdf,
-                "column_widths_pct": anchos_pdf,
-                "note": comentario.strip() if comentario and comentario.strip() else "",
+                "type": "image",
+                "fig": fig_declarado_pdf,
+                "preserve_textfont_size": True,
+                
             },
+            {
+                "type": "image",
+                "fig": fig_facturado_pdf,
+                "preserve_textfont_size": True,
+            },
+
         ])
   
         if mostrar_nota_dos:
@@ -782,45 +740,29 @@ def _seccion_egresos_sat(
 
     fig_egresos.update_layout(title_text=f"{fig_egresos.layout.title.text}{sufijo_periodo}")
 
-    tipo_vista_egresos = (
-        st.pills(
-            "Formato de visualización",
-            options=["Donas", "Barras 100%"],
-            default="Donas",
-            selection_mode="single",
-            key="barrida_pills_tipo_egresos",
-            label_visibility="visible",
-        )
-        or "Donas"
-    )
+    
     fig_egresos_pdf = fig_egresos
 
-    if tipo_vista_egresos == "Donas":
-        st.plotly_chart(
-            fig_egresos,
-            width="stretch",
-            key="egresos_sat_donut_recibido",
-        )
-    else:
-        fig_egresos_barras = fig_donut_facturado(
+    
+    fig_egresos_barras = fig_donut_facturado(
             d_sel,
             descripciones,
             titulo="Distribución de Facturación Recibida (CFDIs)",
             nombre_serie="Egresos recibidos",
             top=n_clases_egresos,
         )
-        labels_egr, values_egr = _datos_desde_donut(fig_egresos_barras)
-        titulo_egr = (
+    labels_egr, values_egr = _datos_desde_donut(fig_egresos_barras)
+    titulo_egr = (
             fig_egresos.layout.title.text
             or f"Distribución de Facturación Recibida (CFDIs){sufijo_periodo}"
         )
-        fig_egresos_pdf = fig_barra_distribucion_100(
+    fig_egresos_pdf = fig_barra_distribucion_100(
             titulo=titulo_egr,
             labels=labels_egr,
             values=values_egr,
             bar_width=0.52,
         )
-        st.markdown(
+    st.markdown(
             html_barra_distribucion_100(
                 titulo=titulo_egr,
                 labels=labels_egr,
@@ -841,42 +783,14 @@ def _seccion_egresos_sat(
     )
 
     if pdf_elements is not None:
-        tabla_pdf = tabla.drop(columns="Tipo").rename(columns={
-            "Clase": "Clave SAT",
-            "Descripcion": "Descripción oficial SAT",
-            "Subtotal": "Subtotal neto (MXN)",
-            "Total": "Total facturado (MXN)",
-            "Pct": "% del total",
-        })
-        tabla_pdf["Descripción oficial SAT"] = tabla_pdf["Descripción oficial SAT"].map(
-            lambda valor: escape(str(valor))
-        )
-        tabla_pdf["Total facturado (MXN)"] = tabla_pdf["Total facturado (MXN)"].map(
-            lambda valor: f"${valor:,.0f}"
-        )
-        if "Subtotal neto (MXN)" in tabla_pdf.columns:
-            tabla_pdf["Subtotal neto (MXN)"] = tabla_pdf[
-                "Subtotal neto (MXN)"
-            ].map(lambda valor: f"${valor:,.0f}")
-        tabla_pdf["% del total"] = tabla_pdf["% del total"].map(
-            lambda valor: f"{valor:.2f}%"
-        )
         pdf_elements.extend([
             {
                 "type": "image",
-                "section_title": f"{titulo} - {modo_egresos}",
+                "section_title": titulo,
                 "title": "",
                 "fig": fig_egresos_pdf,
-                "preserve_textfont_size": tipo_vista_egresos == "Donas",
-                "width_pt": 500 if tipo_vista_egresos == "Barras 100%" else 400,
-                "render_height": 400 if tipo_vista_egresos == "Barras 100%" else 600,
+                "preserve_textfont_size": True,
             },
-            {
-                "type": "table",
-                "title": "Detalle de Facturación Recibida",
-                "df": tabla_pdf,
-                "column_widths_pct": [12, 42, 18, 18, 12],
-                "note": comentario.strip() if comentario and comentario.strip() else "",
-            },
+
         ])
        

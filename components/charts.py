@@ -8,6 +8,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import html
+import re
 import plotly.express as px
 from utils import (_mxn_2d, _importe_abreviado_2d,
                    _abrev_monto, _nombre_abreviado,
@@ -910,9 +911,8 @@ def fig_donut_declarado(actividades) -> go.Figure:
     rotulos = []
     fechas = []
     for nombre, pct, fecha in acts:
-        nombre_corto = nombre if len(nombre) <= 38 else nombre[:38].rstrip() + "…"
         mes_anio = fecha.strftime("%m/%Y") if pd.notna(fecha) else "Sin fecha"
-        rotulos.append(f"{nombre_corto} · {mes_anio} · {pct:g}%")
+        rotulos.append(f"{mes_anio} · {nombre}")
         fechas.append(mes_anio)
     fig.add_trace(go.Pie(labels=rotulos, values=[p for _, p, _ in acts],
                          hole=0.5, sort=False, direction="clockwise",
@@ -978,7 +978,10 @@ def fig_donut_facturado(
             idx_azul += 1
 
     fig = go.Figure(go.Pie(
-        labels=[f"{r[1]} ({p:.1f}%)" for r, p in zip(rebanadas, pcts)],
+        labels=[
+            f"{r[1] if r[0] == 'otras' else r[2]} ({p:.1f}%)"
+            for r, p in zip(rebanadas, pcts)
+        ],
         values=[v for _, _, _, v in rebanadas],
         hole=0.5,
         sort=False,
@@ -1045,14 +1048,15 @@ def fig_barra_distribucion_100(
     titulo: str,
     labels: list[str],
     values: list[float],
-    bar_width: float = 0.30) -> go.Figure:
+    bar_width: float = 0.52,
+) -> go.Figure:
     """Construye la versión Plotly exportable de una barra horizontal apilada al 100%."""
     pares = [(str(l), float(v)) for l, v in zip(labels, values) if v is not None and float(v) > 0]
     total = sum(v for _, v in pares)
     fig = go.Figure()
     if not pares or total <= 0:
         fig.add_annotation(
-            text=f"Sin datos para {titulo}.",
+            text=f"Sin datos para {escape(titulo)}.",
             xref="paper",
             yref="paper",
             x=0.5,
@@ -1063,16 +1067,37 @@ def fig_barra_distribucion_100(
         fig.update_yaxes(visible=False)
         return fig.update_layout(title_text=titulo, showlegend=False)
 
+    n_leyendas = len(pares)
+    if n_leyendas <= 24:
+        n_cols, fuente_leyenda, alto_por_fila, max_chars = 2, 15, 26, 46
+    elif n_leyendas <= 96:
+        n_cols, fuente_leyenda, alto_por_fila, max_chars = 2, 14, 24, 46
+    else:
+        n_cols, fuente_leyenda, alto_por_fila, max_chars = 3, 12, 21, 30
+
+    n_filas = (n_leyendas + n_cols - 1) // n_cols
+    alto_titulo = 50
+    alto_area_barra = 115
+    offset_inicial = 46  # espacio entre los ticks del eje X y la primera fila
+    margen_inferior = max(90, offset_inicial + n_filas * alto_por_fila + 24)
+    altura_total = alto_titulo + alto_area_barra + margen_inferior
+
     for idx, (etiqueta, valor) in enumerate(pares):
         pct = valor / total * 100.0
+        color = PALETA_AZULES_BIA[idx % len(PALETA_AZULES_BIA)]
+        etiqueta = re.sub(r"\s*\(\d+(?:\.\d+)?%\)\s*$", "", etiqueta.strip())
+        etiqueta_corta = (
+            etiqueta if len(etiqueta) <= max_chars else etiqueta[: max_chars - 3].rstrip() + "..."
+        )
         pct_txt = f"{pct:.1f}%"
+
         fig.add_trace(go.Bar(
             x=[pct],
             y=["Distribución"],
             orientation="h",
             width=bar_width,
-            name=f"{etiqueta} ({pct_txt})",
-            marker_color=PALETA_AZULES_BIA[idx % len(PALETA_AZULES_BIA)],
+            name=f"{etiqueta_corta} ({pct_txt})",
+            marker_color=color,
             text=[pct_txt if pct >= 5.0 else ""],
             textposition="inside",
             insidetextanchor="middle",
@@ -1081,22 +1106,31 @@ def fig_barra_distribucion_100(
             hovertemplate="%{customdata}<extra></extra>",
         ))
 
+        fila = idx // n_cols
+        col = idx % n_cols
+        x_pos = col * (1.0 / n_cols)
+        y_pos = -(offset_inicial + fila * alto_por_fila) / alto_area_barra
+
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=x_pos,
+            y=y_pos,
+            xanchor="left",
+            yanchor="middle",
+            showarrow=False,
+            text=f"<span style='color:{color};'>&#9632;</span>  {escape(etiqueta_corta)} ({pct_txt})",
+            font=dict(size=fuente_leyenda, color="#334155"),
+        )
+
     fig.update_layout(
         title=dict(text=titulo, font=dict(size=19), x=0, xanchor="left"),
         barmode="stack",
-        height=400,
-        margin=dict(l=10, r=10, t=60, b=150),
+        height=altura_total,
+        margin=dict(l=0, r=0, t=alto_titulo, b=margen_inferior),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.25,
-            xanchor="left",
-            x=0,
-            font=dict(size=16),
-        ),
+        showlegend=False,
         xaxis=dict(
             range=[0, 100],
             tickmode="array",
@@ -1108,12 +1142,10 @@ def fig_barra_distribucion_100(
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
     )
     return fig
-
-
 def html_barra_distribucion_100(
     titulo: str,
     labels: list[str],
-    values: list[float]) -> str:
+    values: list[float], max_chars: int = 60) -> str:
     """Construye una barra horizontal apilada al 100% con leyenda en 2 columnas."""
     pares = [(str(l), float(v)) for l, v in zip(labels, values) if v is not None and float(v) > 0]
     total = sum(v for _, v in pares)
@@ -1130,7 +1162,14 @@ def html_barra_distribucion_100(
         txt_color = _color_texto_contraste(color)
         pct_txt = f"{pct:.1f}%"
         texto_interno = pct_txt if pct >= 5.0 else ""
-        tooltip = escape(f"{etiqueta} ({pct_txt})")
+
+        etiqueta_limpia = etiqueta.strip()
+        etiqueta_mostrar = (
+            f"{etiqueta_limpia[:max_chars].rstrip()}..."
+            if len(etiqueta_limpia) > max_chars
+            else etiqueta_limpia
+        )
+        tooltip = escape(f"{etiqueta_limpia} ({pct_txt})")
 
         segmentos_html.append(
             f'<div class="b100-seg" title="{tooltip}" '
@@ -1140,13 +1179,13 @@ def html_barra_distribucion_100(
         leyenda_html.append(
             '<div class="b100-item">'
             f'<span class="b100-dot" style="background:{color};"></span>'
-            f'<span class="b100-label">{escape(etiqueta)} ({pct_txt})</span>'
+            f'<span class="b100-label" title="{tooltip}">{escape(etiqueta_mostrar)} ({pct_txt})</span>'
             "</div>"
         )
 
     return f"""
     <style>
-      .b100-wrap {{ margin: 8px 0 22px 0; font-family: inherit; }}
+      .b100-wrap {{ margin: 8px 0 70px 0; font-family: inherit; }}
       .b100-title {{ font-size: 14px; color: #475569; margin-bottom: 8px; font-weight: 500; }}
       .b100-bar {{
         display: flex; width: 100%; height: 40px;
