@@ -935,7 +935,7 @@ def _rotulo_clase_donut(clase: str, descripciones: dict, largo: int = 38) -> str
 def fig_donut_facturado(
     d: pd.DataFrame,
     descripciones: dict | None = None,
-    titulo: str = "Distribución Real Facturada (CFDIs)",
+    titulo: str = "Distribución de Facturación Emitida",
     nombre_serie: str = "Facturación con IVA",
     top: int = TOP_FILAS_CLASE_SAT,
 ) -> go.Figure:

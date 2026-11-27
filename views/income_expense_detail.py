@@ -524,7 +524,7 @@ def _seccion_clave_sat(
     fig_facturado_barras = fig_donut_facturado(d_sel, descripciones)
     labels_fac, values_fac = _datos_desde_donut(fig_facturado_barras)
     titulo_dec = fig_declarado.layout.title.text or f"Distribución de actividades económicas declaradas{sufijo_periodo}"
-    titulo_fac = fig_facturado.layout.title.text or f"Distribución real facturada (CFDIs emitidos){sufijo_periodo}"
+    titulo_fac = fig_facturado.layout.title.text or f"Distribución de Facturación Emitida{sufijo_periodo}"
     fig_declarado_pdf = fig_barra_distribucion_100(
         titulo=titulo_dec,
         labels=labels_dec,
@@ -730,7 +730,7 @@ def _seccion_egresos_sat(
     fig_egresos = fig_donut_facturado(
         d_sel,
         descripciones,
-        titulo="Distribución de Facturación Recibida (CFDIs)",
+        titulo="Distribución de Facturación Recibida",
         nombre_serie="Egresos recibidos",
         top=5,
     )
@@ -744,14 +744,14 @@ def _seccion_egresos_sat(
     fig_egresos_barras = fig_donut_facturado(
             d_sel,
             descripciones,
-            titulo="Distribución de Facturación Recibida (CFDIs)",
+            titulo="Distribución de Facturación Recibida",
             nombre_serie="Egresos recibidos",
             top=n_clases_egresos,
         )
     labels_egr, values_egr = _datos_desde_donut(fig_egresos_barras)
     titulo_egr = (
             fig_egresos.layout.title.text
-            or f"Distribución de Facturación Recibida (CFDIs){sufijo_periodo}"
+            or f"Distribución de Facturación Recibida{sufijo_periodo}"
         )
     fig_egresos_pdf = fig_barra_distribucion_100(
             titulo=titulo_egr,
