@@ -7,6 +7,7 @@ from utils import _ArchivoMem
 import re
 from components.charts import (
     _html_tabla_clase_sat,
+    _render_tabla_clase_sat,
     fig_barra_distribucion_100,
 
     fig_donut_declarado,
@@ -557,7 +558,7 @@ def _seccion_clave_sat(
 
     st.markdown("#### Detalle de Facturación")
     tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_ingresos)
-    st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
+    _render_tabla_clase_sat(tabla, key_prefix=f"ingresos_{elegidos}")
    
 
     if pdf_elements is not None:
@@ -770,7 +771,8 @@ def _seccion_egresos_sat(
 
     st.markdown("#### Detalle de Facturación")
     tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_egresos)
-    st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
+
+    _render_tabla_clase_sat(tabla, key_prefix=f"egresos_{disponibles}")
 
     if pdf_elements is not None:
         pdf_elements.extend([

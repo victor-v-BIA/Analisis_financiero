@@ -1013,7 +1013,9 @@ def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
         else [12, 54, 22, 12]
     )
     colgroup = "<colgroup>" + "".join(
-        f'<col style="width:{ancho}%">' for ancho in anchos) + "</colgroup>"
+        f'<col style="width:{ancho}%">' for ancho in anchos
+    ) + "</colgroup>"
+
     filas = []
     for _, r in t.iterrows():
         clase = ' class="sf-total"' if r["Tipo"] == "total" else ""
@@ -1029,10 +1031,91 @@ def _html_tabla_clase_sat(t: pd.DataFrame) -> str:
             f'<td class="sf-num">{r["Pct"]:.2f}%</td>',
         ])
         filas.append(f'<tr{clase}>{"".join(celdas)}</tr>')
+
     encabezado = "<thead><tr>" + "".join(
         f'<th class="sf-num">{esc(c)}</th>' if i >= 2 else f"<th>{esc(c)}</th>"
-        for i, c in enumerate(cabeza)) + "</tr></thead>"
-    return f'{CSS_SIN_FACTURACION}<div class="sf-wrap"><table class="sf-tabla">{colgroup}{encabezado}<tbody>{"".join(filas)}</tbody></table></div>'
+        for i, c in enumerate(cabeza)
+    ) + "</tr></thead>"
+    return (
+        f'{CSS_SIN_FACTURACION}<div class="sf-wrap">'
+        f'<table class="sf-tabla">{colgroup}{encabezado}'
+        f'<tbody>{"".join(filas)}</tbody></table></div>'
+    )
+
+def _render_tabla_clase_sat(t: pd.DataFrame, key_prefix: str) -> None:
+    """Renderiza la tabla HTML principal y, si hay resto, un expander con filtro, tabla, total y descarga CSV."""
+    st.markdown(_html_tabla_clase_sat(t), unsafe_allow_html=True)
+
+    resto_df = t.attrs.get("resto_df")
+    if resto_df is None or resto_df.empty:
+        return
+
+    with st.expander(f"Ver Resto de Clases ({len(resto_df):,} clases más)"):
+        tiene_subtotal = "Subtotal" in resto_df.columns
+
+        busqueda = st.text_input(
+                "Filtrar por Clave SAT o Descripción",
+                placeholder="Ej. 80101500 o mantenimiento...",
+                key=f"{key_prefix}_filtro_resto",
+            ).strip()
+
+        df_vista = resto_df.copy()
+        if busqueda:
+            mask = (
+                df_vista["Clase"].astype(str).str.contains(busqueda, case=False, na=False)
+                | df_vista["Descripcion"].astype(str).str.contains(busqueda, case=False, na=False)
+            )
+            df_vista = df_vista[mask]
+
+        renombres = {
+            "Clase": "CLAVE SAT",
+            "Descripcion": "DESCRIPCIÓN OFICIAL SAT",
+            "Subtotal": "SUBTOTAL NETO (MXN)",
+            "Total": "TOTAL FACTURADO (MXN)",
+            "Pct": "% DEL TOTAL",
+        }
+        cols_mostrar = [c for c in ["Clase", "Descripcion", "Subtotal", "Total", "Pct"] if c in df_vista.columns]
+        df_vista = df_vista[cols_mostrar].rename(columns=renombres)
+
+        # Agrega el renglón de Total al final (recalculado automáticamente si hay filtro)
+        if not df_vista.empty:
+            fila_total = {
+                "CLAVE SAT": "Total",
+                "DESCRIPCIÓN OFICIAL SAT": f"{len(df_vista):,} clases" + (" filtradas" if busqueda else ""),
+                "TOTAL FACTURADO (MXN)": df_vista["TOTAL FACTURADO (MXN)"].sum(),
+                "% DEL TOTAL": df_vista["% DEL TOTAL"].sum(),
+            }
+            if tiene_subtotal:
+                fila_total["SUBTOTAL NETO (MXN)"] = df_vista["SUBTOTAL NETO (MXN)"].sum()
+
+            df_mostrar = pd.concat([df_vista, pd.DataFrame([fila_total])], ignore_index=True)
+        else:
+            df_mostrar = df_vista
+
+
+        column_config = {
+            "CLAVE SAT": st.column_config.TextColumn("CLAVE SAT", width="small"),
+            "DESCRIPCIÓN OFICIAL SAT": st.column_config.TextColumn("DESCRIPCIÓN OFICIAL SAT", width="large"),
+            "TOTAL FACTURADO (MXN)": st.column_config.NumberColumn("TOTAL FACTURADO (MXN)", format="$%,.0f"),
+            "% DEL TOTAL": st.column_config.NumberColumn("% DEL TOTAL", format="%.2f%%"),
+        }
+        if tiene_subtotal:
+            column_config["SUBTOTAL NETO (MXN)"] = st.column_config.NumberColumn(
+                "SUBTOTAL NETO (MXN)", format="$%,.0f"
+            )
+
+        def _resaltar_total(row):
+            if row["CLAVE SAT"] == "Total":
+                return ["font-weight: 700; background-color: #F1F5F9;"] * len(row)
+            return [""] * len(row)
+
+        datos_render = df_mostrar.style.apply(_resaltar_total, axis=1) if not df_mostrar.empty else df_mostrar
+        st.dataframe(
+            datos_render,
+            use_container_width=True,
+            hide_index=True,
+            column_config=column_config,
+        )
 
 
 def _color_texto_contraste(hex_color: str) -> str:
