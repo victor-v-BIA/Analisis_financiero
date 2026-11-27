@@ -508,11 +508,12 @@ def _seccion_clave_sat(
     titulo_dec = fig_declarado.layout.title.text or f"Distribución de actividades económicas declaradas{sufijo_periodo}"
     titulo_fac = fig_facturado.layout.title.text or f"Distribución real facturada (CFDIs emitidos){sufijo_periodo}"
     fig_declarado_pdf = fig_barra_distribucion_100(
-            titulo=titulo_dec,
-            labels=labels_dec,
-            values=values_dec,
-            bar_width=0.52,
-        )
+        titulo=titulo_dec,
+        labels=labels_dec,
+        values=values_dec,
+        bar_width=0.52,
+        texto_completo=True,
+    )
     fig_facturado_pdf = fig_barra_distribucion_100(
             titulo=titulo_fac,
             labels=labels_fac,
@@ -552,20 +553,13 @@ def _seccion_clave_sat(
     if mostrar_nota_dos:
         st.caption(nota_dos_texto)
 
-    comentario = st.text_area(
-        "Insight para Estructura de Ingresos Facturados",
-        max_chars=600,
-        placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
-        key="clase_sat_insight",)
-
     if pdf_elements is not None:
   
         pdf_elements.extend([
             {
                 "type": "image",
                 "fig": fig_declarado_pdf,
-                "preserve_textfont_size": True,
-                
+                "preserve_textfont_size": True,                
             },
             {
                 "type": "image",
@@ -774,13 +768,6 @@ def _seccion_egresos_sat(
     st.markdown("#### Detalle de Facturación")
     tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_egresos)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
-
-    comentario = st.text_area(
-        "Conclusiones para Estructura de Egresos Facturados",
-        max_chars=600,
-        placeholder="Escribe tus conclusiones (máx. 600 caracteres)...",
-        key="egresos_clase_sat_insight",
-    )
 
     if pdf_elements is not None:
         pdf_elements.extend([

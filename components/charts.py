@@ -5,6 +5,7 @@ de Plotly (go.Figure o px) y renderizan tablas HTML personalizadas.
 '''
 import plotly.graph_objects as go
 import streamlit as st
+import textwrap
 import pandas as pd
 import numpy as np
 import html
@@ -1049,6 +1050,7 @@ def fig_barra_distribucion_100(
     labels: list[str],
     values: list[float],
     bar_width: float = 0.52,
+    texto_completo: bool = False,
 ) -> go.Figure:
     """Construye la versión Plotly exportable de una barra horizontal apilada al 100%."""
     pares = [(str(l), float(v)) for l, v in zip(labels, values) if v is not None and float(v) > 0]
@@ -1068,35 +1070,46 @@ def fig_barra_distribucion_100(
         return fig.update_layout(title_text=titulo, showlegend=False)
 
     n_leyendas = len(pares)
-    if n_leyendas <= 24:
-        n_cols, fuente_leyenda, alto_por_fila, max_chars = 2, 15, 26, 46
+    if texto_completo:
+        n_cols, fuente_leyenda, alto_linea, espacio_fila, max_chars = 1, 15, 22, 10, 95
+    elif n_leyendas <= 24:
+        n_cols, fuente_leyenda, alto_linea, espacio_fila, max_chars = 2, 15, 26, 0, 46
     elif n_leyendas <= 96:
-        n_cols, fuente_leyenda, alto_por_fila, max_chars = 2, 14, 24, 46
+        n_cols, fuente_leyenda, alto_linea, espacio_fila, max_chars = 2, 14, 24, 0, 46
     else:
-        n_cols, fuente_leyenda, alto_por_fila, max_chars = 3, 12, 21, 30
+        n_cols, fuente_leyenda, alto_linea, espacio_fila, max_chars = 3, 12, 21, 0, 30
 
-    n_filas = (n_leyendas + n_cols - 1) // n_cols
     alto_titulo = 50
     alto_area_barra = 115
-    offset_inicial = 46  # espacio entre los ticks del eje X y la primera fila
-    margen_inferior = max(90, offset_inicial + n_filas * alto_por_fila + 24)
-    altura_total = alto_titulo + alto_area_barra + margen_inferior
+    y_px = 40  # espacio inicial entre los ticks del eje X y la primera fila
+    max_lineas_fila = 1
 
     for idx, (etiqueta, valor) in enumerate(pares):
         pct = valor / total * 100.0
         color = PALETA_AZULES_BIA[idx % len(PALETA_AZULES_BIA)]
         etiqueta = re.sub(r"\s*\(\d+(?:\.\d+)?%\)\s*$", "", etiqueta.strip())
-        etiqueta_corta = (
-            etiqueta if len(etiqueta) <= max_chars else etiqueta[: max_chars - 3].rstrip() + "..."
-        )
         pct_txt = f"{pct:.1f}%"
+
+        if texto_completo:
+            lineas = textwrap.wrap(f"{etiqueta} ({pct_txt})", width=max_chars) or [f"{etiqueta} ({pct_txt})"]
+            texto_html = (
+                f"<span style='color:{color};'>&#9632;</span>  {escape(lineas[0])}"
+                + "".join(f"<br>&nbsp;&nbsp;&nbsp;&nbsp;{escape(l)}" for l in lineas[1:])
+            )
+            n_lineas = len(lineas)
+        else:
+            etiqueta_corta = (
+                etiqueta if len(etiqueta) <= max_chars else etiqueta[: max_chars - 3].rstrip() + "..."
+            )
+            texto_html = f"<span style='color:{color};'>&#9632;</span>  {escape(etiqueta_corta)} ({pct_txt})"
+            n_lineas = 1
 
         fig.add_trace(go.Bar(
             x=[pct],
             y=["Distribución"],
             orientation="h",
             width=bar_width,
-            name=f"{etiqueta_corta} ({pct_txt})",
+            name=f"{etiqueta} ({pct_txt})",
             marker_color=color,
             text=[pct_txt if pct >= 5.0 else ""],
             textposition="inside",
@@ -1106,10 +1119,9 @@ def fig_barra_distribucion_100(
             hovertemplate="%{customdata}<extra></extra>",
         ))
 
-        fila = idx // n_cols
         col = idx % n_cols
         x_pos = col * (1.0 / n_cols)
-        y_pos = -(offset_inicial + fila * alto_por_fila) / alto_area_barra
+        y_pos = -y_px / alto_area_barra
 
         fig.add_annotation(
             xref="paper",
@@ -1117,11 +1129,20 @@ def fig_barra_distribucion_100(
             x=x_pos,
             y=y_pos,
             xanchor="left",
-            yanchor="middle",
+            yanchor="top",
+            align="left",
             showarrow=False,
-            text=f"<span style='color:{color};'>&#9632;</span>  {escape(etiqueta_corta)} ({pct_txt})",
+            text=texto_html,
             font=dict(size=fuente_leyenda, color="#334155"),
         )
+
+        max_lineas_fila = max(max_lineas_fila, n_lineas)
+        if col == n_cols - 1 or idx == n_leyendas - 1:
+            y_px += max_lineas_fila * alto_linea + espacio_fila
+            max_lineas_fila = 1
+
+    margen_inferior = max(90, y_px + 20)
+    altura_total = alto_titulo + alto_area_barra + margen_inferior
 
     fig.update_layout(
         title=dict(text=titulo, font=dict(size=19), x=0, xanchor="left"),
@@ -1142,6 +1163,9 @@ def fig_barra_distribucion_100(
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
     )
     return fig
+
+
+
 def html_barra_distribucion_100(
     titulo: str,
     labels: list[str],
