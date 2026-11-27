@@ -254,8 +254,24 @@ def tabla_clase_sat(
         if tiene_subtotal:
             fila["Subtotal"] = float(row["SubTotal_Neto_MXN"])
         filas.append(fila)
+    resto_df = pd.DataFrame(columns=cols)
     if len(g) > top:
-        resto = float(g["Monto"].iloc[top:].sum())
+        g_resto = g.iloc[top:]
+        filas_resto = []
+        for _, row in g_resto.iterrows():
+            subfila = {
+                "Clase": row["Clase"],
+                "Descripcion": descripciones.get(row["Clase"], "Sin catálogo"),
+                "Total": float(row["Monto"]),
+                "Pct": pct(float(row["Monto"])),
+                "Tipo": "subfila",
+            }
+            if tiene_subtotal:
+                subfila["Subtotal"] = float(row["SubTotal_Neto_MXN"])
+            filas_resto.append(subfila)
+        resto_df = pd.DataFrame(filas_resto, columns=cols)
+
+        resto = float(g_resto["Monto"].sum())
         fila_resto = {
             "Clase": "Resto de Clases",
             "Descripcion": f"{len(g) - top:,} clases más",
@@ -264,7 +280,7 @@ def tabla_clase_sat(
             "Tipo": "resto",
         }
         if tiene_subtotal:
-            fila_resto["Subtotal"] = float(g["SubTotal_Neto_MXN"].iloc[top:].sum())
+            fila_resto["Subtotal"] = float(g_resto["SubTotal_Neto_MXN"].sum())
         filas.append(fila_resto)
     fila_total = {
         "Clase": "Total",
@@ -276,7 +292,9 @@ def tabla_clase_sat(
     if tiene_subtotal:
         fila_total["Subtotal"] = float(g["SubTotal_Neto_MXN"].sum())
     filas.append(fila_total)
-    return pd.DataFrame(filas, columns=cols)
+    resultado = pd.DataFrame(filas, columns=cols)
+    resultado.attrs["resto_df"] = resto_df
+    return resultado
 
 
 def _filtrar_actividades_csf_por_anio(
@@ -541,17 +559,6 @@ def _seccion_clave_sat(
     tabla = tabla_clase_sat(d_sel, descripciones, top=n_clases_ingresos)
     st.markdown(_html_tabla_clase_sat(tabla), unsafe_allow_html=True)
    
-    nota_dos_texto = (
-        "La gráfica Distribución de Actividades Económicas Declaradas muestra las "
-        "actividades y porcentajes registrados en la Constancia de Situación Fiscal "
-        "actual. Si la empresa registró una nueva actividad dentro del periodo "
-        "analizado, los años anteriores a ese registro podrían no sumar 100%, ya que "
-        "se desconoce cómo estaban distribuidas las actividades antes del cambio.")
-
-    mostrar_nota_dos = _algun_anio_actividad_fuera_periodo(
-        actividades, anios_seleccionados)
-    if mostrar_nota_dos:
-        st.caption(nota_dos_texto)
 
     if pdf_elements is not None:
   
@@ -569,11 +576,7 @@ def _seccion_clave_sat(
 
         ])
   
-        if mostrar_nota_dos:
-            pdf_elements.append({
-                "type": "callout",
-                "text": "<b>Nota: </b> " + escape(nota_dos_texto).replace("\n", "<br/>"),
-            })
+
     return disponibles
 
 
